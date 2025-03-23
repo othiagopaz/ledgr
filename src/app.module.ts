@@ -3,6 +3,7 @@ import { FinancialEntryModule } from './modules/financial-entry/financial-entry.
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InstallmentModule } from './modules/installment/installment.module';
+import { CategoryModule } from './modules/category/category.module';
 import ormConfig from './config/typeorm.config';
 
 @Module({
@@ -14,6 +15,7 @@ import ormConfig from './config/typeorm.config';
     TypeOrmModule.forRoot(ormConfig),
     FinancialEntryModule,
     InstallmentModule,
+    CategoryModule,
   ],
   controllers: [],
   providers: [],

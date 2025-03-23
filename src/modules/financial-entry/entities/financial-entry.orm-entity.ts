@@ -1,6 +1,13 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { EntryType } from '@/shared/enums/entry-type.enum';
 import { OwnershipType } from '@/shared/enums/ownership-type.enum';
+import { CategoryEntity } from '@/modules/category/entities/category.orm-entity';
 
 @Entity('financial_entries')
 export class FinancialEntryEntity {
@@ -22,7 +29,7 @@ export class FinancialEntryEntity {
   @Column({ type: 'enum', enum: EntryType, nullable: false })
   type: EntryType;
 
-  @Column({ name: 'category_id', nullable: false })
+  @Column({ name: 'category_id', nullable: false, type: 'uuid' })
   categoryId: string;
 
   @Column({ name: 'credit_card_id', nullable: true })
@@ -50,4 +57,10 @@ export class FinancialEntryEntity {
 
   @Column({ name: 'is_off_balance', nullable: true })
   isOffBalance?: boolean;
+
+  @ManyToOne(() => CategoryEntity, (category) => category.financialEntries, {
+    eager: false,
+  })
+  @JoinColumn({ name: 'category_id' })
+  category: CategoryEntity;
 }

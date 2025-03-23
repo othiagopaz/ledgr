@@ -6,9 +6,9 @@ import {
 import { Installment } from '@/domain/installment/installment.entity';
 import { InstallmentRepository } from '../repositories/installment.repository';
 import { FinancialEntry } from '@/domain/financial-entry/financial-entry.entity';
-import { UpdateInstallmentDto } from '../dto/update-installment.dto';
+import { UpdateInstallmentDto } from '../dtos/update-installment.dto';
 import { InstallmentStatus } from '@/shared/enums/installment-status.enum';
-import { CreateInstallmentDto } from '../dto/create-installment.dto';
+import { CreateInstallmentDto } from '../dtos/create-installment.dto';
 import { addMonths } from 'date-fns';
 import { OwnershipType } from '@/shared/enums/ownership-type.enum';
 
@@ -58,34 +58,15 @@ export class InstallmentService {
     if (!installment) {
       throw new NotFoundException('Installment not found');
     }
-
-    const updated = Installment.update(installment, {
-      financialEntryId: installment.financialEntryId,
-      amount: dto.amount ?? installment.amount,
-      dueDate: dto.dueDate ? new Date(dto.dueDate) : installment.dueDate,
-      competenceDate: dto.competenceDate
-        ? new Date(dto.competenceDate)
-        : installment.competenceDate,
-      status: dto.status ?? installment.status,
-      paymentDate: dto.paymentDate
-        ? new Date(dto.paymentDate)
-        : installment.paymentDate,
-      accountId: dto.accountId ?? installment.accountId,
-      creditCardId: dto.creditCardId ?? installment.creditCardId,
-      isRefundable: dto.isRefundable ?? installment.isRefundable,
-      isShared: dto.isShared ?? installment.isShared,
-      notes: dto.notes ?? installment.notes,
-    });
-
     if (dto.paymentDate && !installment.isPaid()) {
-      updated.markAsPaid(new Date(dto.paymentDate));
+      installment.markAsPaid(new Date(dto.paymentDate));
     }
 
     if (dto.dueDate && !installment.isPaid()) {
-      updated.changeDueDate(new Date(dto.dueDate));
+      installment.changeDueDate(new Date(dto.dueDate));
     }
 
-    return this.repo.save(updated);
+    return this.repo.save(installment);
   }
 
   async delete(id: string): Promise<void> {

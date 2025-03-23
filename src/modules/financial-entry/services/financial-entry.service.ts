@@ -1,13 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateFinancialEntryDto } from '../dto/create-financial-entry.dto';
+import { CreateFinancialEntryDto } from '../dtos/create-financial-entry.dto';
 import { FinancialEntry } from '@/domain/financial-entry/financial-entry.entity';
 import { FinancialEntryRepository } from '../repositories/financial-entry.repository';
 import { InstallmentService } from '@/modules/installment/services/installment.service';
+import { CategoryService } from '@/modules/category/services/category.service';
 @Injectable()
 export class FinancialEntryService {
   constructor(
     private readonly financialEntryRepository: FinancialEntryRepository,
     private readonly installmentService: InstallmentService,
+    private readonly categoryService: CategoryService,
   ) {}
 
   async create(dto: CreateFinancialEntryDto): Promise<FinancialEntry> {
@@ -28,6 +30,12 @@ export class FinancialEntryService {
       ),
       isOffBalance: dto.isOffBalance,
     });
+
+    const category = await this.categoryService.findById(dto.categoryId);
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
 
     await this.financialEntryRepository.save(entry);
 

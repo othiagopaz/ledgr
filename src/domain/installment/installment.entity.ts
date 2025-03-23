@@ -67,24 +67,4 @@ export class Installment {
 
     this.dueDate = dueDate;
   }
-
-  static update(
-    installment: Installment,
-    props: InstallmentProps,
-  ): Installment {
-    return new Installment(
-      installment.id,
-      installment.financialEntryId,
-      props.amount ?? installment.amount,
-      props.dueDate ?? installment.dueDate,
-      props.competenceDate ?? installment.competenceDate,
-      props.status ?? installment.status,
-      props.paymentDate ?? installment.paymentDate,
-      props.accountId ?? installment.accountId,
-      props.creditCardId ?? installment.creditCardId,
-      props.isRefundable ?? installment.isRefundable,
-      props.isShared ?? installment.isShared,
-      props.notes ?? installment.notes,
-    );
-  }
 }
