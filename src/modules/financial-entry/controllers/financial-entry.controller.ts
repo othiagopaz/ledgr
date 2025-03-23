@@ -9,7 +9,7 @@ export class FinancialEntryController {
   @Post()
   async create(@Body() dto: CreateFinancialEntryDto) {
     const financialEntry = await this.service.create(dto);
-    return financialEntry;
+    return financialEntry.id;
   }
 
   @Get()

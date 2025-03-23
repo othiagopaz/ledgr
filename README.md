@@ -1,128 +1,81 @@
-# 🧾 Ledger
+## ⚙️ Como rodar o projeto do zero (primeira vez)
 
-> Um sistema de controle financeiro pessoal moderno, inspirado nos conceitos contábeis clássicos e construído com foco em robustez, escalabilidade e clareza.
-
----
-
-## ✨ Visão Geral
-
-**Ledger** é um backend modular para gestão de finanças pessoais com suporte real a:
-
-- Regime de **Competência** e **Caixa**
-- Parcelamentos e controle de faturas
-- Cartões de crédito e contas bancárias
-- Transferências e adiantamentos
-- Pagamentos **recorrentes**
-- Classificação por categorias
-
----
-
-## 🧠 Arquitetura
-
-- **🧱 Clean Architecture** com camadas bem definidas
-- **DDD (Domain-Driven Design)** com separação entre Domínio, Aplicação e Infraestrutura
-- **Repositórios abstratos** com injeção de dependência via providers
-- **Entidades ricas** com comportamento encapsulado
-- **Validação com DTOs e class-validator**
-
----
-
-## 🏗️ Estrutura de Pastas
+### 1. Suba o banco de dados com Docker:
 
 ```bash
-src/
-├── domain/                  # Lógica de negócio pura
-│   └── financial-entry/
-│       ├── financial-entry.entity.ts
-│       └── financial-entry.types.ts
-│
-├── modules/                # Módulos da aplicação (Nest)
-│   └── financial-entry/
-│       ├── controllers/
-│       ├── services/
-│       ├── dto/
-│       ├── repositories/
-│       ├── entities/
-│       └── mappers/
-│
-├── shared/                 # Utilitários, enums e base classes
-│   ├── base.repository.ts
-│   └── enums/
-│
-└── main.ts
+docker-compose up -d
+```
+
+> Isso sobe um PostgreSQL local na porta 5432 com o banco `ledger`
+
+---
+
+### 2. Configure o `.env`
+
+Crie um arquivo `.env.local` com as variáveis:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=ledger
+DB_PASSWORD=ledger
+DB_DATABASE=ledger
+NODE_ENV=development
 ```
 
 ---
 
-## 🚀 Stack
-
-- **Nest.js** - Framework principal
-- **TypeORM** - ORM para PostgreSQL
-- **PostgreSQL** - Banco de dados relacional
-- **TypeScript** - Tipagem forte
-- **class-validator** / **class-transformer** - Validação e transformação de dados
-- **uuid** - Identificadores únicos
-
----
-
-## 🧪 Modo Dev (sem banco)
-
-Para rodar sem precisar configurar banco de dados, o projeto já está preparado com um **repositório em memória**.
-
-### ➤ Executar:
+### 3. Instale as dependências:
 
 ```bash
 npm install
+```
+
+---
+
+### 4. Compile o projeto:
+
+```bash
+npm run build
+```
+
+---
+
+### 5. Gere a primeira migration (criação do schema):
+
+```bash
+npm run migration:generate
+```
+
+---
+
+### 6. Rode a migration no banco:
+
+```bash
+npm run migration:run
+```
+
+---
+
+### 7. Execute o servidor:
+
+```bash
 npm run start:dev
 ```
 
-Você poderá fazer requisições como:
+> Agora o projeto está rodando com o banco ativo, tabelas criadas e pronto pra uso.
+
+---
+
+## 🔁 Como rodar o projeto em ambiente já configurado
+
+Se você já tem o projeto clonado e configurado na máquina:
 
 ```bash
-POST /financial-entries
-Content-Type: application/json
-
-{
-  "description": "Compra no cartão",
-  "amount": 1200,
-  "installments": 6,
-  "date": "2025-04-01",
-  "type": "expense",
-  "categoryId": "cat-tv",
-  "creditCardId": "card-001"
-}
+npm install # instala dependências
+npm run build # compila para dist/
+npm run migration:run # aplica as migrations pendentes (se houver)
+npm run start:dev # inicia o servidor em modo dev
 ```
 
----
-
-## 📦 TODO (Roadmap)
-
-- [ ] Módulo de `Installment`
-- [ ] Suporte a `Invoice` e pagamento de faturas
-- [ ] Lançamentos `recorrentes`
-- [ ] Módulo de `Transferências`
-- [ ] Autenticação e gerenciamento de usuários
-- [ ] Painel gráfico (Dashboard com Nest + Front)
-
----
-
-## 🧠 Filosofia
-
-Este projeto não é um simples CRUD. É uma tentativa séria de aplicar princípios contábeis reais à vida financeira pessoal, com:
-
-- Separação entre compromisso e execução
-- Controle de competência versus caixa
-- Clareza nos dados e responsabilidade de cada entidade
-
----
-
-## 🧑‍💻 Autor
-
-**Thiago Paz** — empreendedor, racional, e curioso compulsivo.  
-Arquitetura limpa, código com propósito.
-
----
-
-## 📜 Licença
-
-MIT — pode usar, modificar e escalar. Só não faz bobagem.
+> Certifique-se de que o banco (PostgreSQL via Docker) está rodando (`docker ps`)
