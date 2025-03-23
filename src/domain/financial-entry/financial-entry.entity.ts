@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { EntryType } from '../../shared/enums/entry-type.enum';
 import { FinancialEntryProps } from './financial-entry.types';
-
+import { OwnershipType } from '../../shared/enums/ownership-type.enum';
 export class FinancialEntry {
   constructor(
     public readonly id: string,
@@ -13,6 +13,11 @@ export class FinancialEntry {
     public readonly categoryId: string,
     public readonly creditCardId?: string,
     public readonly accountId?: string,
+    public readonly ownershipType?: OwnershipType,
+    public readonly expectedRefundAmount?: number,
+    public readonly refundInstallments?: number,
+    public readonly refundInstallmentDates?: Date[],
+    public readonly isOffBalance?: boolean,
   ) {}
 
   static create(props: FinancialEntryProps): FinancialEntry {
@@ -26,6 +31,11 @@ export class FinancialEntry {
       props.categoryId,
       props.creditCardId,
       props.accountId,
+      props.ownershipType,
+      props.expectedRefundAmount,
+      props.refundInstallments,
+      props.refundInstallmentDates,
+      props.isOffBalance,
     );
   }
 

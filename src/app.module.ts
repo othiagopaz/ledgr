@@ -1,25 +1,22 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { FinancialEntryModule } from './modules/financial-entry/financial-entry.module';
 import { FinancialEntryController } from './modules/financial-entry/controllers/financial-entry.controller';
-// import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import ormConfig from './config/typeorm.config';
 
 @Module({
   imports: [
-    // TypeOrmModule.forRoot({
-    //   type: 'postgres',
-    //   host: 'localhost',
-    //   port: 5432,
-    //   username: 'seu_usuario',
-    //   password: 'sua_senha',
-    //   database: 'ledger',
-    //   autoLoadEntities: true, // <- carrega os @Entity() automaticamente
-    //   synchronize: true, // <- true no dev, false em prod
-    // }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
+    }),
+    TypeOrmModule.forRoot(ormConfig),
     FinancialEntryModule,
   ],
-  controllers: [AppController, FinancialEntryController],
-  providers: [AppService],
+  controllers: [FinancialEntryController],
+  providers: [],
 })
 export class AppModule {}
+
+console.log('DB_HOST via process.env:', process.env.NODE_ENV);

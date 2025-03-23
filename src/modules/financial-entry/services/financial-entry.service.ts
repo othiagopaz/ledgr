@@ -17,6 +17,13 @@ export class FinancialEntryService {
       categoryId: dto.categoryId,
       creditCardId: dto.creditCardId,
       accountId: dto.accountId,
+      ownershipType: dto.ownershipType,
+      expectedRefundAmount: dto.expectedRefundAmount,
+      refundInstallments: dto.refundInstallments,
+      refundInstallmentDates: dto.refundInstallmentDates?.map(
+        (date) => new Date(date),
+      ),
+      isOffBalance: dto.isOffBalance,
     });
 
     await this.repo.save(entry);

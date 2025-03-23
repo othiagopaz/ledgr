@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: ledger-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: ledger
+    ports:
+      - '5432:5432'
+    volumes:
+      - ledger-data:/var/lib/postgresql/data
+
+volumes:
+  ledger-data:

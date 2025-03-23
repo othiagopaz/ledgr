@@ -6,8 +6,10 @@ import {
   IsDateString,
   IsEnum,
   Min,
+  IsBoolean,
 } from 'class-validator';
 import { EntryType } from '@/shared/enums/entry-type.enum';
+import { OwnershipType } from '@/shared/enums/ownership-type.enum';
 
 export class CreateFinancialEntryDto {
   @IsString()
@@ -39,4 +41,24 @@ export class CreateFinancialEntryDto {
   @IsOptional()
   @IsString()
   accountId?: string;
+
+  @IsOptional()
+  @IsEnum(OwnershipType)
+  ownershipType?: OwnershipType;
+
+  @IsOptional()
+  @IsNumber()
+  expectedRefundAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  refundInstallments?: number;
+
+  @IsOptional()
+  @IsDateString()
+  refundInstallmentDates?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  isOffBalance?: boolean;
 }
