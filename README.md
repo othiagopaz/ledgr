@@ -43,9 +43,9 @@ Gerenciar finanças pessoais de forma **realista, automatizada e estratégica**,
 
 ### 1. Suba o banco de dados com Docker:
 
-\`\`\`bash
+```bash
 docker-compose up -d
-\`\`\`
+```
 
 > Isso sobe um PostgreSQL local na porta 5432 com o banco `ledger`
 
@@ -55,54 +55,54 @@ docker-compose up -d
 
 Crie um arquivo `.env.local` com as variáveis:
 
-\`\`\`env
+```env
 DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=ledger
 DB_PASSWORD=ledger
 DB_DATABASE=ledger
 NODE_ENV=development
-\`\`\`
+```
 
 ---
 
 ### 3. Instale as dependências:
 
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 ---
 
 ### 4. Compile o projeto:
 
-\`\`\`bash
+```bash
 npm run build
-\`\`\`
+```
 
 ---
 
 ### 5. Gere a primeira migration (criação do schema):
 
-\`\`\`bash
+```bash
 npm run migration:generate
-\`\`\`
+```
 
 ---
 
 ### 6. Rode a migration no banco:
 
-\`\`\`bash
+```bash
 npm run migration:run
-\`\`\`
+```
 
 ---
 
 ### 7. Execute o servidor:
 
-\`\`\`bash
+```bash
 npm run start:dev
-\`\`\`
+```
 
 > Agora o projeto está rodando com o banco ativo, tabelas criadas e pronto pra uso.
 
@@ -112,12 +112,12 @@ npm run start:dev
 
 Se você já tem o projeto clonado e configurado na máquina:
 
-\`\`\`bash
+```bash
 npm install # instala dependências
 npm run build # compila para dist/
 npm run migration:run # aplica as migrations pendentes (se houver)
 npm run start:dev # inicia o servidor em modo dev
-\`\`\`
+```
 
 > Certifique-se de que o banco (PostgreSQL via Docker) está rodando (`docker ps`)
 
