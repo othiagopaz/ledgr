@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { FinancialEntryEntity } from '../modules/financial-entry/entities/financial-entry.orm-entity';
-import { InstallmentEntity } from '../modules/installments/entities/installment.orm-entity';
+import { InstallmentEntity } from '../modules/installment/entities/installment.orm-entity';
 // Importar as entidades compiladas
 
 export const typeOrmConfig: DataSourceOptions = {

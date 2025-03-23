@@ -18,6 +18,7 @@ export class CreateFinancialEntryDto {
 
   @IsNumber()
   @Min(0.01)
+  @IsNotEmpty()
   amount: number;
 
   @IsNumber()
@@ -25,9 +26,11 @@ export class CreateFinancialEntryDto {
   installments: number;
 
   @IsDateString()
+  @IsNotEmpty()
   date: string;
 
   @IsEnum(EntryType)
+  @IsNotEmpty()
   type: EntryType;
 
   @IsString()
@@ -44,7 +47,8 @@ export class CreateFinancialEntryDto {
 
   @IsOptional()
   @IsEnum(OwnershipType)
-  ownershipType?: OwnershipType;
+  @IsNotEmpty()
+  ownershipType: OwnershipType;
 
   @IsOptional()
   @IsNumber()
@@ -60,5 +64,6 @@ export class CreateFinancialEntryDto {
 
   @IsOptional()
   @IsBoolean()
-  isOffBalance?: boolean;
+  @IsNotEmpty()
+  isOffBalance: boolean;
 }

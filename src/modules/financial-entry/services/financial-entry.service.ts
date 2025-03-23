@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateFinancialEntryDto } from '../dto/create-financial-entry.dto';
 import { FinancialEntry } from '@/domain/financial-entry/financial-entry.entity';
 import { FinancialEntryRepository } from '../repositories/financial-entry.repository';
-import { InstallmentService } from '@/modules/installments/services/installment.service';
+import { InstallmentService } from '@/modules/installment/services/installment.service';
 @Injectable()
 export class FinancialEntryService {
   constructor(

@@ -4,7 +4,7 @@ import { FinancialEntryController } from './controllers/financial-entry.controll
 import { FinancialEntryRepository } from './repositories/financial-entry.repository';
 import { FinancialEntryEntity } from './entities/financial-entry.orm-entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { InstallmentModule } from '@/modules/installments/installment.module';
+import { InstallmentModule } from '@/modules/installment/installment.module';
 import { FinancialEntryMapper } from './mappers/financial-entry.mapper';
 @Module({
   imports: [

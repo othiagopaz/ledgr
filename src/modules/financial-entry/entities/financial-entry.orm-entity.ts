@@ -7,22 +7,22 @@ export class FinancialEntryEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ nullable: false })
   description: string;
 
-  @Column('decimal')
+  @Column({ type: 'decimal', nullable: false })
   amount: number;
 
-  @Column()
+  @Column({ nullable: false })
   installments: number;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamp', nullable: false })
   date: Date;
 
-  @Column({ type: 'enum', enum: EntryType })
+  @Column({ type: 'enum', enum: EntryType, nullable: false })
   type: EntryType;
 
-  @Column({ name: 'category_id' })
+  @Column({ name: 'category_id', nullable: false })
   categoryId: string;
 
   @Column({ name: 'credit_card_id', nullable: true })

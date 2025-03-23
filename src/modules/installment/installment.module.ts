@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { InstallmentService } from './services/installment.service';
-import { InstallmentController } from './controller/installment.controller';
+import { InstallmentController } from './controllers/installment.controller';
 import { InstallmentRepository } from './repositories/installment.repository';
 import { InstallmentMapper } from './mappers/installment.mapper';
 import { InstallmentEntity } from './entities/installment.orm-entity';

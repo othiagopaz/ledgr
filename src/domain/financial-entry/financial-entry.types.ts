@@ -9,9 +9,9 @@ export type FinancialEntryProps = {
   categoryId: string;
   creditCardId?: string;
   accountId?: string;
-  ownershipType?: OwnershipType;
+  ownershipType: OwnershipType;
   expectedRefundAmount?: number;
   refundInstallments?: number;
   refundInstallmentDates?: Date[];
-  isOffBalance?: boolean;
+  isOffBalance: boolean;
 };
