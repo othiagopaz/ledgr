@@ -2,10 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateFinancialEntryDto } from '../dto/create-financial-entry.dto';
 import { FinancialEntry } from '@/domain/financial-entry/financial-entry.entity';
 import { FinancialEntryRepository } from '../repositories/financial-entry.repository';
-
+import { InstallmentService } from '@/modules/installments/services/installment.service';
 @Injectable()
 export class FinancialEntryService {
-  constructor(private readonly repo: FinancialEntryRepository) {}
+  constructor(
+    private readonly financialEntryRepository: FinancialEntryRepository,
+    private readonly installmentService: InstallmentService,
+  ) {}
 
   async create(dto: CreateFinancialEntryDto): Promise<FinancialEntry> {
     const entry = FinancialEntry.create({
@@ -26,16 +29,19 @@ export class FinancialEntryService {
       isOffBalance: dto.isOffBalance,
     });
 
-    await this.repo.save(entry);
+    await this.financialEntryRepository.save(entry);
+
+    await this.installmentService.createFromEntry(entry);
+
     return entry;
   }
 
   async findAll(): Promise<FinancialEntry[]> {
-    return this.repo.findAll();
+    return this.financialEntryRepository.findAll();
   }
 
   async findById(id: string): Promise<FinancialEntry> {
-    const entry = await this.repo.findById(id);
+    const entry = await this.financialEntryRepository.findById(id);
     if (!entry) {
       throw new NotFoundException('Financial entry not found');
     }
