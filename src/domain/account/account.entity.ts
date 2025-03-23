@@ -1,15 +1,15 @@
-import { EntryType } from '@/shared/enums/entry-type.enum';
+import { AccountType } from '../../shared/enums/account-type.enum';
 
-export class Category {
+export class Account {
   constructor(
     public readonly id: string,
     public name: string,
-    public type: EntryType,
+    public type: AccountType,
+    public initialBalance: number,
+    public institution?: string,
     public color?: string,
-    public isDefault?: boolean,
     public isArchived?: boolean,
     public userId?: string,
-    public parentCategoryId?: string,
   ) {}
 
   archive() {

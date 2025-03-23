@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { InstallmentModule } from './modules/installment/installment.module';
 import { CategoryModule } from './modules/category/category.module';
 import ormConfig from './config/typeorm.config';
-
+import { AccountModule } from './modules/account/account.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -16,6 +16,7 @@ import ormConfig from './config/typeorm.config';
     FinancialEntryModule,
     InstallmentModule,
     CategoryModule,
+    AccountModule,
   ],
   controllers: [],
   providers: [],

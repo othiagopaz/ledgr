@@ -58,15 +58,25 @@ export class InstallmentService {
     if (!installment) {
       throw new NotFoundException('Installment not found');
     }
-    if (dto.paymentDate && !installment.isPaid()) {
-      installment.markAsPaid(new Date(dto.paymentDate));
-    }
 
-    if (dto.dueDate && !installment.isPaid()) {
-      installment.changeDueDate(new Date(dto.dueDate));
-    }
+    const updatedInstallment = new Installment(
+      installment.id,
+      dto.financialEntryId ?? installment.financialEntryId,
+      dto.amount ?? installment.amount,
+      dto.dueDate ? new Date(dto.dueDate) : installment.dueDate,
+      dto.competenceDate
+        ? new Date(dto.competenceDate)
+        : installment.competenceDate,
+      dto.status ?? installment.status,
+      dto.paymentDate ? new Date(dto.paymentDate) : installment.paymentDate,
+      dto.accountId ?? installment.accountId,
+      dto.creditCardId ?? installment.creditCardId,
+      dto.isRefundable ?? installment.isRefundable,
+      dto.isShared ?? installment.isShared,
+      dto.notes ?? installment.notes,
+    );
 
-    return this.repo.save(installment);
+    return this.repo.save(updatedInstallment);
   }
 
   async delete(id: string): Promise<void> {

@@ -39,8 +39,18 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
-    category.update(dto);
-    return this.categoryRepository.save(category);
+    const updatedCategory = new Category(
+      category.id,
+      dto.name ?? category.name,
+      dto.type ?? category.type,
+      dto.color ?? category.color,
+      dto.isDefault ?? category.isDefault,
+      dto.isArchived ?? category.isArchived,
+      dto.userId ?? category.userId,
+      dto.parentCategoryId ?? category.parentCategoryId,
+    );
+
+    return this.categoryRepository.save(updatedCategory);
   }
 
   async findSubcategories(id: string): Promise<Category[]> {

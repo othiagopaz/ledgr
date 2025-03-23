@@ -8,6 +8,7 @@ import {
 import { EntryType } from '@/shared/enums/entry-type.enum';
 import { OwnershipType } from '@/shared/enums/ownership-type.enum';
 import { CategoryEntity } from '@/modules/category/entities/category.orm-entity';
+import { AccountEntity } from '@/modules/account/entities/account.orm-entity';
 
 @Entity('financial_entries')
 export class FinancialEntryEntity {
@@ -63,4 +64,10 @@ export class FinancialEntryEntity {
   })
   @JoinColumn({ name: 'category_id' })
   category: CategoryEntity;
+
+  @ManyToOne(() => AccountEntity, (account) => account.financialEntries, {
+    eager: false,
+  })
+  @JoinColumn({ name: 'account_id' })
+  account: AccountEntity;
 }

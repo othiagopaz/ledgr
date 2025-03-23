@@ -1,0 +1,7 @@
+export enum AccountType {
+  CHECKING = 'CHECKING',
+  SAVINGS = 'SAVINGS',
+  WALLET = 'WALLET',
+  INVESTMENT = 'INVESTMENT',
+  OTHER = 'OTHER',
+}
