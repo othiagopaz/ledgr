@@ -1,5 +1,5 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
-import { InstallmentStatus } from '../../../shared/enums/installment-status.enum';
+import { InstallmentStatus } from '../../common/enums/installment-status.enum';
 
 @Entity('installments')
 export class InstallmentEntity {

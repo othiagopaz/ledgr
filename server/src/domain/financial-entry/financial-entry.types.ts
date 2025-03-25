@@ -1,5 +1,5 @@
-import { EntryType } from '../../shared/enums/entry-type.enum';
-import { OwnershipType } from '../../shared/enums/ownership-type.enum';
+import { EntryType } from '../../common/enums/entry-type.enum';
+import { OwnershipType } from '../../common/enums/ownership-type.enum';
 export type FinancialEntryProps = {
   description: string;
   amount: number;

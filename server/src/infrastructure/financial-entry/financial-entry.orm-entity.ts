@@ -5,10 +5,10 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { EntryType } from '../../../shared/enums/entry-type.enum';
-import { OwnershipType } from '../../../shared/enums/ownership-type.enum';
-import { CategoryEntity } from '../../category/entities/category.orm-entity';
-import { AccountEntity } from '../../account/entities/account.orm-entity';
+import { EntryType } from '../../common/enums/entry-type.enum';
+import { OwnershipType } from '../../common/enums/ownership-type.enum';
+import { CategoryEntity } from '../category/category.orm-entity';
+import { AccountEntity } from '../account/account.orm-entity';
 
 @Entity('financial_entries')
 export class FinancialEntryEntity {

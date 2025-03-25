@@ -8,7 +8,7 @@ import {
   IsPositive,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { InstallmentStatus } from '../../../shared/enums/installment-status.enum';
+import { InstallmentStatus } from '../../../common/enums/installment-status.enum';
 
 export class CreateInstallmentDto {
   @IsUUID()

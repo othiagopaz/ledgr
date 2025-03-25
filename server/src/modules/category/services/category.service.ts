@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
-import { CategoryRepository } from '../repositories/category.repository';
+import { CategoryRepository } from '../../../infrastructure/category/category.repository';
 import { CreateCategoryDto } from '../dtos/create-category.dto';
 import { Category } from '../../../domain/category/category.entity';
 import { UpdateCategoryDto } from '../dtos/update-category.dto';

@@ -1,6 +1,6 @@
 import { Column, Entity, OneToMany, PrimaryColumn } from 'typeorm';
-import { AccountType } from '../../../shared/enums/account-type.enum';
-import { FinancialEntryEntity } from '../../financial-entry/entities/financial-entry.orm-entity';
+import { AccountType } from '../../common/enums/account-type.enum';
+import { FinancialEntryEntity } from '../financial-entry/financial-entry.orm-entity';
 
 @Entity('accounts')
 export class AccountEntity {

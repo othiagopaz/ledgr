@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { AccountService } from './services/account.service';
 import { AccountController } from './controllers/account.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AccountRepository } from './repositories/account.repository';
-import { AccountMapper } from './mappers/account.mapper';
-import { AccountEntity } from './entities/account.orm-entity';
+import { AccountRepository } from '../../infrastructure/account/account.repository';
+import { AccountMapper } from '../../infrastructure/account/account.mapper';
+import { AccountEntity } from '../../infrastructure/account/account.orm-entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AccountEntity])],

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { FinancialEntryService } from '../services/financial-entry.service';
 import { CreateFinancialEntryDto } from '../dtos/create-financial-entry.dto';
-import { Message } from '../../../shared/decorators/message.decorator';
+import { Message } from '../../../common/decorators/message.decorator';
 
 @Controller('financial-entries')
 export class FinancialEntryController {

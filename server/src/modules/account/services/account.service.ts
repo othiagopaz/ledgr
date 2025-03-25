@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AccountRepository } from '../repositories/account.repository';
+import { AccountRepository } from '../../../infrastructure/account/account.repository';
 import { CreateAccountDto } from '../dtos/create-account.dto';
 import { Account } from '../../../domain/account/account.entity';
 import { UpdateAccountDto } from '../dtos/update-account.dto';

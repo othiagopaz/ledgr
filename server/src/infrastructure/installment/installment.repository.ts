@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Installment } from '../../../domain/installment/installment.entity';
-import { InstallmentEntity } from '../entities/installment.orm-entity';
-import { InstallmentMapper } from '../mappers/installment.mapper';
-import { BaseRepository } from '../../../shared/base.repository';
+import { Installment } from '../../domain/installment/installment.entity';
+import { InstallmentEntity } from './installment.orm-entity';
+import { InstallmentMapper } from './installment.mapper';
+import { BaseRepository } from '../common/base.repository';
 
 @Injectable()
 export class InstallmentRepository extends BaseRepository<

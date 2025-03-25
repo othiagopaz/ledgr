@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateFinancialEntryDto } from '../dtos/create-financial-entry.dto';
 import { FinancialEntry } from '../../../domain/financial-entry/financial-entry.entity';
-import { FinancialEntryRepository } from '../repositories/financial-entry.repository';
+import { FinancialEntryRepository } from '../../../infrastructure/financial-entry/financial-entry.repository';
 import { InstallmentService } from '../../installment/services/installment.service';
 import { CategoryService } from '../../category/services/category.service';
 import { UpdateFinancialEntryDto } from '../dtos/update-financial-entry.dto';

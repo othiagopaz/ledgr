@@ -1,9 +1,9 @@
 // src/modules/installment/mappers/installment.mapper.ts
 import { Injectable } from '@nestjs/common';
 
-import { Installment } from '../../../domain/installment/installment.entity';
-import { InstallmentEntity } from '../entities/installment.orm-entity';
-import { Mapper } from '../../../shared/base.repository';
+import { Installment } from '../../domain/installment/installment.entity';
+import { InstallmentEntity } from './installment.orm-entity';
+import { Mapper } from '../common/base.repository';
 
 @Injectable()
 export class InstallmentMapper

@@ -1,9 +1,9 @@
 // src/modules/financial-entry/mappers/financial-entry.mapper.ts
 import { Injectable } from '@nestjs/common';
 
-import { FinancialEntry } from '../../../domain/financial-entry/financial-entry.entity';
-import { FinancialEntryEntity } from '../entities/financial-entry.orm-entity';
-import { Mapper } from '../../../shared/base.repository';
+import { FinancialEntry } from '../../domain/financial-entry/financial-entry.entity';
+import { FinancialEntryEntity } from './financial-entry.orm-entity';
+import { Mapper } from '../common/base.repository';
 
 @Injectable()
 export class FinancialEntryMapper

@@ -1,4 +1,4 @@
-import { InstallmentStatus } from '../../shared/enums/installment-status.enum';
+import { InstallmentStatus } from '../../common/enums/installment-status.enum';
 
 export type InstallmentProps = {
   financialEntryId: string;

@@ -1,4 +1,4 @@
-import { AccountType } from '../../shared/enums/account-type.enum';
+import { AccountType } from '../../common/enums/account-type.enum';
 
 export class Account {
   constructor(

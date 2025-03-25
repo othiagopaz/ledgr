@@ -6,8 +6,8 @@ import {
   OneToMany,
   PrimaryColumn,
 } from 'typeorm';
-import { EntryType } from '../../../shared/enums/entry-type.enum';
-import { FinancialEntryEntity } from '../../financial-entry/entities/financial-entry.orm-entity';
+import { EntryType } from '../../common/enums/entry-type.enum';
+import { FinancialEntryEntity } from '../financial-entry/financial-entry.orm-entity';
 
 @Entity('categories')
 export class CategoryEntity {

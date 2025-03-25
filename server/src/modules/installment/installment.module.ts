@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { InstallmentService } from './services/installment.service';
 import { InstallmentController } from './controllers/installment.controller';
-import { InstallmentRepository } from './repositories/installment.repository';
-import { InstallmentMapper } from './mappers/installment.mapper';
-import { InstallmentEntity } from './entities/installment.orm-entity';
+import { InstallmentRepository } from '../../infrastructure/installment/installment.repository';
+import { InstallmentMapper } from '../../infrastructure/installment/installment.mapper';
+import { InstallmentEntity } from '../../infrastructure/installment/installment.orm-entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({

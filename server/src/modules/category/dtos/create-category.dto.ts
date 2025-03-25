@@ -1,5 +1,5 @@
 import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
-import { EntryType } from '../../../shared/enums/entry-type.enum';
+import { EntryType } from '../../../common/enums/entry-type.enum';
 
 export class CreateCategoryDto {
   @IsString()
