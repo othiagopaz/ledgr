@@ -1,12 +1,12 @@
 import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
-import { EntryType } from '../../../common/enums/entry-type.enum';
+import { EventType } from '../../../common/enums/event-type.enum';
 
 export class CreateCategoryDto {
   @IsString()
   name: string;
 
-  @IsEnum(EntryType)
-  type: EntryType;
+  @IsEnum(EventType)
+  type: EventType;
 
   @IsOptional()
   @IsString()

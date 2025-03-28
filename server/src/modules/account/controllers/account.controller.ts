@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Body, Param } from '@nestjs/common';
 import { AccountService } from '../services/account.service';
 import { CreateAccountDto } from '../dtos/create-account.dto';
 import { UpdateAccountDto } from '../dtos/update-account.dto';
-import { Account } from '../../../domain/account/account.entity';
+import { Account } from '../../../domain/Account/account.entity';
 import { Message } from '../../../common/decorators/message.decorator';
 
 @Controller('accounts')

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Mapper } from '../common/base.repository';
-import { Account } from '../../domain/account/account.entity';
+import { Mapper } from '../common/repository.interface';
+import { Account } from '../../domain/Account/account.entity';
 import { AccountEntity } from './account.orm-entity';
 @Injectable()
 export class AccountMapper implements Mapper<Account, AccountEntity> {

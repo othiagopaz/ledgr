@@ -6,8 +6,8 @@ import {
   OneToMany,
   PrimaryColumn,
 } from 'typeorm';
-import { EntryType } from '../../common/enums/entry-type.enum';
-import { FinancialEntryEntity } from '../financial-entry/financial-entry.orm-entity';
+import { EventType } from '../../common/enums/event-type.enum';
+import { EventEntity } from '../Event/event.orm-entity';
 
 @Entity('categories')
 export class CategoryEntity {
@@ -17,8 +17,8 @@ export class CategoryEntity {
   @Column()
   name: string;
 
-  @Column({ type: 'enum', enum: EntryType })
-  type: EntryType;
+  @Column({ type: 'enum', enum: EventType })
+  type: EventType;
 
   @Column({ nullable: true, name: 'color' })
   color?: string;
@@ -44,6 +44,6 @@ export class CategoryEntity {
   @Column({ name: 'parent_category_id', nullable: true })
   parentCategoryId?: string;
 
-  @OneToMany(() => FinancialEntryEntity, (entry) => entry.category)
-  financialEntries?: FinancialEntryEntity[];
+  @OneToMany(() => EventEntity, (entry) => entry.category)
+  events?: EventEntity[];
 }

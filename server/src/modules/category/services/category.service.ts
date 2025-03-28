@@ -1,14 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-
-import { CategoryRepository } from '../../../infrastructure/category/category.repository';
+import { ICategoryRepository } from '../../../infrastructure/Category/category.repository.interface';
 import { CreateCategoryDto } from '../dtos/create-category.dto';
-import { Category } from '../../../domain/category/category.entity';
+import { Category } from '../../../domain/Category/category.entity';
 import { UpdateCategoryDto } from '../dtos/update-category.dto';
 
 @Injectable()
 export class CategoryService {
-  constructor(private readonly categoryRepository: CategoryRepository) {}
+  constructor(
+    @Inject(ICategoryRepository)
+    private readonly categoryRepository: ICategoryRepository,
+  ) {}
 
   async create(dto: CreateCategoryDto): Promise<Category> {
     const category = new Category(

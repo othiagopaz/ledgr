@@ -1,6 +1,6 @@
 import { Column, Entity, OneToMany, PrimaryColumn } from 'typeorm';
 import { AccountType } from '../../common/enums/account-type.enum';
-import { FinancialEntryEntity } from '../financial-entry/financial-entry.orm-entity';
+import { EventEntity } from '../Event/event.orm-entity';
 
 @Entity('accounts')
 export class AccountEntity {
@@ -28,6 +28,6 @@ export class AccountEntity {
   @Column({ nullable: true, name: 'user_id' })
   userId?: string;
 
-  @OneToMany(() => FinancialEntryEntity, (entry) => entry.account)
-  financialEntries?: FinancialEntryEntity[];
+  @OneToMany(() => EventEntity, (entry) => entry.account)
+  events?: EventEntity[];
 }

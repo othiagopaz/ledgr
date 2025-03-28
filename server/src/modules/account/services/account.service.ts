@@ -1,14 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-
-import { AccountRepository } from '../../../infrastructure/account/account.repository';
 import { CreateAccountDto } from '../dtos/create-account.dto';
-import { Account } from '../../../domain/account/account.entity';
+import { Account } from '../../../domain/Account/account.entity';
 import { UpdateAccountDto } from '../dtos/update-account.dto';
+import { IAccountRepository } from '../../../infrastructure/Account/account.repository.interface';
 
 @Injectable()
 export class AccountService {
-  constructor(private readonly accountRepository: AccountRepository) {}
+  constructor(
+    @Inject(IAccountRepository)
+    private readonly accountRepository: IAccountRepository,
+  ) {}
 
   async create(dto: CreateAccountDto): Promise<Account> {
     const account = new Account(

@@ -2,10 +2,10 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-import { FinancialEntryEntity } from '../infrastructure/financial-entry/financial-entry.orm-entity';
-import { InstallmentEntity } from '../infrastructure/installment/installment.orm-entity';
-import { CategoryEntity } from '../infrastructure/category/category.orm-entity';
-import { AccountEntity } from '../infrastructure/account/account.orm-entity';
+import { EventEntity } from '../infrastructure/Event/event.orm-entity';
+import { TransactionEntity } from '../infrastructure/Transaction/transaction.orm-entity';
+import { CategoryEntity } from '../infrastructure/Category/category.orm-entity';
+import { AccountEntity } from '../infrastructure/Account/account.orm-entity';
 export const typeOrmConfig: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DB_HOST,
@@ -13,12 +13,7 @@ export const typeOrmConfig: DataSourceOptions = {
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
-  entities: [
-    FinancialEntryEntity,
-    InstallmentEntity,
-    CategoryEntity,
-    AccountEntity,
-  ],
+  entities: [EventEntity, TransactionEntity, CategoryEntity, AccountEntity],
   migrations: ['dist/database/migrations/*.js'],
   synchronize: false,
   migrationsRun: true,

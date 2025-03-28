@@ -1,0 +1,23 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { Transaction } from '../../domain/Transaction/transaction.entity';
+import { TransactionEntity } from './transaction.orm-entity';
+import { TransactionMapper } from './transaction.mapper';
+import { BaseRepository } from '../common/base.repository';
+import { ITransactionRepository } from './transaction.repository.interface';
+
+@Injectable()
+export class TransactionRepository
+  extends BaseRepository<Transaction, TransactionEntity>
+  implements ITransactionRepository
+{
+  constructor(
+    @InjectRepository(TransactionEntity)
+    repo: Repository<TransactionEntity>,
+    mapper: TransactionMapper,
+  ) {
+    super(repo, mapper);
+  }
+}

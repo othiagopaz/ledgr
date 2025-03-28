@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { FinancialEntryModule } from './modules/financial-entry/financial-entry.module';
+import { EventModule } from './modules/Event/event.module';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { InstallmentModule } from './modules/installment/installment.module';
-import { CategoryModule } from './modules/category/category.module';
+import { TransactionModule } from './modules/Transaction/transaction.module';
+import { CategoryModule } from './modules/Category/category.module';
 import ormConfig from './config/typeorm.config';
-import { AccountModule } from './modules/account/account.module';
+import { AccountModule } from './modules/Account/account.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -13,8 +13,8 @@ import { AccountModule } from './modules/account/account.module';
       envFilePath: ['.env.local', '.env'],
     }),
     TypeOrmModule.forRoot(ormConfig),
-    FinancialEntryModule,
-    InstallmentModule,
+    EventModule,
+    TransactionModule,
     CategoryModule,
     AccountModule,
   ],

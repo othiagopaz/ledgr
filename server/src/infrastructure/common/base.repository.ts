@@ -1,11 +1,9 @@
-import { Repository, ObjectLiteral } from 'typeorm';
+import { ObjectLiteral, Repository } from 'typeorm';
+import { IRepository, Mapper } from './repository.interface';
 
-export interface Mapper<TDomain, TOrm> {
-  toDomain(ormEntity: TOrm): TDomain;
-  toOrm(domainEntity: TDomain): TOrm;
-}
-
-export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral> {
+export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
+  implements IRepository<TDomain>
+{
   constructor(
     protected readonly ormRepo: Repository<TOrm>,
     protected readonly mapper: Mapper<TDomain, TOrm>,
