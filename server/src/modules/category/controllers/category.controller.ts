@@ -1,17 +1,28 @@
-import { Controller, Post, Body, Get, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Param,
+  BadRequestException,
+} from '@nestjs/common';
 import { CategoryService } from '../services/category.service';
 import { CreateCategoryDto } from '../dtos/create-category.dto';
 import { Category } from '../../../domain/Category/category.entity';
 import { Message } from '../../../common/decorators/message.decorator';
 
-@Controller('category')
+@Controller('categories')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Post()
   @Message('Category created successfully')
   async create(@Body() dto: CreateCategoryDto): Promise<Category> {
-    return this.categoryService.create(dto);
+    try {
+      return this.categoryService.create(dto);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
   }
 
   @Get()

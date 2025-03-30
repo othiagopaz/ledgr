@@ -1,17 +1,13 @@
-import { EventType } from '../../common/enums/event-type.enum';
-import { OwnershipType } from '../../common/enums/ownership-type.enum';
+import { TransactionType } from '../../common/enums/transaction-type.enum';
+import { TransactionProps } from '../Transaction/transaction.types';
+
 export type EventProps = {
   description: string;
   amount: number;
   installments: number;
-  date: Date;
-  type: EventType;
+  competenceDate: Date;
+  type: TransactionType;
   categoryId: string;
-  creditCardId?: string;
-  accountId?: string;
-  ownershipType: OwnershipType;
   expectedRefundAmount?: number;
-  refundInstallments?: number;
-  refundInstallmentDates?: Date[];
-  isOffBalance: boolean;
+  transactions?: TransactionProps[];
 };

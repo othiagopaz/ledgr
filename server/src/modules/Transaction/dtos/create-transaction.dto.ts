@@ -4,15 +4,18 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  IsBoolean,
   IsPositive,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TransactionStatus } from '../../../common/enums/transaction-status.enum';
+import { Ownership } from '../../../common/enums/ownership.enum';
+import { TransactionType } from '../../../common/enums/transaction-type.enum';
 
 export class CreateTransactionDto {
   @IsUUID()
-  eventId: string;
+  @IsOptional()
+  eventId?: string;
 
   @IsNumber()
   @IsPositive()
@@ -27,7 +30,16 @@ export class CreateTransactionDto {
   competenceDate: Date;
 
   @IsString()
+  @IsEnum(TransactionStatus)
   status: TransactionStatus;
+
+  @IsString()
+  @IsEnum(Ownership)
+  ownership: Ownership;
+
+  @IsString()
+  @IsEnum(TransactionType)
+  type: TransactionType;
 
   @IsOptional()
   @IsDate()
@@ -41,14 +53,6 @@ export class CreateTransactionDto {
   @IsOptional()
   @IsUUID()
   creditCardId?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isRefundable?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  isShared?: boolean;
 
   @IsOptional()
   @IsString()

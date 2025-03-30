@@ -27,7 +27,7 @@ export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
   }
 
   async findAll(): Promise<TDomain[]> {
-    const all = await this.ormRepo.find();
+    const all = await this.ormRepo.find({ relations: ['transactions'] });
     return all.map((f) => this.mapper.toDomain(f));
   }
 

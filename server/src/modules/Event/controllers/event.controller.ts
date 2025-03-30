@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  BadRequestException,
+} from '@nestjs/common';
 import { EventService } from '../services/event.service';
 import { CreateEventDto } from '../dtos/create-event.dto';
 import { Message } from '../../../common/decorators/message.decorator';
@@ -10,8 +17,12 @@ export class EventController {
   @Post()
   @Message('Event created successfully')
   async create(@Body() dto: CreateEventDto) {
-    const event = await this.service.create(dto);
-    return { id: event.id };
+    try {
+      const event = await this.service.create(dto);
+      return { id: event.id };
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
   }
 
   @Get()

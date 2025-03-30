@@ -8,10 +8,14 @@ import { TransactionModule } from '../Transaction/transaction.module';
 import { EventMapper } from '../../infrastructure/Event/event.mapper';
 import { CategoryModule } from '../Category/category.module';
 import { EVENT_REPOSITORY } from '../../infrastructure/common/repository.tokens';
+import { CATEGORY_REPOSITORY } from '../../infrastructure/common/repository.tokens';
+import { CategoryRepository } from '../../infrastructure/Category/category.repository';
+import { CategoryEntity } from '../../infrastructure/Category/category.orm-entity';
+import { CategoryMapper } from '../../infrastructure/Category/category.mapper';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([EventEntity]),
+    TypeOrmModule.forFeature([EventEntity, CategoryEntity]),
     TransactionModule,
     CategoryModule,
   ],
@@ -22,7 +26,12 @@ import { EVENT_REPOSITORY } from '../../infrastructure/common/repository.tokens'
       provide: EVENT_REPOSITORY,
       useClass: EventRepository,
     },
+    {
+      provide: CATEGORY_REPOSITORY,
+      useClass: CategoryRepository,
+    },
     EventMapper,
+    CategoryMapper,
   ],
   exports: [EventService],
 })

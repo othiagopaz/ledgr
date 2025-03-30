@@ -6,10 +6,12 @@ import {
   IsDateString,
   IsEnum,
   Min,
-  IsBoolean,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
-import { EventType } from '../../../common/enums/event-type.enum';
-import { OwnershipType } from '../../../common/enums/ownership-type.enum';
+import { TransactionType } from '../../../common/enums/transaction-type.enum';
+import { CreateTransactionDto } from '../../Transaction/dtos/create-transaction.dto';
+import { Type } from 'class-transformer';
 
 export class CreateEventDto {
   @IsString()
@@ -27,43 +29,23 @@ export class CreateEventDto {
 
   @IsDateString()
   @IsNotEmpty()
-  date: string;
+  competenceDate: string;
 
-  @IsEnum(EventType)
+  @IsEnum(TransactionType)
   @IsNotEmpty()
-  type: EventType;
+  type: TransactionType;
 
   @IsString()
   @IsNotEmpty()
   categoryId: string;
 
   @IsOptional()
-  @IsString()
-  creditCardId?: string;
-
-  @IsOptional()
-  @IsString()
-  accountId?: string;
-
-  @IsOptional()
-  @IsEnum(OwnershipType)
-  @IsNotEmpty()
-  ownershipType: OwnershipType;
-
-  @IsOptional()
   @IsNumber()
   expectedRefundAmount?: number;
 
-  @IsOptional()
-  @IsNumber()
-  refundInstallments?: number;
-
-  @IsOptional()
-  @IsDateString()
-  refundInstallmentDates?: string[];
-
-  @IsOptional()
-  @IsBoolean()
+  @IsArray()
   @IsNotEmpty()
-  isOffBalance: boolean;
+  @ValidateNested({ each: true })
+  @Type(() => CreateTransactionDto)
+  transactions: CreateTransactionDto[];
 }

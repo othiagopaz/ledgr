@@ -5,14 +5,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CategoryRepository } from '../../infrastructure/Category/category.repository';
 import { CategoryMapper } from '../../infrastructure/Category/category.mapper';
 import { CategoryEntity } from '../../infrastructure/Category/category.orm-entity';
-import { ICategoryRepository } from '../../infrastructure/Category/category.repository.interface';
+import { CATEGORY_REPOSITORY } from '../../infrastructure/common/repository.tokens';
 
 @Module({
   imports: [TypeOrmModule.forFeature([CategoryEntity])],
   providers: [
     CategoryService,
     {
-      provide: ICategoryRepository,
+      provide: CATEGORY_REPOSITORY,
       useClass: CategoryRepository,
     },
     CategoryMapper,

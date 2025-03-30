@@ -1,6 +1,5 @@
-import { Column, Entity, OneToMany, PrimaryColumn } from 'typeorm';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { AccountType } from '../../common/enums/account-type.enum';
-import { EventEntity } from '../Event/event.orm-entity';
 
 @Entity('accounts')
 export class AccountEntity {
@@ -28,6 +27,17 @@ export class AccountEntity {
   @Column({ nullable: true, name: 'user_id' })
   userId?: string;
 
-  @OneToMany(() => EventEntity, (entry) => entry.account)
-  events?: EventEntity[];
+  @Column({
+    type: 'timestamp',
+    name: 'created_at',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  createdAt: Date;
+
+  @Column({
+    type: 'timestamp',
+    name: 'updated_at',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  updatedAt: Date;
 }

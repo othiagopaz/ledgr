@@ -4,11 +4,11 @@ import { ICategoryRepository } from '../../../infrastructure/Category/category.r
 import { CreateCategoryDto } from '../dtos/create-category.dto';
 import { Category } from '../../../domain/Category/category.entity';
 import { UpdateCategoryDto } from '../dtos/update-category.dto';
-
+import { CATEGORY_REPOSITORY } from '../../../infrastructure/common/repository.tokens';
 @Injectable()
 export class CategoryService {
   constructor(
-    @Inject(ICategoryRepository)
+    @Inject(CATEGORY_REPOSITORY)
     private readonly categoryRepository: ICategoryRepository,
   ) {}
 
@@ -20,8 +20,8 @@ export class CategoryService {
       dto.color,
       dto.isDefault ?? false,
       dto.isArchived ?? false,
-      dto.userId,
-      dto.parentCategoryId,
+      dto.userId ?? undefined,
+      dto.parentCategoryId ?? undefined,
     );
 
     return this.categoryRepository.save(category);

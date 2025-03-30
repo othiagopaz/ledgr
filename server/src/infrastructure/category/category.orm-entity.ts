@@ -6,7 +6,7 @@ import {
   OneToMany,
   PrimaryColumn,
 } from 'typeorm';
-import { EventType } from '../../common/enums/event-type.enum';
+import { TransactionType } from '../../common/enums/transaction-type.enum';
 import { EventEntity } from '../Event/event.orm-entity';
 
 @Entity('categories')
@@ -17,8 +17,8 @@ export class CategoryEntity {
   @Column()
   name: string;
 
-  @Column({ type: 'enum', enum: EventType })
-  type: EventType;
+  @Column({ type: 'enum', enum: TransactionType })
+  type: TransactionType;
 
   @Column({ nullable: true, name: 'color' })
   color?: string;
@@ -46,4 +46,18 @@ export class CategoryEntity {
 
   @OneToMany(() => EventEntity, (entry) => entry.category)
   events?: EventEntity[];
+
+  @Column({
+    type: 'timestamp',
+    name: 'created_at',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  createdAt: Date;
+
+  @Column({
+    type: 'timestamp',
+    name: 'updated_at',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  updatedAt: Date;
 }

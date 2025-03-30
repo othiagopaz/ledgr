@@ -17,11 +17,11 @@ export class TransactionMapper
       orm.dueDate,
       orm.competenceDate,
       orm.status,
+      orm.ownership,
+      orm.type,
       orm.paymentDate,
       orm.accountId,
       orm.creditCardId,
-      orm.isRefundable,
-      orm.isShared,
       orm.notes,
     );
   }
@@ -38,8 +38,8 @@ export class TransactionMapper
     orm.accountId = domain.accountId;
     orm.creditCardId = domain.creditCardId;
     orm.notes = domain.notes;
-    orm.isRefundable = domain.isRefundable;
-    orm.isShared = domain.isShared;
+    orm.ownership = domain.ownership;
+    orm.type = domain.type;
     return orm;
   }
 }

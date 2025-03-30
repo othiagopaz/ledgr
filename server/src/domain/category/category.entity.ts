@@ -1,10 +1,10 @@
-import { EventType } from '../../common/enums/event-type.enum';
+import { TransactionType } from '../../common/enums/transaction-type.enum';
 
 export class Category {
   constructor(
     public readonly id: string,
     public name: string,
-    public type: EventType,
+    public type: TransactionType,
     public color?: string,
     public isDefault?: boolean,
     public isArchived?: boolean,

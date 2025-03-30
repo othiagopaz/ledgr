@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { Transaction } from '../../../domain/Transaction/transaction.entity';
 import { ITransactionRepository } from '../../../infrastructure/Transaction/transaction.repository.interface';
-import { Event } from '../../../domain/Event/event.entity';
 import { UpdateTransactionDto } from '../dtos/update-transaction.dto';
 import { CreateTransactionDto } from '../dtos/create-transaction.dto';
 import { TRANSACTION_REPOSITORY } from '../../../infrastructure/common/repository.tokens';
@@ -20,11 +19,11 @@ export class TransactionService {
       dueDate: dto.dueDate,
       competenceDate: dto.competenceDate,
       status: dto.status,
+      ownership: dto.ownership,
+      type: dto.type,
       paymentDate: dto.paymentDate,
       accountId: dto.accountId,
       creditCardId: dto.creditCardId,
-      isRefundable: dto.isRefundable,
-      isShared: dto.isShared,
       notes: dto.notes,
     });
 
@@ -63,11 +62,11 @@ export class TransactionService {
         ? new Date(dto.competenceDate)
         : transaction.competenceDate,
       dto.status ?? transaction.status,
+      dto.ownership ?? transaction.ownership,
+      dto.type ?? transaction.type,
       dto.paymentDate ? new Date(dto.paymentDate) : transaction.paymentDate,
       dto.accountId ?? transaction.accountId,
       dto.creditCardId ?? transaction.creditCardId,
-      dto.isRefundable ?? transaction.isRefundable,
-      dto.isShared ?? transaction.isShared,
       dto.notes ?? transaction.notes,
     );
 
@@ -76,11 +75,5 @@ export class TransactionService {
 
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
-  }
-
-  async createFromEntry(entry: Event) {
-    const transactions = entry.generateTransactions();
-    await this.repo.saveMany(transactions);
-    return transactions;
   }
 }

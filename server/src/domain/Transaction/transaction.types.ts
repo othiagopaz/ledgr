@@ -1,15 +1,17 @@
 import { TransactionStatus } from '../../common/enums/transaction-status.enum';
+import { Ownership } from '../../common/enums/ownership.enum';
+import { TransactionType } from '../../common/enums/transaction-type.enum';
 
 export type TransactionProps = {
-  eventId: string;
+  eventId?: string;
   amount: number;
   dueDate: Date;
   competenceDate: Date;
   status: TransactionStatus;
+  ownership: Ownership;
+  type: TransactionType;
   paymentDate?: Date;
   accountId?: string;
   creditCardId?: string;
-  isRefundable?: boolean;
-  isShared?: boolean;
   notes?: string;
 };

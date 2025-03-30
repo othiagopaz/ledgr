@@ -1,50 +1,59 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { IEventRepository } from '../../../infrastructure/Event/event.repository.interface';
 import { TransactionService } from '../../Transaction/services/transaction.service';
-import { CategoryService } from '../../Category/services/category.service';
 import { EVENT_REPOSITORY } from '../../../infrastructure/common/repository.tokens';
 import { CreateEventDto } from '../dtos/create-event.dto';
 import { UpdateEventDto } from '../dtos/update-event.dto';
 import { Event } from '../../../domain/Event/event.entity';
+import { ICategoryRepository } from '../../../infrastructure/Category/category.repository.interface';
+import { Transaction } from '../../../domain/Transaction/transaction.entity';
+import { CATEGORY_REPOSITORY } from '../../../infrastructure/common/repository.tokens';
+
 @Injectable()
 export class EventService {
   constructor(
     @Inject(EVENT_REPOSITORY)
     private readonly eventRepository: IEventRepository,
     private readonly transactionService: TransactionService,
-    private readonly categoryService: CategoryService,
+    @Inject(CATEGORY_REPOSITORY)
+    private readonly categoryRepository: ICategoryRepository,
   ) {}
 
   async create(dto: CreateEventDto): Promise<Event> {
-    const entry = Event.create({
-      description: dto.description,
-      amount: dto.amount,
-      installments: dto.installments,
-      date: new Date(dto.date),
-      type: dto.type,
-      categoryId: dto.categoryId,
-      creditCardId: dto.creditCardId,
-      accountId: dto.accountId,
-      ownershipType: dto.ownershipType,
-      expectedRefundAmount: dto.expectedRefundAmount,
-      refundInstallments: dto.refundInstallments,
-      refundInstallmentDates: dto.refundInstallmentDates?.map(
-        (date) => new Date(date),
-      ),
-      isOffBalance: dto.isOffBalance,
-    });
-
-    const category = await this.categoryService.findById(dto.categoryId);
+    const category = await this.categoryRepository.findById(dto.categoryId);
 
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    await this.eventRepository.save(entry);
+    const event = Event.create({
+      description: dto.description,
+      amount: dto.amount,
+      installments: dto.installments,
+      competenceDate: new Date(dto.competenceDate),
+      type: dto.type,
+      categoryId: dto.categoryId,
+      expectedRefundAmount: dto.expectedRefundAmount,
+      transactions: dto.transactions,
+    });
 
-    await this.transactionService.createFromEntry(entry);
+    await this.eventRepository.save(event);
 
-    return entry;
+    const transactions: Transaction[] = await Promise.all(
+      dto.transactions.map((transactionDto) => {
+        const transaction = Transaction.create({
+          ...transactionDto,
+          eventId: event.id,
+        });
+        return this.transactionService.create(transaction);
+      }),
+    );
+
+    if (transactions) {
+      event.transactions = transactions;
+    }
+
+    return event;
   }
 
   async findAll(): Promise<Event[]> {
@@ -70,18 +79,10 @@ export class EventService {
       dto.description ?? entry.description,
       dto.amount ?? entry.amount,
       dto.installments ?? entry.installments,
-      dto.date ? new Date(dto.date) : entry.date,
+      dto.competenceDate ? new Date(dto.competenceDate) : entry.competenceDate,
       dto.type ?? entry.type,
       dto.categoryId ?? entry.categoryId,
-      dto.creditCardId ?? entry.creditCardId,
-      dto.accountId ?? entry.accountId,
-      dto.ownershipType ?? entry.ownershipType,
       dto.expectedRefundAmount ?? entry.expectedRefundAmount,
-      dto.refundInstallments ?? entry.refundInstallments,
-      dto.refundInstallmentDates
-        ? dto.refundInstallmentDates.map((date) => new Date(date))
-        : entry.refundInstallmentDates,
-      dto.isOffBalance ?? entry.isOffBalance,
     );
 
     return this.eventRepository.save(updatedEntry);
