@@ -1,9 +1,9 @@
 // src/modules/financial-entry/mappers/financial-entry.mapper.ts
 import { Injectable } from '@nestjs/common';
-
 import { Event } from '../../domain/Event/event.entity';
 import { EventEntity } from './event.orm-entity';
 import { Mapper } from '../common/repository.interface';
+import { Money } from '../../common/types/money';
 
 @Injectable()
 export class EventMapper implements Mapper<Event, EventEntity> {
@@ -11,12 +11,14 @@ export class EventMapper implements Mapper<Event, EventEntity> {
     return new Event(
       orm.id,
       orm.description,
-      orm.amount,
+      new Money(orm.amount),
       orm.installments,
       orm.competenceDate,
       orm.type,
       orm.categoryId,
-      orm.expectedRefundAmount,
+      orm.expectedRefundAmount
+        ? new Money(orm.expectedRefundAmount)
+        : undefined,
     );
   }
 
@@ -24,12 +26,12 @@ export class EventMapper implements Mapper<Event, EventEntity> {
     const orm = new EventEntity();
     orm.id = domain.id;
     orm.description = domain.description;
-    orm.amount = domain.amount;
+    orm.amount = domain.amount.toDecimal();
     orm.installments = domain.installments;
     orm.competenceDate = domain.competenceDate;
     orm.type = domain.type;
     orm.categoryId = domain.categoryId;
-    orm.expectedRefundAmount = domain.expectedRefundAmount;
+    orm.expectedRefundAmount = domain.expectedRefundAmount?.toDecimal();
     return orm;
   }
 }

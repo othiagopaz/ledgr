@@ -2,15 +2,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { TransactionProps } from './transaction.types';
 import { TransactionStatus } from '../../common/enums/transaction-status.enum';
 import { Ownership } from '../../common/enums/ownership.enum';
-import { addMonths } from 'date-fns';
-import { Event } from '../Event/event.entity';
 import { TransactionType } from '../../common/enums/transaction-type.enum';
+import { Money } from '../../common/types/money';
 
 export class Transaction {
   constructor(
     public readonly id: string,
     public readonly eventId: string,
-    public amount: number,
+    public amount: Money,
     public dueDate: Date,
     public competenceDate: Date,
     public status: TransactionStatus,
@@ -52,7 +51,7 @@ export class Transaction {
     return new Transaction(
       uuidv4(),
       props.eventId,
-      props.amount,
+      new Money(props.amount),
       props.dueDate,
       props.competenceDate,
       props.status || TransactionStatus.PENDING,
@@ -88,32 +87,5 @@ export class Transaction {
 
     this.status = TransactionStatus.PAID;
     this.paymentDate = paymentDate;
-  }
-
-  static generateTransactions(event: Event): Transaction[] {
-    const transactions: Transaction[] = [];
-
-    //TODO: aplicar aqui toda a regra de refundable
-
-    for (let i = 0; i < event.installments; i++) {
-      const dueDate = addMonths(event.competenceDate, i);
-
-      const competenceDate = event.competenceDate;
-
-      transactions.push(
-        Transaction.create({
-          amount: event.amount / event.installments,
-          dueDate: dueDate,
-          competenceDate,
-          eventId: event.id,
-          status: TransactionStatus.PENDING,
-          notes: event.description,
-          ownership: Ownership.OWN,
-          type: TransactionType.EXPENSE,
-        }),
-      );
-    }
-
-    return transactions;
   }
 }

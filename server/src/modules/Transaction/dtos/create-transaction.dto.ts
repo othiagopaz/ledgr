@@ -1,11 +1,11 @@
 import {
   IsDate,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   IsPositive,
   IsEnum,
+  IsInt,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TransactionStatus } from '../../../common/enums/transaction-status.enum';
@@ -17,7 +17,7 @@ export class CreateTransactionDto {
   @IsOptional()
   eventId?: string;
 
-  @IsNumber()
+  @IsInt()
   @IsPositive()
   amount: number;
 

@@ -24,7 +24,7 @@ export class TransactionEntity {
   @JoinColumn({ name: 'event_id' })
   event: EventEntity;
 
-  @Column('numeric', { precision: 19, scale: 4 })
+  @Column({ type: 'integer' })
   amount: number;
 
   @Column({ type: 'date', name: 'due_date' })

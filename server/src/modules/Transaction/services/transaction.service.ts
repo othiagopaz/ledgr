@@ -4,7 +4,7 @@ import { ITransactionRepository } from '../../../infrastructure/Transaction/tran
 import { UpdateTransactionDto } from '../dtos/update-transaction.dto';
 import { CreateTransactionDto } from '../dtos/create-transaction.dto';
 import { TRANSACTION_REPOSITORY } from '../../../infrastructure/common/repository.tokens';
-
+import { Money } from '../../../common/types/money';
 @Injectable()
 export class TransactionService {
   constructor(
@@ -53,22 +53,23 @@ export class TransactionService {
       throw new NotFoundException('Transaction not found');
     }
 
-    const updatedTransaction = new Transaction(
-      transaction.id,
-      dto.eventId ?? transaction.eventId,
-      dto.amount ?? transaction.amount,
-      dto.dueDate ? new Date(dto.dueDate) : transaction.dueDate,
-      dto.competenceDate
+    const updatedTransaction = Transaction.create({
+      eventId: dto.eventId ?? transaction.eventId,
+      amount: dto.amount ?? transaction.amount.toDecimal(),
+      dueDate: dto.dueDate ? new Date(dto.dueDate) : transaction.dueDate,
+      competenceDate: dto.competenceDate
         ? new Date(dto.competenceDate)
         : transaction.competenceDate,
-      dto.status ?? transaction.status,
-      dto.ownership ?? transaction.ownership,
-      dto.type ?? transaction.type,
-      dto.paymentDate ? new Date(dto.paymentDate) : transaction.paymentDate,
-      dto.accountId ?? transaction.accountId,
-      dto.creditCardId ?? transaction.creditCardId,
-      dto.notes ?? transaction.notes,
-    );
+      status: dto.status ?? transaction.status,
+      ownership: dto.ownership ?? transaction.ownership,
+      type: dto.type ?? transaction.type,
+      paymentDate: dto.paymentDate
+        ? new Date(dto.paymentDate)
+        : transaction.paymentDate,
+      accountId: dto.accountId ?? transaction.accountId,
+      creditCardId: dto.creditCardId ?? transaction.creditCardId,
+      notes: dto.notes ?? transaction.notes,
+    });
 
     return this.repo.save(updatedTransaction);
   }

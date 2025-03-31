@@ -1,6 +1,5 @@
 import {
   IsNotEmpty,
-  IsNumber,
   IsString,
   IsOptional,
   IsDateString,
@@ -8,6 +7,7 @@ import {
   Min,
   IsArray,
   ValidateNested,
+  IsInt,
 } from 'class-validator';
 import { TransactionType } from '../../../common/enums/transaction-type.enum';
 import { CreateTransactionDto } from '../../Transaction/dtos/create-transaction.dto';
@@ -18,13 +18,14 @@ export class CreateEventDto {
   @IsNotEmpty()
   description: string;
 
-  @IsNumber()
-  @Min(0.01)
+  @IsInt()
+  @Min(0)
   @IsNotEmpty()
   amount: number;
 
-  @IsNumber()
+  @IsInt()
   @Min(1)
+  @IsNotEmpty()
   installments: number;
 
   @IsDateString()
@@ -40,7 +41,8 @@ export class CreateEventDto {
   categoryId: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(0)
   expectedRefundAmount?: number;
 
   @IsArray()

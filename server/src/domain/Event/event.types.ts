@@ -1,6 +1,5 @@
 import { TransactionType } from '../../common/enums/transaction-type.enum';
 import { TransactionProps } from '../Transaction/transaction.types';
-
 export type EventProps = {
   description: string;
   amount: number;

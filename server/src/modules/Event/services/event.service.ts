@@ -8,6 +8,7 @@ import { Event } from '../../../domain/Event/event.entity';
 import { ICategoryRepository } from '../../../infrastructure/Category/category.repository.interface';
 import { Transaction } from '../../../domain/Transaction/transaction.entity';
 import { CATEGORY_REPOSITORY } from '../../../infrastructure/common/repository.tokens';
+import { Money } from '../../../common/types/money';
 
 @Injectable()
 export class EventService {
@@ -41,10 +42,11 @@ export class EventService {
 
     const transactions: Transaction[] = await Promise.all(
       dto.transactions.map((transactionDto) => {
-        const transaction = Transaction.create({
+        const transaction = {
           ...transactionDto,
           eventId: event.id,
-        });
+          amount: transactionDto.amount,
+        };
         return this.transactionService.create(transaction);
       }),
     );
@@ -77,12 +79,14 @@ export class EventService {
     const updatedEntry = new Event(
       entry.id,
       dto.description ?? entry.description,
-      dto.amount ?? entry.amount,
+      dto.amount ? new Money(dto.amount) : entry.amount,
       dto.installments ?? entry.installments,
       dto.competenceDate ? new Date(dto.competenceDate) : entry.competenceDate,
       dto.type ?? entry.type,
       dto.categoryId ?? entry.categoryId,
-      dto.expectedRefundAmount ?? entry.expectedRefundAmount,
+      dto.expectedRefundAmount
+        ? new Money(dto.expectedRefundAmount)
+        : entry.expectedRefundAmount,
     );
 
     return this.eventRepository.save(updatedEntry);

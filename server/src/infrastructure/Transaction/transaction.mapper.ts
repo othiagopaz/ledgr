@@ -1,6 +1,6 @@
 // src/modules/installment/mappers/installment.mapper.ts
 import { Injectable } from '@nestjs/common';
-
+import { Money } from '../../common/types/money';
 import { Transaction } from '../../domain/Transaction/transaction.entity';
 import { TransactionEntity } from './transaction.orm-entity';
 import { Mapper } from '../common/repository.interface';
@@ -13,7 +13,7 @@ export class TransactionMapper
     return new Transaction(
       orm.id,
       orm.eventId,
-      orm.amount,
+      new Money(orm.amount),
       orm.dueDate,
       orm.competenceDate,
       orm.status,
@@ -30,7 +30,7 @@ export class TransactionMapper
     const orm = new TransactionEntity();
     orm.id = domain.id;
     orm.eventId = domain.eventId;
-    orm.amount = domain.amount;
+    orm.amount = domain.amount.toDecimal();
     orm.dueDate = domain.dueDate;
     orm.competenceDate = domain.competenceDate;
     orm.status = domain.status;

@@ -18,7 +18,7 @@ export class EventEntity {
   @Column({ nullable: false })
   description: string;
 
-  @Column({ type: 'numeric', precision: 19, scale: 4, nullable: false })
+  @Column({ type: 'integer', nullable: false })
   amount: number;
 
   @Column({ nullable: false })
@@ -36,9 +36,7 @@ export class EventEntity {
   @Column({
     name: 'expected_refund_amount',
     nullable: true,
-    type: 'numeric',
-    precision: 19,
-    scale: 4,
+    type: 'integer',
   })
   expectedRefundAmount?: number;
 
