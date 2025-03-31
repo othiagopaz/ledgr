@@ -30,7 +30,7 @@ export class TransactionMapper
     const orm = new TransactionEntity();
     orm.id = domain.id;
     orm.eventId = domain.eventId;
-    orm.amount = domain.amount.toDecimal();
+    orm.amount = domain.amount.toCents();
     orm.dueDate = domain.dueDate;
     orm.competenceDate = domain.competenceDate;
     orm.status = domain.status;

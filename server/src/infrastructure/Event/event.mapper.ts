@@ -26,12 +26,12 @@ export class EventMapper implements Mapper<Event, EventEntity> {
     const orm = new EventEntity();
     orm.id = domain.id;
     orm.description = domain.description;
-    orm.amount = domain.amount.toDecimal();
+    orm.amount = domain.amount.toCents();
     orm.installments = domain.installments;
     orm.competenceDate = domain.competenceDate;
     orm.type = domain.type;
     orm.categoryId = domain.categoryId;
-    orm.expectedRefundAmount = domain.expectedRefundAmount?.toDecimal();
+    orm.expectedRefundAmount = domain.expectedRefundAmount?.toCents();
     return orm;
   }
 }

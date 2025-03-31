@@ -1,17 +1,21 @@
 export class Money {
   private readonly cents: number;
 
-  constructor(amount: number) {
-    // Convert from decimal to cents and round to avoid floating-point issues
-    this.cents = Math.round(amount * 100);
+  /**
+   * Creates a Money instance from cents (integers).
+   * This is the default constructor - use this when working with integer cents.
+   * For decimal values, use Money.fromDecimal()
+   */
+  constructor(cents: number) {
+    this.cents = cents;
   }
 
   add(other: Money): Money {
-    return new Money((this.cents + other.cents) / 100);
+    return new Money(this.cents + other.cents);
   }
 
   subtract(other: Money): Money {
-    return new Money((this.cents - other.cents) / 100);
+    return new Money(this.cents - other.cents);
   }
 
   equals(other: Money): boolean {
@@ -26,8 +30,20 @@ export class Money {
     return this.cents;
   }
 
+  /**
+   * Creates a Money instance from cents (integers).
+   * This is an alias for the constructor for better readability.
+   */
   static fromCents(cents: number): Money {
-    return new Money(cents / 100);
+    return new Money(cents);
+  }
+
+  /**
+   * Creates a Money instance from a decimal value.
+   * Use this when you have a decimal value (e.g., 10.50).
+   */
+  static fromDecimal(decimal: number): Money {
+    return new Money(Math.round(decimal * 100));
   }
 
   static zero(): Money {
@@ -47,6 +63,6 @@ export class Money {
   }
 
   toString(): string {
-    return this.toDecimal().toFixed(2);
+    return (this.cents / 100).toFixed(2);
   }
 }

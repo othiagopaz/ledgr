@@ -45,7 +45,6 @@ export class EventService {
         const transaction = {
           ...transactionDto,
           eventId: event.id,
-          amount: transactionDto.amount,
         };
         return this.transactionService.create(transaction);
       }),

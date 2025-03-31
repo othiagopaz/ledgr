@@ -4,7 +4,6 @@ import { ITransactionRepository } from '../../../infrastructure/Transaction/tran
 import { UpdateTransactionDto } from '../dtos/update-transaction.dto';
 import { CreateTransactionDto } from '../dtos/create-transaction.dto';
 import { TRANSACTION_REPOSITORY } from '../../../infrastructure/common/repository.tokens';
-import { Money } from '../../../common/types/money';
 @Injectable()
 export class TransactionService {
   constructor(
@@ -13,22 +12,22 @@ export class TransactionService {
   ) {}
 
   async create(dto: CreateTransactionDto): Promise<Transaction> {
-    const entry = Transaction.create({
+    const transaction = Transaction.create({
       eventId: dto.eventId,
       amount: dto.amount,
-      dueDate: dto.dueDate,
-      competenceDate: dto.competenceDate,
+      dueDate: new Date(dto.dueDate),
+      competenceDate: new Date(dto.competenceDate),
       status: dto.status,
       ownership: dto.ownership,
       type: dto.type,
-      paymentDate: dto.paymentDate,
+      paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
       accountId: dto.accountId,
       creditCardId: dto.creditCardId,
       notes: dto.notes,
     });
 
-    await this.repo.save(entry);
-    return entry;
+    await this.repo.save(transaction);
+    return transaction;
   }
 
   findAll(): Promise<Transaction[]> {

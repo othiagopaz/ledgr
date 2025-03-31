@@ -9,6 +9,7 @@ import {
 import { EventService } from '../services/event.service';
 import { CreateEventDto } from '../dtos/create-event.dto';
 import { Message } from '../../../common/decorators/message.decorator';
+import { EventResponseDto } from '../dtos/event-response.dto';
 
 @Controller('events')
 export class EventController {
@@ -19,7 +20,7 @@ export class EventController {
   async create(@Body() dto: CreateEventDto) {
     try {
       const event = await this.service.create(dto);
-      return { id: event.id };
+      return new EventResponseDto(event);
     } catch (error) {
       throw new BadRequestException(error.message);
     }
@@ -27,13 +28,15 @@ export class EventController {
 
   @Get()
   @Message('Events fetched successfully')
-  findAll() {
-    return this.service.findAll();
+  async findAll() {
+    const events = await this.service.findAll();
+    return events.map((event) => new EventResponseDto(event));
   }
 
   @Get(':id')
   @Message('Event fetched successfully')
-  findById(@Param('id') id: string) {
-    return this.service.findById(id);
+  async findById(@Param('id') id: string) {
+    const event = await this.service.findById(id);
+    return new EventResponseDto(event);
   }
 }
