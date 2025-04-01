@@ -7,7 +7,7 @@ export class EventResponseDto {
   description: string;
   amount: number;
   installments: number;
-  competenceDate: Date;
+  competenceDate: string;
   type: TransactionType;
   categoryId: string;
   expectedRefundAmount?: number;
@@ -18,7 +18,7 @@ export class EventResponseDto {
     this.description = event.description;
     this.amount = event.amount.toCents();
     this.installments = event.installments;
-    this.competenceDate = event.competenceDate;
+    this.competenceDate = event.competenceDate.toISOString().split('T')[0];
     this.type = event.type;
     this.categoryId = event.categoryId;
     this.expectedRefundAmount = event.expectedRefundAmount?.toCents();

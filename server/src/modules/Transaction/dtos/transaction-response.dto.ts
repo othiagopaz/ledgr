@@ -7,12 +7,12 @@ export class TransactionResponseDto {
   id: string;
   eventId: string;
   amount: number;
-  dueDate: Date;
-  competenceDate: Date;
+  dueDate: string;
+  competenceDate: string;
   status: TransactionStatus;
   ownership: Ownership;
   type: TransactionType;
-  paymentDate?: Date;
+  paymentDate?: string;
   accountId?: string;
   creditCardId?: string;
   notes?: string;
@@ -21,12 +21,14 @@ export class TransactionResponseDto {
     this.id = transaction.id;
     this.eventId = transaction.eventId;
     this.amount = transaction.amount.toCents();
-    this.dueDate = transaction.dueDate;
-    this.competenceDate = transaction.competenceDate;
+    this.dueDate = transaction.dueDate.toISOString().split('T')[0];
+    this.competenceDate = transaction.competenceDate
+      .toISOString()
+      .split('T')[0];
     this.status = transaction.status;
     this.ownership = transaction.ownership;
     this.type = transaction.type;
-    this.paymentDate = transaction.paymentDate;
+    this.paymentDate = transaction.paymentDate?.toISOString().split('T')[0];
     this.accountId = transaction.accountId;
     this.creditCardId = transaction.creditCardId;
     this.notes = transaction.notes;
