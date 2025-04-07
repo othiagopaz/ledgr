@@ -1,4 +1,4 @@
-# 💰 Ledger: Controle Financeiro Pessoal com Inteligência Contábil
+dock# 💰 Ledger: Controle Financeiro Pessoal com Inteligência Contábil
 
 O **Ledger** é um sistema de controle financeiro pessoal com uma pegada contábil real.  
 Inspirado nos conceitos mais sólidos da contabilidade (regime de caixa e competência), ele é uma versão moderna, poderosa e automatizável do antigo Microsoft Money — só que com cérebro.
@@ -45,6 +45,13 @@ Gerenciar finanças pessoais de forma **realista, automatizada e estratégica**,
 
 ```bash
 docker-compose up -d
+```
+
+> Se não estiver funcionando, você poderá rodar:
+
+```bash
+sudo systemctl start docker
+sudo systemctl enable docker #starts docker on login
 ```
 
 > Isso sobe um PostgreSQL local na porta 5432 com o banco `ledger`
