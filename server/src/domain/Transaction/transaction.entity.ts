@@ -13,6 +13,7 @@ export class Transaction {
     public dueDate: Date,
     public competenceDate: Date,
     public status: TransactionStatus,
+    public installment: number,
     public ownership: Ownership,
     public type: TransactionType,
     public paymentDate?: Date,
