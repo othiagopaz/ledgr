@@ -6,7 +6,7 @@ import {
   OneToMany,
   PrimaryColumn,
 } from 'typeorm';
-import { TransactionType } from '../../../core/shared/enums/transaction-type.enum';
+import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
 import { EventEntity } from '../../Event/infra/event.orm-entity';
 
 @Entity('categories')

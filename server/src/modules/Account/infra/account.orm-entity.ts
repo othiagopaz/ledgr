@@ -1,5 +1,5 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
-import { AccountType } from '../../../core/shared/enums/account-type.enum';
+import { AccountType } from '../../../utils/shared/enums/account-type.enum';
 
 @Entity('accounts')
 export class AccountEntity {

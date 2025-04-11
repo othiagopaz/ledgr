@@ -1,5 +1,5 @@
 import { Event } from '../domain/event.entity';
-import { IRepository } from '../../../core/shared/infra/repository.interface';
+import { IRepository } from '../../../utils/shared/infra/repository.interface';
 
 export type IEventRepository = IRepository<Event>;
 

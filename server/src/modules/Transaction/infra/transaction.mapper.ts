@@ -1,9 +1,9 @@
 // src/modules/installment/mappers/installment.mapper.ts
 import { Injectable } from '@nestjs/common';
-import { Money } from '../../../core/shared/types/money';
+import { Money } from '../../../utils/shared/types/money';
 import { Transaction } from '../domain/transaction.entity';
 import { TransactionEntity } from './transaction.orm-entity';
-import { Mapper } from '../../../core/shared/infra/repository.interface';
+import { Mapper } from '../../../utils/shared/infra/repository.interface';
 
 @Injectable()
 export class TransactionMapper

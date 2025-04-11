@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { EventEntity } from './event.orm-entity';
 import { Event } from '../domain/event.entity';
 import { EventMapper } from './event.mapper';
-import { BaseRepository } from '../../../core/shared/infra/base.repository';
+import { BaseRepository } from '../../../utils/shared/infra/base.repository';
 import { IEventRepository } from './event.repository.interface';
 
 @Injectable()

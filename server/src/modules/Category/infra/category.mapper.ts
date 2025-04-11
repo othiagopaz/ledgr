@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Category } from '../domain/category.entity';
 import { CategoryEntity } from './category.orm-entity';
-import { Mapper } from '../../../core/shared/infra/repository.interface';
+import { Mapper } from '../../../utils/shared/infra/repository.interface';
 
 @Injectable()
 export class CategoryMapper implements Mapper<Category, CategoryEntity> {

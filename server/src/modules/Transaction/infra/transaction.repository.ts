@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { Transaction } from '../domain/transaction.entity';
 import { TransactionEntity } from './transaction.orm-entity';
 import { TransactionMapper } from './transaction.mapper';
-import { BaseRepository } from '../../../core/shared/infra/base.repository';
+import { BaseRepository } from '../../../utils/shared/infra/base.repository';
 import { ITransactionRepository } from './transaction.repository.interface';
 
 @Injectable()

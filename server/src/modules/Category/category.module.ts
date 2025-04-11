@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CategoryRepository } from './infra/category.repository';
 import { CategoryMapper } from './infra/category.mapper';
 import { CategoryEntity } from './infra/category.orm-entity';
-import { CATEGORY_REPOSITORY } from '../../core/shared/infra/repository.tokens';
+import { CATEGORY_REPOSITORY } from '../../utils/shared/infra/repository.tokens';
 
 @Module({
   imports: [TypeOrmModule.forFeature([CategoryEntity])],

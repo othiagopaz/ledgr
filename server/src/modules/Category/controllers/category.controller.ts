@@ -9,7 +9,7 @@ import {
 import { CategoryService } from '../services/category.service';
 import { CreateCategoryDto } from '../dtos/create-category.dto';
 import { Category } from '../domain/category.entity';
-import { Message } from '../../../core/shared/decorators/message.decorator';
+import { Message } from '../../../utils/shared/decorators/message.decorator';
 
 @Controller('categories')
 export class CategoryController {

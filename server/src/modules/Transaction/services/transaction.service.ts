@@ -3,7 +3,7 @@ import { Transaction } from '../domain/transaction.entity';
 import { ITransactionRepository } from '../infra/transaction.repository.interface';
 import { UpdateTransactionDto } from '../dtos/update-transaction.dto';
 import { CreateTransactionDto } from '../dtos/create-transaction.dto';
-import { TRANSACTION_REPOSITORY } from '../../../core/shared/infra/repository.tokens';
+import { TRANSACTION_REPOSITORY } from '../../../utils/shared/infra/repository.tokens';
 @Injectable()
 export class TransactionService {
   constructor(

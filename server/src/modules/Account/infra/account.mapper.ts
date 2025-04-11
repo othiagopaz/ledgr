@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Mapper } from '../../../core/shared/infra/repository.interface';
+import { Mapper } from '../../../utils/shared/infra/repository.interface';
 import { Account } from '../domain/account.entity';
 import { AccountEntity } from './account.orm-entity';
 @Injectable()

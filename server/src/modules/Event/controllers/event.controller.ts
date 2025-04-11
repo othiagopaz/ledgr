@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { EventService } from '../services/event.service';
 import { CreateEventDto } from '../dtos/create-event.dto';
-import { Message } from '../../../core/shared/decorators/message.decorator';
+import { Message } from '../../../utils/shared/decorators/message.decorator';
 import { EventResponseDto } from '../dtos/event-response.dto';
 
 @Controller('events')

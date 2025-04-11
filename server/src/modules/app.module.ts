@@ -4,7 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionModule } from './Transaction/transaction.module';
 import { CategoryModule } from './Category/category.module';
-import ormConfig from '../core/config/typeorm.config';
+import ormConfig from '../utils/config/typeorm.config';
 import { AccountModule } from './Account/account.module';
 @Module({
   imports: [

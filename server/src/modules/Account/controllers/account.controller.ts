@@ -3,7 +3,7 @@ import { AccountService } from '../services/account.service';
 import { CreateAccountDto } from '../dtos/create-account.dto';
 import { UpdateAccountDto } from '../dtos/update-account.dto';
 import { Account } from '../domain/account.entity';
-import { Message } from '../../../core/shared/decorators/message.decorator';
+import { Message } from '../../../utils/shared/decorators/message.decorator';
 
 @Controller('accounts')
 export class AccountController {

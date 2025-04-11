@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { Account } from '../domain/account.entity';
 import { AccountEntity } from './account.orm-entity';
 import { AccountMapper } from './account.mapper';
-import { BaseRepository } from '../../../core/shared/infra/base.repository';
+import { BaseRepository } from '../../../utils/shared/infra/base.repository';
 import { IAccountRepository } from './account.repository.interface';
 
 @Injectable()

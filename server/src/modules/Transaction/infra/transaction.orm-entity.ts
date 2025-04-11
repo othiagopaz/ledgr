@@ -5,10 +5,10 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { TransactionStatus } from '../../../core/shared/enums/transaction-status.enum';
+import { TransactionStatus } from '../../../utils/shared/enums/transaction-status.enum';
 import { EventEntity } from '../../Event/infra/event.orm-entity';
-import { Ownership } from '../../../core/shared/enums/ownership.enum';
-import { TransactionType } from '../../../core/shared/enums/transaction-type.enum';
+import { Ownership } from '../../../utils/shared/enums/ownership.enum';
+import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
 
 @Entity('transactions')
 export class TransactionEntity {

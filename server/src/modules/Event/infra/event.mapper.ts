@@ -2,7 +2,7 @@
 import { Injectable } from '@nestjs/common';
 import { Event } from '../domain/event.entity';
 import { EventEntity } from './event.orm-entity';
-import { Mapper } from '../../../core/shared/infra/repository.interface';
+import { Mapper } from '../../../utils/shared/infra/repository.interface';
 
 @Injectable()
 export class EventMapper implements Mapper<Event, EventEntity> {

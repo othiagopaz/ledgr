@@ -1,4 +1,4 @@
-import { TransactionType } from '../../../core/shared/enums/transaction-type.enum';
+import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
 
 export class Category {
   constructor(
