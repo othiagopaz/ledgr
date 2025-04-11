@@ -2,10 +2,10 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-import { EventEntity } from '../infrastructure/Event/event.orm-entity';
-import { TransactionEntity } from '../infrastructure/Transaction/transaction.orm-entity';
-import { CategoryEntity } from '../infrastructure/Category/category.orm-entity';
-import { AccountEntity } from '../infrastructure/Account/account.orm-entity';
+import { EventEntity } from '../Event/infra/event.orm-entity';
+import { TransactionEntity } from '../Transaction/infra/transaction.orm-entity';
+import { CategoryEntity } from '../Category/infra/category.orm-entity';
+import { AccountEntity } from '../Account/infra/account.orm-entity';
 export const typeOrmConfig: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DB_HOST,
