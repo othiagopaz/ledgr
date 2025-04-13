@@ -18,6 +18,7 @@ export class CreateAccountDto {
   type: AccountType;
 
   @IsInt()
+  @IsNumber()
   initialBalance: number;
 
   @IsString()
