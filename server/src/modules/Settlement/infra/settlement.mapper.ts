@@ -1,37 +1,38 @@
 import { Injectable } from '@nestjs/common';
+import { Mapper } from '../../../utils/shared/infra/repository.interface';
 import { Settlement } from '../domain/settlement.entity';
-import { SettlementOrmEntity } from './settlement.orm-entity';
+import { SettlementEntity } from './settlement.orm-entity';
 import { Money } from '../../../utils/shared/types/money';
 
 @Injectable()
-export class SettlementMapper {
-  toDomainEntity(ormEntity: SettlementOrmEntity): Settlement {
-    return new Settlement({
-      id: ormEntity.id,
-      transactionId: ormEntity.transactionId,
-      negotiatorId: ormEntity.negotiatorId,
-      amount: new Money(ormEntity.amount),
-      dueDate: ormEntity.dueDate,
-      status: ormEntity.status,
-      direction: ormEntity.direction,
-      paymentDate: ormEntity.paymentDate,
-      accountId: ormEntity.accountId,
-      notes: ormEntity.notes,
-    });
+export class SettlementMapper implements Mapper<Settlement, SettlementEntity> {
+  toDomain(orm: SettlementEntity): Settlement {
+    return new Settlement(
+      orm.id,
+      orm.transactionId,
+      orm.negotiatorId,
+      new Money(orm.amount),
+      orm.dueDate,
+      orm.status,
+      orm.direction,
+      orm.paymentDate,
+      orm.accountId,
+      orm.notes,
+    );
   }
 
-  toOrmEntity(domainEntity: Settlement): SettlementOrmEntity {
-    const ormEntity = new SettlementOrmEntity();
-    ormEntity.id = domainEntity.id;
-    ormEntity.transactionId = domainEntity.transactionId;
-    ormEntity.negotiatorId = domainEntity.negotiatorId;
-    ormEntity.amount = domainEntity.amount.value;
-    ormEntity.dueDate = domainEntity.dueDate;
-    ormEntity.status = domainEntity.status;
-    ormEntity.direction = domainEntity.direction;
-    ormEntity.paymentDate = domainEntity.paymentDate;
-    ormEntity.accountId = domainEntity.accountId;
-    ormEntity.notes = domainEntity.notes;
-    return ormEntity;
+  toOrm(domain: Settlement): SettlementEntity {
+    const orm = new SettlementEntity();
+    orm.id = domain.id;
+    orm.transactionId = domain.transactionId;
+    orm.negotiatorId = domain.negotiatorId;
+    orm.amount = domain.amount.value;
+    orm.dueDate = domain.dueDate;
+    orm.status = domain.status;
+    orm.direction = domain.direction;
+    orm.paymentDate = domain.paymentDate;
+    orm.accountId = domain.accountId;
+    orm.notes = domain.notes;
+    return orm;
   }
 }

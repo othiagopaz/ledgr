@@ -5,6 +5,8 @@ import {
   IsOptional,
   IsBoolean,
   IsUUID,
+  IsInt,
+  IsHexColor,
 } from 'class-validator';
 import { AccountType } from '../../../utils/shared/enums/account-type.enum';
 
@@ -15,7 +17,7 @@ export class CreateAccountDto {
   @IsEnum(AccountType)
   type: AccountType;
 
-  @IsNumber()
+  @IsInt()
   initialBalance: number;
 
   @IsString()
@@ -24,6 +26,7 @@ export class CreateAccountDto {
 
   @IsString()
   @IsOptional()
+  @IsHexColor()
   color?: string;
 
   @IsBoolean()

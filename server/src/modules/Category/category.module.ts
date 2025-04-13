@@ -18,6 +18,6 @@ import { CATEGORY_REPOSITORY } from '../../utils/shared/infra/repository.tokens'
     CategoryMapper,
   ],
   controllers: [CategoryController],
-  exports: [CategoryService],
+  exports: [CategoryService, CategoryMapper, CATEGORY_REPOSITORY],
 })
 export class CategoryModule {}

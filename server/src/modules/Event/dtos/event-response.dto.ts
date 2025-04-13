@@ -13,6 +13,7 @@ export class EventResponseDto {
     this.id = event.id;
     this.description = event.description;
     this.date = event.date.toISOString().split('T')[0];
+    this.negotiatorId = event.negotiatorId;
     this.categoryId = event.categoryId;
     this.transactions = event.transactions?.map(
       (transaction) => new TransactionResponseDto(transaction),

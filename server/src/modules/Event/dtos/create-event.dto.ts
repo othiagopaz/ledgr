@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsArray,
   ValidateNested,
+  isUUID,
 } from 'class-validator';
 import { CreateTransactionDto } from '../../Transaction/dtos/create-transaction.dto';
 import { Type } from 'class-transformer';
@@ -19,10 +20,12 @@ export class CreateEventDto {
 
   @IsString()
   @IsNotEmpty()
+  // @IsUUID()
   categoryId: string;
 
   @IsString()
   @IsNotEmpty()
+  // @IsUUID()
   negotiatorId: string;
 
   @IsArray()

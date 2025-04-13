@@ -4,6 +4,7 @@ import {
   IsDate,
   IsEnum,
   IsOptional,
+  IsInt,
 } from 'class-validator';
 import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
 import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.enum';
@@ -16,6 +17,7 @@ export class CreateSettlementDto {
   negotiatorId: string;
 
   @IsNumber()
+  @IsInt()
   amount: number;
 
   @IsDate()

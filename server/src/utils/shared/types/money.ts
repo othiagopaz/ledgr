@@ -1,5 +1,6 @@
 export class Money {
   private readonly cents: number;
+  value: number;
 
   /**
    * Creates a Money instance from cents (integers).
@@ -8,6 +9,7 @@ export class Money {
    */
   constructor(cents: number) {
     this.cents = cents;
+    this.value = cents;
   }
 
   add(other: Money): Money {

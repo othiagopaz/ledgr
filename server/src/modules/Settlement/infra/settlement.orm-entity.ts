@@ -3,20 +3,20 @@ import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.
 import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
 
 @Entity('settlements')
-export class SettlementOrmEntity {
+export class SettlementEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ name: 'transaction_id' })
   transactionId: string;
 
-  @Column()
+  @Column({ name: 'negotiator_id' })
   negotiatorId: string;
 
   @Column('integer')
   amount: number;
 
-  @Column()
+  @Column({ name: 'due_date' })
   dueDate: Date;
 
   @Column({
@@ -32,12 +32,12 @@ export class SettlementOrmEntity {
   })
   direction: SettlementDirection;
 
-  @Column({ nullable: true })
+  @Column({ name: 'payment_date', nullable: true })
   paymentDate?: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'account_id', nullable: true })
   accountId?: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'notes', nullable: true })
   notes?: string;
 }

@@ -21,3 +21,5 @@ export class CategoryRepository
     super(repo, mapper);
   }
 }
+
+export const CATEGORY_REPOSITORY = Symbol('CATEGORY_REPOSITORY');

@@ -23,6 +23,26 @@ export class Transaction {
   ) {}
 
   static create(props: TransactionProps): Transaction {
+    Transaction.validateTransaction(props);
+
+    return new Transaction(
+      uuidv4(),
+      props.eventId ?? '', // TODO: this is crap, we need to fix this
+      new Money(props.amount),
+      props.dueDate,
+      props.competenceDate,
+      props.installmentNumber,
+      props.status || TransactionStatus.PENDING,
+      props.ownership,
+      props.type,
+      props.paymentDate,
+      props.accountId,
+      props.creditCardId,
+      props.notes,
+    );
+  }
+
+  private static validateTransaction(props: TransactionProps) {
     if (!props.eventId) {
       throw new Error('Event ID is required');
     }
@@ -49,21 +69,13 @@ export class Transaction {
       throw new Error('Account or credit card is required');
     }
 
-    return new Transaction(
-      uuidv4(),
-      props.eventId,
-      new Money(props.amount),
-      props.dueDate,
-      props.competenceDate,
-      props.installmentNumber,
-      props.status || TransactionStatus.PENDING,
-      props.ownership,
-      props.type,
-      props.paymentDate,
-      props.accountId,
-      props.creditCardId,
-      props.notes,
-    );
+    if (props.status === TransactionStatus.PAID && !props.paymentDate) {
+      throw new Error('Payment date is required');
+    }
+
+    if (props.status === TransactionStatus.PENDING && props.paymentDate) {
+      throw new Error('Payment date is not allowed for pending transactions');
+    }
   }
 
   get isPaid(): boolean {

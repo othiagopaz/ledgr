@@ -1,8 +1,6 @@
+import { IRepository } from '../../../utils/shared/infra/repository.interface';
 import { Settlement } from '../domain/settlement.entity';
 
-export interface ISettlementRepository {
-  save(settlement: Settlement): Promise<Settlement>;
-  findById(id: string): Promise<Settlement | null>;
-  findAll(): Promise<Settlement[]>;
-  delete(id: string): Promise<void>;
-}
+export type ISettlementRepository = IRepository<Settlement>;
+
+export const ISettlementRepository = Symbol('ISettlementRepository');

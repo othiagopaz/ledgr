@@ -4,7 +4,7 @@ import { CreateAccountDto } from '../dtos/create-account.dto';
 import { Account } from '../domain/account.entity';
 import { UpdateAccountDto } from '../dtos/update-account.dto';
 import { IAccountRepository } from '../infra/account.repository.interface';
-
+import { Money } from '../../../utils/shared/types/money';
 @Injectable()
 export class AccountService {
   constructor(
@@ -17,7 +17,7 @@ export class AccountService {
       uuidv4(),
       dto.name,
       dto.type,
-      dto.initialBalance,
+      new Money(dto.initialBalance),
       dto.institution,
       dto.color,
       dto.isArchived ?? false,
@@ -41,11 +41,15 @@ export class AccountService {
       throw new NotFoundException('Account not found');
     }
 
+    if (dto.initialBalance) {
+      account.initialBalance = new Money(dto.initialBalance);
+    }
+
     const updatedAccount = new Account(
       account.id,
       dto.name ?? account.name,
       dto.type ?? account.type,
-      dto.initialBalance ?? account.initialBalance,
+      account.initialBalance,
       dto.institution ?? account.institution,
       dto.color ?? account.color,
       dto.isArchived ?? account.isArchived,

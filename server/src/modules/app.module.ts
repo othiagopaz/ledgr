@@ -6,6 +6,7 @@ import { TransactionModule } from './Transaction/transaction.module';
 import { CategoryModule } from './Category/category.module';
 import ormConfig from '../utils/config/typeorm.config';
 import { AccountModule } from './Account/account.module';
+import { SettlementModule } from './Settlement/settlement.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -17,6 +18,7 @@ import { AccountModule } from './Account/account.module';
     TransactionModule,
     CategoryModule,
     AccountModule,
+    SettlementModule,
   ],
   controllers: [],
   providers: [],

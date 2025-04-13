@@ -1,56 +1,82 @@
-import { Injectable } from '@nestjs/common';
-import { Settlement } from '../domain/settlement.entity';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { v4 as uuidv4 } from 'uuid';
 import { CreateSettlementDto } from '../dtos/create-settlement.dto';
-import { Money } from '../../../shared/domain/money';
+import { Settlement } from '../domain/settlement.entity';
+import { UpdateSettlementDto } from '../dtos/update-settlement.dto';
+import { ISettlementRepository } from '../infra/settlement.repository.interface';
+import { Money } from '../../../utils/shared/types/money';
 
 @Injectable()
 export class SettlementService {
-  private settlements: Settlement[] = [];
+  constructor(
+    @Inject(ISettlementRepository)
+    private readonly settlementRepository: ISettlementRepository,
+  ) {}
 
-  async create(createSettlementDto: CreateSettlementDto): Promise<Settlement> {
-    const settlement = new Settlement({
-      id: Math.random().toString(36).substr(2, 9),
-      ...createSettlementDto,
-      amount: new Money(createSettlementDto.amount),
-    });
+  async create(dto: CreateSettlementDto): Promise<Settlement> {
+    const settlement = new Settlement(
+      uuidv4(),
+      dto.transactionId,
+      dto.negotiatorId,
+      new Money(dto.amount),
+      dto.dueDate,
+      dto.status,
+      dto.direction,
+      dto.paymentDate,
+      dto.accountId,
+      dto.notes,
+    );
 
-    this.settlements.push(settlement);
-    return settlement;
+    return this.settlementRepository.save(settlement);
   }
 
   async findAll(): Promise<Settlement[]> {
-    return this.settlements;
+    return this.settlementRepository.findAll();
   }
 
-  async findOne(id: string): Promise<Settlement | undefined> {
-    return this.settlements.find((settlement) => settlement.id === id);
+  async findById(id: string): Promise<Settlement | null> {
+    return this.settlementRepository.findById(id);
   }
 
-  async update(
-    id: string,
-    updateData: Partial<Settlement>,
-  ): Promise<Settlement | undefined> {
-    const index = this.settlements.findIndex(
-      (settlement) => settlement.id === id,
+  async update(id: string, dto: UpdateSettlementDto): Promise<Settlement> {
+    const settlement = await this.findById(id);
+    if (!settlement) {
+      throw new NotFoundException('Settlement not found');
+    }
+
+    const updatedSettlement = new Settlement(
+      settlement.id,
+      dto.transactionId ?? settlement.transactionId,
+      dto.negotiatorId ?? settlement.negotiatorId,
+      new Money(dto.amount ?? settlement.amount.value),
+      dto.dueDate ?? settlement.dueDate,
+      dto.status ?? settlement.status,
+      dto.direction ?? settlement.direction,
+      dto.paymentDate ?? settlement.paymentDate,
+      dto.accountId ?? settlement.accountId,
+      dto.notes ?? settlement.notes,
     );
-    if (index === -1) return undefined;
 
-    const updatedSettlement = {
-      ...this.settlements[index],
-      ...updateData,
-    };
-
-    this.settlements[index] = updatedSettlement;
-    return updatedSettlement;
+    return this.settlementRepository.save(updatedSettlement);
   }
 
   async remove(id: string): Promise<boolean> {
-    const index = this.settlements.findIndex(
-      (settlement) => settlement.id === id,
-    );
-    if (index === -1) return false;
+    const settlement = await this.findById(id);
+    if (!settlement) {
+      throw new NotFoundException('Settlement not found');
+    }
 
-    this.settlements.splice(index, 1);
-    return true;
+    try {
+      await this.settlementRepository.delete(id);
+      return true;
+    } catch (error) {
+      console.error('Error deleting settlement:', error);
+      throw new InternalServerErrorException('Failed to delete settlement');
+    }
   }
 }

@@ -31,3 +31,5 @@ export class TransactionRepository
     return transactions.map((transaction) => this.mapper.toDomain(transaction));
   }
 }
+
+export const TRANSACTION_REPOSITORY = Symbol('TRANSACTION_REPOSITORY');

@@ -12,7 +12,7 @@ export class AccountEntity {
   @Column({ type: 'enum', enum: AccountType })
   type: AccountType;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, name: 'initial_balance' })
+  @Column({ type: 'integer', name: 'initial_balance' })
   initialBalance: number;
 
   @Column({ nullable: true })

@@ -13,13 +13,22 @@ export class Event {
   ) {}
 
   static create(props: EventProps): Event {
+    const eventId = uuidv4();
+
+    const transactions = props.transactions?.map((transaction) =>
+      Transaction.create({
+        ...transaction,
+        eventId,
+      }),
+    );
+
     return new Event(
-      uuidv4(),
+      eventId,
       props.description,
       props.date,
       props.categoryId,
       props.negotiatorId,
-      props.transactions?.map((transaction) => Transaction.create(transaction)),
+      transactions,
     );
   }
 }

@@ -18,6 +18,6 @@ import { TRANSACTION_REPOSITORY } from '../../utils/shared/infra/repository.toke
     TransactionMapper,
   ],
   controllers: [TransactionController],
-  exports: [TransactionService],
+  exports: [TransactionService, TRANSACTION_REPOSITORY, TransactionMapper],
 })
 export class TransactionModule {}

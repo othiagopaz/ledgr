@@ -21,3 +21,5 @@ export class EventRepository
     super(repo, mapper);
   }
 }
+
+export const EVENT_REPOSITORY = Symbol('EVENT_REPOSITORY');
