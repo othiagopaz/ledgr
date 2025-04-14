@@ -26,9 +26,14 @@ export class TransactionRepository
 
   async findByEventId(eventId: string): Promise<Transaction[]> {
     const transactions = await this.repo.find({
-      where: { eventId },
+      where: { event: { id: eventId } },
+      relations: this.getRelations(),
     });
     return transactions.map((transaction) => this.mapper.toDomain(transaction));
+  }
+
+  protected override getRelations(): string[] {
+    return ['event', 'event.category', 'account'];
   }
 }
 

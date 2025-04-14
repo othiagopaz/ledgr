@@ -1,9 +1,11 @@
 import { TransactionStatus } from '../../../utils/shared/enums/transaction-status.enum';
 import { Ownership } from '../../../utils/shared/enums/ownership.enum';
 import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
+import { Event } from '../../Event/domain/event.entity';
+import { Account } from '../../Account/domain/account.entity';
 
 export type TransactionProps = {
-  eventId?: string;
+  event: Event;
   amount: number;
   dueDate: Date;
   competenceDate: Date;
@@ -12,7 +14,7 @@ export type TransactionProps = {
   ownership: Ownership;
   type: TransactionType;
   paymentDate?: Date;
-  accountId?: string;
+  account?: Account;
   creditCardId?: string;
   notes?: string;
 };

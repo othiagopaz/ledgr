@@ -21,3 +21,5 @@ export class AccountRepository
     super(repo, mapper);
   }
 }
+
+export const ACCOUNT_REPOSITORY = Symbol('ACCOUNT_REPOSITORY');

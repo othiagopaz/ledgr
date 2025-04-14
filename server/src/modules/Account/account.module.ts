@@ -5,19 +5,19 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountRepository } from './infra/account.repository';
 import { AccountMapper } from './infra/account.mapper';
 import { AccountEntity } from './infra/account.orm-entity';
-import { IAccountRepository } from './infra/account.repository.interface';
+import { ACCOUNT_REPOSITORY } from './infra/account.repository';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AccountEntity])],
   providers: [
     AccountService,
     {
-      provide: IAccountRepository,
+      provide: ACCOUNT_REPOSITORY,
       useClass: AccountRepository,
     },
     AccountMapper,
   ],
   controllers: [AccountController],
-  exports: [AccountService],
+  exports: [AccountService, ACCOUNT_REPOSITORY, AccountMapper],
 })
 export class AccountModule {}

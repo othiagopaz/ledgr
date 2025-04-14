@@ -15,7 +15,7 @@ import { TransactionType } from '../../../utils/shared/enums/transaction-type.en
 export class CreateTransactionDto {
   @IsUUID()
   @IsOptional()
-  eventId?: string;
+  eventId: string;
 
   @IsInt()
   @IsPositive()

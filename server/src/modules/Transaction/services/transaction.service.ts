@@ -1,19 +1,46 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  BadRequestException,
+} from '@nestjs/common';
 import { Transaction } from '../domain/transaction.entity';
 import { ITransactionRepository } from '../infra/transaction.repository.interface';
 import { UpdateTransactionDto } from '../dtos/update-transaction.dto';
 import { CreateTransactionDto } from '../dtos/create-transaction.dto';
 import { TRANSACTION_REPOSITORY } from '../infra/transaction.repository';
+import { IEventRepository } from '../../Event/infra/event.repository.interface';
+import { EVENT_REPOSITORY } from '../../Event/infra/event.repository';
+import { IAccountRepository } from '../../Account/infra/account.repository.interface';
+import { ACCOUNT_REPOSITORY } from '../../Account/infra/account.repository';
 @Injectable()
 export class TransactionService {
   constructor(
     @Inject(TRANSACTION_REPOSITORY)
     private readonly repo: ITransactionRepository,
+    @Inject(EVENT_REPOSITORY)
+    private readonly eventRepository: IEventRepository,
+    @Inject(ACCOUNT_REPOSITORY)
+    private readonly accountRepository: IAccountRepository,
   ) {}
 
   async create(dto: CreateTransactionDto): Promise<Transaction> {
+    const event = await this.eventRepository.findById(dto.eventId);
+
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+
+    const account = dto.accountId
+      ? await this.accountRepository.findById(dto.accountId)
+      : undefined;
+
+    if (!account) {
+      throw new NotFoundException('Account not found');
+    }
+
     const transaction = Transaction.create({
-      eventId: dto.eventId,
+      event,
       amount: dto.amount,
       dueDate: new Date(dto.dueDate),
       competenceDate: new Date(dto.competenceDate),
@@ -22,7 +49,7 @@ export class TransactionService {
       ownership: dto.ownership,
       type: dto.type,
       paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
-      accountId: dto.accountId,
+      account,
       creditCardId: dto.creditCardId,
       notes: dto.notes,
     });
@@ -53,8 +80,30 @@ export class TransactionService {
       throw new NotFoundException('Transaction not found');
     }
 
+    let event = transaction.event;
+    if (dto.eventId) {
+      const foundEvent = await this.eventRepository.findById(dto.eventId);
+
+      if (!foundEvent) {
+        throw new NotFoundException('Event not found');
+      }
+      event = foundEvent;
+    } else {
+      throw new BadRequestException('Event is required');
+    }
+
+    let account = transaction.account;
+    if (dto.accountId) {
+      const foundAccount = await this.accountRepository.findById(dto.accountId);
+
+      if (!foundAccount) {
+        throw new NotFoundException('Account not found');
+      }
+      account = foundAccount;
+    }
+
     const updatedTransaction = Transaction.create({
-      eventId: dto.eventId ?? transaction.eventId,
+      event,
       amount: dto.amount ?? transaction.amount.toDecimal(),
       dueDate: dto.dueDate ? new Date(dto.dueDate) : transaction.dueDate,
       competenceDate: dto.competenceDate
@@ -67,7 +116,7 @@ export class TransactionService {
       paymentDate: dto.paymentDate
         ? new Date(dto.paymentDate)
         : transaction.paymentDate,
-      accountId: dto.accountId ?? transaction.accountId,
+      account,
       creditCardId: dto.creditCardId ?? transaction.creditCardId,
       notes: dto.notes ?? transaction.notes,
     });

@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventProps } from './event.types';
 import { Transaction } from '../../Transaction/domain/transaction.entity';
 import { Category } from '../../Category/domain/category.entity';
+import { BadRequestException } from '@nestjs/common';
 
 export class Event {
   constructor(
@@ -14,22 +15,45 @@ export class Event {
   ) {}
 
   static create(props: EventProps): Event {
+    if (
+      !props.description ||
+      !props.date ||
+      !props.category ||
+      !props.negotiatorId
+    ) {
+      throw new BadRequestException('Missing required event properties.');
+    }
+
     const eventId = uuidv4();
 
-    const transactions = props.transactions?.map((transaction) =>
-      Transaction.create({
-        ...transaction,
-        eventId,
-      }),
-    );
-
-    return new Event(
+    const event = new Event(
       eventId,
       props.description,
       props.date,
       props.category,
       props.negotiatorId,
-      transactions,
+      [],
     );
+
+    if (props.transactions && props.transactions.length > 0) {
+      event.transactions = props.transactions.map((txData) => {
+        if (
+          txData.amount == null ||
+          txData.dueDate == null ||
+          txData.competenceDate == null
+        ) {
+          throw new BadRequestException(
+            'Missing required transaction properties (amount, dueDate, competenceDate).',
+          );
+        }
+
+        return Transaction.create({
+          ...txData,
+          event: event,
+        });
+      });
+    }
+
+    return event;
   }
 }

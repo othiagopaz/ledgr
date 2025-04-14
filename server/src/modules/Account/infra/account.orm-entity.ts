@@ -1,9 +1,10 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { AccountType } from '../../../utils/shared/enums/account-type.enum';
+import { TransactionEntity } from '../../Transaction/infra/transaction.orm-entity';
 
 @Entity('accounts')
 export class AccountEntity {
-  @PrimaryColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
@@ -26,6 +27,9 @@ export class AccountEntity {
 
   @Column({ nullable: true, name: 'user_id' })
   userId?: string;
+
+  @OneToMany(() => TransactionEntity, (transaction) => transaction.account)
+  transactions: TransactionEntity[];
 
   @Column({
     type: 'timestamp',

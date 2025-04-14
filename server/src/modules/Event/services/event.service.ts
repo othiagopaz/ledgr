@@ -6,8 +6,10 @@ import { UpdateEventDto } from '../dtos/update-event.dto';
 import { Event } from '../domain/event.entity';
 import { ICategoryRepository } from '../../Category/infra/category.repository.interface';
 import { CATEGORY_REPOSITORY } from '../../Category/infra/category.repository';
-import { ITransactionRepository } from '../../Transaction/infra/transaction.repository.interface';
-import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository';
+import { IAccountRepository } from '../../Account/infra/account.repository.interface';
+import { ACCOUNT_REPOSITORY } from '../../Account/infra/account.repository';
+import { Account } from '../../Account/domain/account.entity';
+import { TransactionCreationData } from '../domain/event.types';
 
 @Injectable()
 export class EventService {
@@ -16,15 +18,44 @@ export class EventService {
     private readonly eventRepository: IEventRepository,
     @Inject(CATEGORY_REPOSITORY)
     private readonly categoryRepository: ICategoryRepository,
-    @Inject(TRANSACTION_REPOSITORY)
-    private readonly transactionRepository: ITransactionRepository,
+    @Inject(ACCOUNT_REPOSITORY)
+    private readonly accountRepository: IAccountRepository,
   ) {}
 
   async create(dto: CreateEventDto): Promise<Event> {
     const category = await this.categoryRepository.findById(dto.categoryId);
-
     if (!category) {
       throw new NotFoundException('Category not found');
+    }
+
+    const transactionData: TransactionCreationData[] = [];
+    for (const txDto of dto.transactions) {
+      let account: Account | undefined = undefined;
+      if (txDto.accountId) {
+        const foundAccount = await this.accountRepository.findById(
+          txDto.accountId,
+        );
+        if (!foundAccount) {
+          throw new NotFoundException(
+            `Account with ID ${txDto.accountId} not found for transaction.`,
+          );
+        }
+        account = foundAccount;
+      }
+
+      transactionData.push({
+        amount: txDto.amount,
+        dueDate: txDto.dueDate,
+        competenceDate: txDto.competenceDate,
+        installmentNumber: txDto.installmentNumber,
+        status: txDto.status,
+        ownership: txDto.ownership,
+        type: txDto.type,
+        paymentDate: txDto.paymentDate,
+        account: account,
+        creditCardId: txDto.creditCardId,
+        notes: txDto.notes,
+      });
     }
 
     const event = Event.create({
@@ -32,14 +63,10 @@ export class EventService {
       date: new Date(dto.date),
       category: category,
       negotiatorId: dto.negotiatorId,
-      transactions: dto.transactions,
+      transactions: transactionData,
     });
 
     await this.eventRepository.save(event);
-
-    if (event.transactions) {
-      await this.transactionRepository.saveMany(event.transactions);
-    }
 
     return event;
   }

@@ -5,10 +5,11 @@ import { Account } from '../domain/account.entity';
 import { UpdateAccountDto } from '../dtos/update-account.dto';
 import { IAccountRepository } from '../infra/account.repository.interface';
 import { Money } from '../../../utils/shared/types/money';
+import { ACCOUNT_REPOSITORY } from '../infra/account.repository';
 @Injectable()
 export class AccountService {
   constructor(
-    @Inject(IAccountRepository)
+    @Inject(ACCOUNT_REPOSITORY)
     private readonly accountRepository: IAccountRepository,
   ) {}
 

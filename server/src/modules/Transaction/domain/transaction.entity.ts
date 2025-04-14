@@ -4,11 +4,12 @@ import { TransactionStatus } from '../../../utils/shared/enums/transaction-statu
 import { Ownership } from '../../../utils/shared/enums/ownership.enum';
 import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
 import { Money } from '../../../utils/shared/types/money';
-
+import { Event } from '../../Event/domain/event.entity';
+import { Account } from '../../Account/domain/account.entity';
 export class Transaction {
   constructor(
     public readonly id: string,
-    public readonly eventId: string,
+    public readonly event: Event,
     public amount: Money,
     public dueDate: Date,
     public competenceDate: Date,
@@ -17,7 +18,7 @@ export class Transaction {
     public ownership: Ownership,
     public type: TransactionType,
     public paymentDate?: Date,
-    public accountId?: string,
+    public account?: Account,
     public creditCardId?: string,
     public notes?: string,
   ) {}
@@ -27,7 +28,7 @@ export class Transaction {
 
     return new Transaction(
       uuidv4(),
-      props.eventId ?? '', // TODO: this is crap, we need to fix this
+      props.event,
       new Money(props.amount),
       props.dueDate,
       props.competenceDate,
@@ -36,15 +37,15 @@ export class Transaction {
       props.ownership,
       props.type,
       props.paymentDate,
-      props.accountId,
+      props.account,
       props.creditCardId,
       props.notes,
     );
   }
 
   private static validateTransaction(props: TransactionProps) {
-    if (!props.eventId) {
-      throw new Error('Event ID is required');
+    if (!props.event) {
+      throw new Error('Event is required');
     }
 
     if (!props.amount) {
@@ -65,7 +66,7 @@ export class Transaction {
       );
     }
 
-    if (!props.accountId && !props.creditCardId) {
+    if (!props.account && !props.creditCardId) {
       throw new Error('Account or credit card is required');
     }
 

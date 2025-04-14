@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { EventService } from './services/event.service';
 import { EventController } from './controllers/event.controller';
 import { EventRepository } from './infra/event.repository';
@@ -8,12 +8,14 @@ import { TransactionModule } from '../Transaction/transaction.module';
 import { CategoryModule } from '../Category/category.module';
 import { EventMapper } from './infra/event.mapper';
 import { EVENT_REPOSITORY } from './infra/event.repository';
+import { AccountModule } from '../Account/account.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([EventEntity]),
-    TransactionModule,
-    CategoryModule,
+    forwardRef(() => TransactionModule),
+    forwardRef(() => CategoryModule),
+    forwardRef(() => AccountModule),
   ],
   controllers: [EventController],
   providers: [
@@ -24,6 +26,6 @@ import { EVENT_REPOSITORY } from './infra/event.repository';
       useClass: EventRepository,
     },
   ],
-  exports: [EventService],
+  exports: [EventService, EVENT_REPOSITORY, EventMapper],
 })
 export class EventModule {}

@@ -20,7 +20,7 @@ export class TransactionResponseDto {
 
   constructor(transaction: Transaction) {
     this.id = transaction.id;
-    this.eventId = transaction.eventId;
+    this.eventId = transaction.event.id;
     this.amount = transaction.amount.toCents();
     this.dueDate = transaction.dueDate.toISOString().split('T')[0];
     this.installmentNumber = transaction.installmentNumber;
@@ -31,7 +31,7 @@ export class TransactionResponseDto {
     this.ownership = transaction.ownership;
     this.type = transaction.type;
     this.paymentDate = transaction.paymentDate?.toISOString().split('T')[0];
-    this.accountId = transaction.accountId;
+    this.accountId = transaction.account?.id;
     this.creditCardId = transaction.creditCardId;
     this.notes = transaction.notes;
   }
