@@ -7,8 +7,8 @@ export class Event {
     public readonly id: string,
     public readonly description: string,
     public readonly date: Date,
-    public readonly categoryId: string, //TODO: this needs to be become an Entity
-    public readonly negotiatorId: string, //TODO: this needs to be become an Entity
+    public readonly categoryId: string,
+    public readonly negotiatorId: string,
     public transactions?: Transaction[],
   ) {}
 

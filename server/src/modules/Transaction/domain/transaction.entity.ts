@@ -8,7 +8,7 @@ import { Money } from '../../../utils/shared/types/money';
 export class Transaction {
   constructor(
     public readonly id: string,
-    public readonly eventId: string, //TODO: this needs to be become an Entity
+    public readonly eventId: string,
     public amount: Money,
     public dueDate: Date,
     public competenceDate: Date,
@@ -17,8 +17,8 @@ export class Transaction {
     public ownership: Ownership,
     public type: TransactionType,
     public paymentDate?: Date,
-    public accountId?: string, //TODO: this needs to be become an Entity
-    public creditCardId?: string, //TODO: this needs to be become an Entity
+    public accountId?: string,
+    public creditCardId?: string,
     public notes?: string,
   ) {}
 
