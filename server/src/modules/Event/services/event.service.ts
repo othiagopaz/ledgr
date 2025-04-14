@@ -30,7 +30,7 @@ export class EventService {
     const event = Event.create({
       description: dto.description,
       date: new Date(dto.date),
-      categoryId: dto.categoryId,
+      category: category,
       negotiatorId: dto.negotiatorId,
       transactions: dto.transactions,
     });
@@ -62,12 +62,18 @@ export class EventService {
       throw new NotFoundException('Event not found');
     }
 
+    const category = await this.categoryRepository.findById(dto.categoryId);
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
     const updatedEntry = new Event(
       entry.id,
       dto.description ?? entry.description,
       dto.date ? new Date(dto.date) : entry.date,
+      category,
       dto.negotiatorId ?? entry.negotiatorId,
-      dto.categoryId ?? entry.categoryId,
     );
 
     return this.eventRepository.save(updatedEntry);

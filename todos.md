@@ -14,7 +14,6 @@
 
 ## To-dos
 
-TODO: Migrar para entidades em Events
 TODO: Migrar para entidades em Transactions
 TODO: Migrar para entidades em Categories
 TODO: Implementar lógica de Settlements na criação de Events onde há transactions REFUNDABLE

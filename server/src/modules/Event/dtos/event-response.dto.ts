@@ -1,11 +1,11 @@
 import { Event } from '../domain/event.entity';
 import { TransactionResponseDto } from '../../Transaction/dtos/transaction-response.dto';
-
+import { Category } from '../../Category/domain/category.entity';
 export class EventResponseDto {
   id: string;
   description: string;
   date: string;
-  categoryId: string;
+  category: Category;
   negotiatorId: string;
   transactions?: TransactionResponseDto[];
 
@@ -14,7 +14,7 @@ export class EventResponseDto {
     this.description = event.description;
     this.date = event.date.toISOString().split('T')[0];
     this.negotiatorId = event.negotiatorId;
-    this.categoryId = event.categoryId;
+    this.category = event.category;
     this.transactions = event.transactions?.map(
       (transaction) => new TransactionResponseDto(transaction),
     );

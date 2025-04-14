@@ -14,15 +14,9 @@ export class SettlementEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'original_transaction_id' })
-  originalTransactionId: string;
-
   @ManyToOne(() => TransactionEntity)
   @JoinColumn({ name: 'original_transaction_id' })
   originalTransaction: TransactionEntity;
-
-  @Column({ name: 'linked_transaction_id', nullable: true })
-  linkedTransactionId: string | null;
 
   @ManyToOne(() => TransactionEntity, { nullable: true })
   @JoinColumn({ name: 'linked_transaction_id' })
