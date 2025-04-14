@@ -37,18 +37,29 @@
   },
   {
     "description": "Business travel booking",
-    "date": "2024-03-22T09:15:00Z",
+    "date": "2024-03-22",
     "categoryId": "9abdfeb4-84b5-41b7-9a02-8b9205117b1b",
     "negotiatorId": "550e8400-e29b-41d4-a716-446655440005",
     "transactions": [
       {
         "amount": 50000,
         "installmentNumber": 1,
-        "dueDate": "2024-03-22T09:15:00Z",
-        "competenceDate": "2024-03-22T09:15:00Z",
+        "dueDate": "2024-03-22",
+        "competenceDate": "2024-03-22",
         "type": "EXPENSE",
         "status": "PAID",
-        "ownership": "REFUNDABLE"
+        "ownership": "REFUNDABLE",
+        "settlements": [
+          {
+            "amount": 50000,
+            "dueDate": "2024-03-22",
+            "status": "PAID",
+            "paymentDate": "2024-03-22",
+            "negotiatorId": "550e8400-e29b-41d4-a716-446655440005",
+            "direction": "RECEIVBLE",
+            "accountId": "910702a4-6282-46fb-bc55-a68502dd616b"
+          }
+        ]
       }
     ]
   },

@@ -10,6 +10,10 @@ import { IAccountRepository } from '../../Account/infra/account.repository.inter
 import { ACCOUNT_REPOSITORY } from '../../Account/infra/account.repository';
 import { Account } from '../../Account/domain/account.entity';
 import { TransactionCreationData } from '../domain/event.types';
+import { ITransactionRepository } from '../../Transaction/infra/transaction.repository.interface';
+import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository';
+import { ISettlementRepository } from '../../Settlement/infra/settlement.repository.interface';
+import { SETTLEMENT_REPOSITORY } from '../../Settlement/infra/settlement.repository';
 
 @Injectable()
 export class EventService {
@@ -20,6 +24,10 @@ export class EventService {
     private readonly categoryRepository: ICategoryRepository,
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accountRepository: IAccountRepository,
+    @Inject(TRANSACTION_REPOSITORY)
+    private readonly transactionRepository: ITransactionRepository,
+    @Inject(SETTLEMENT_REPOSITORY)
+    private readonly settlementRepository: ISettlementRepository,
   ) {}
 
   async create(dto: CreateEventDto): Promise<Event> {
@@ -55,6 +63,7 @@ export class EventService {
         account: account,
         creditCardId: txDto.creditCardId,
         notes: txDto.notes,
+        settlements: txDto.settlements,
       });
     }
 
@@ -67,6 +76,12 @@ export class EventService {
     });
 
     await this.eventRepository.save(event);
+
+    await this.transactionRepository.saveMany(event.transactions ?? []);
+
+    await this.settlementRepository.saveMany(
+      event.transactions?.flatMap((tx) => tx.settlements ?? []) ?? [],
+    );
 
     return event;
   }

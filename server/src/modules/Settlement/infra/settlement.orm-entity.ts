@@ -44,7 +44,7 @@ export class SettlementEntity {
   })
   direction: SettlementDirection;
 
-  @Column({ name: 'payment_date', nullable: true })
+  @Column({ name: 'payment_date', nullable: true, type: 'date' })
   paymentDate?: Date;
 
   @Column({ name: 'account_id', nullable: true })

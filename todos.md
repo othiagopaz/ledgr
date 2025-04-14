@@ -14,7 +14,7 @@
 
 ## To-dos
 
-TODO: Implementar lógica de Settlements na criação de Events onde há transactions REFUNDABLE
+TODO: Implementar lógica de Settlements na criação de Evens onde há transactions REFUNDABLE
 
 ## Questionamentos interessantes
 

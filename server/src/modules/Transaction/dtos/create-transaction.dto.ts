@@ -6,10 +6,13 @@ import {
   IsPositive,
   IsEnum,
   IsInt,
+  ValidateNested,
+  IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TransactionStatus } from '../../../utils/shared/enums/transaction-status.enum';
 import { Ownership } from '../../../utils/shared/enums/ownership.enum';
+import { CreateSettlementDto } from '../../Settlement/dtos/create-settlement.dto';
 import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
 
 export class CreateTransactionDto {
@@ -61,4 +64,10 @@ export class CreateTransactionDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateSettlementDto)
+  settlements?: CreateSettlementDto[];
 }

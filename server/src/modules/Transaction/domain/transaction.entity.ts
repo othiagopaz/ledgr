@@ -6,6 +6,9 @@ import { TransactionType } from '../../../utils/shared/enums/transaction-type.en
 import { Money } from '../../../utils/shared/types/money';
 import { Event } from '../../Event/domain/event.entity';
 import { Account } from '../../Account/domain/account.entity';
+import { Settlement } from '../../Settlement/domain/settlement.entity';
+import { BadRequestException } from '@nestjs/common';
+
 export class Transaction {
   constructor(
     public readonly id: string,
@@ -21,15 +24,32 @@ export class Transaction {
     public account?: Account,
     public creditCardId?: string,
     public notes?: string,
+    public settlements?: Settlement[],
   ) {}
 
   static create(props: TransactionProps): Transaction {
     Transaction.validateTransaction(props);
 
-    return new Transaction(
+    const transactionAmount = new Money(props.amount);
+
+    if (props.ownership == Ownership.REFUNDABLE) {
+      const totalSettlementsAmount =
+        props.settlements?.reduce(
+          (acc, settlement) => acc.add(new Money(settlement.amount)),
+          new Money(0),
+        ) ?? new Money(0);
+
+      if (!transactionAmount.equals(totalSettlementsAmount)) {
+        throw new BadRequestException(
+          'Total settlements amount must be equal to transaction amount',
+        );
+      }
+    }
+
+    const transaction = new Transaction(
       uuidv4(),
       props.event,
-      new Money(props.amount),
+      transactionAmount,
       props.dueDate,
       props.competenceDate,
       props.installmentNumber,
@@ -40,7 +60,19 @@ export class Transaction {
       props.account,
       props.creditCardId,
       props.notes,
+      [],
     );
+
+    if (props.ownership === Ownership.REFUNDABLE && props.settlements) {
+      transaction.settlements = props.settlements.map((settlementData) =>
+        Settlement.create({
+          ...settlementData,
+          originalTransaction: transaction,
+        }),
+      );
+    }
+
+    return transaction;
   }
 
   private static validateTransaction(props: TransactionProps) {

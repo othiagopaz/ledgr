@@ -18,6 +18,6 @@ import { TransactionModule } from '../Transaction/transaction.module';
     SettlementMapper,
   ],
   controllers: [SettlementController],
-  exports: [SettlementService],
+  exports: [SettlementService, SETTLEMENT_REPOSITORY, SettlementMapper],
 })
 export class SettlementModule {}

@@ -52,6 +52,8 @@ export class Event {
           event: event,
         });
       });
+    } else {
+      throw new BadRequestException('Missing transactions');
     }
 
     return event;

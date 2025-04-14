@@ -13,6 +13,7 @@ import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.
 
 export class CreateSettlementDto {
   @IsUUID()
+  @IsOptional()
   originalTransactionId: string;
 
   @IsUUID()
@@ -36,13 +37,13 @@ export class CreateSettlementDto {
   @IsEnum(SettlementDirection)
   direction: SettlementDirection;
 
-  @IsOptional()
-  @IsDate()
-  paymentDate?: Date;
+  @IsString()
+  accountId: string;
 
   @IsOptional()
-  @IsString()
-  accountId?: string;
+  @IsDate()
+  @Type(() => Date)
+  paymentDate?: Date;
 
   @IsOptional()
   @IsString()
