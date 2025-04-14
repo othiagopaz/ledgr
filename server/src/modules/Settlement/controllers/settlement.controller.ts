@@ -1,16 +1,7 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Delete,
-  Put,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
 import { SettlementService } from '../services/settlement.service';
 import { CreateSettlementDto } from '../dtos/create-settlement.dto';
 import { Settlement } from '../domain/settlement.entity';
-import { UpdateSettlementDto } from '../dtos/update-settlement.dto';
 import { Message } from '../../../utils/shared/decorators/message.decorator';
 
 @Controller('settlements')
@@ -35,15 +26,6 @@ export class SettlementController {
   @Message('Settlement fetched successfully')
   async findById(@Param('id') id: string): Promise<Settlement | null> {
     return this.settlementService.findById(id);
-  }
-
-  @Put(':id')
-  @Message('Settlement updated successfully')
-  async update(
-    @Param('id') id: string,
-    @Body() updateData: UpdateSettlementDto,
-  ): Promise<Settlement | null> {
-    return this.settlementService.update(id, updateData);
   }
 
   @Delete(':id')

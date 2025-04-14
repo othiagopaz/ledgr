@@ -7,26 +7,42 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { CreateSettlementDto } from '../dtos/create-settlement.dto';
 import { Settlement } from '../domain/settlement.entity';
-import { UpdateSettlementDto } from '../dtos/update-settlement.dto';
 import { ISettlementRepository } from '../infra/settlement.repository.interface';
 import { Money } from '../../../utils/shared/types/money';
-
+import { ITransactionRepository } from '../../Transaction/infra/transaction.repository.interface';
+import { SETTLEMENT_REPOSITORY } from '../infra/settlement.repository';
+import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository';
 @Injectable()
 export class SettlementService {
   constructor(
-    @Inject(ISettlementRepository)
+    @Inject(SETTLEMENT_REPOSITORY)
     private readonly settlementRepository: ISettlementRepository,
+    @Inject(TRANSACTION_REPOSITORY)
+    private readonly transactionRepository: ITransactionRepository,
   ) {}
 
   async create(dto: CreateSettlementDto): Promise<Settlement> {
+    const originalTransaction = await this.transactionRepository.findById(
+      dto.originalTransactionId,
+    );
+
+    if (!originalTransaction) {
+      throw new NotFoundException('Original transaction not found');
+    }
+
+    const linkedTransaction = dto.linkedTransactionId
+      ? await this.transactionRepository.findById(dto.linkedTransactionId)
+      : undefined;
+
     const settlement = new Settlement(
       uuidv4(),
-      dto.transactionId,
+      originalTransaction,
       dto.negotiatorId,
       new Money(dto.amount),
       dto.dueDate,
       dto.status,
       dto.direction,
+      linkedTransaction ?? undefined,
       dto.paymentDate,
       dto.accountId,
       dto.notes,
@@ -41,28 +57,6 @@ export class SettlementService {
 
   async findById(id: string): Promise<Settlement | null> {
     return this.settlementRepository.findById(id);
-  }
-
-  async update(id: string, dto: UpdateSettlementDto): Promise<Settlement> {
-    const settlement = await this.findById(id);
-    if (!settlement) {
-      throw new NotFoundException('Settlement not found');
-    }
-
-    const updatedSettlement = new Settlement(
-      settlement.id,
-      dto.transactionId ?? settlement.transactionId,
-      dto.negotiatorId ?? settlement.negotiatorId,
-      new Money(dto.amount ?? settlement.amount.value),
-      dto.dueDate ?? settlement.dueDate,
-      dto.status ?? settlement.status,
-      dto.direction ?? settlement.direction,
-      dto.paymentDate ?? settlement.paymentDate,
-      dto.accountId ?? settlement.accountId,
-      dto.notes ?? settlement.notes,
-    );
-
-    return this.settlementRepository.save(updatedSettlement);
   }
 
   async remove(id: string): Promise<boolean> {

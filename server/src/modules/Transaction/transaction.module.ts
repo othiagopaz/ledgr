@@ -5,7 +5,7 @@ import { TransactionRepository } from './infra/transaction.repository';
 import { TransactionMapper } from './infra/transaction.mapper';
 import { TransactionEntity } from './infra/transaction.orm-entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TRANSACTION_REPOSITORY } from '../../utils/shared/infra/repository.tokens';
+import { TRANSACTION_REPOSITORY } from './infra/transaction.repository';
 
 @Module({
   imports: [TypeOrmModule.forFeature([TransactionEntity])],

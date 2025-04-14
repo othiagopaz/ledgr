@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { IEventRepository } from '../infra/event.repository.interface';
-import { EVENT_REPOSITORY } from '../../../utils/shared/infra/repository.tokens';
+import { EVENT_REPOSITORY } from '../infra/event.repository';
 import { CreateEventDto } from '../dtos/create-event.dto';
 import { UpdateEventDto } from '../dtos/update-event.dto';
 import { Event } from '../domain/event.entity';
 import { ICategoryRepository } from '../../Category/infra/category.repository.interface';
-import { CATEGORY_REPOSITORY } from '../../../utils/shared/infra/repository.tokens';
+import { CATEGORY_REPOSITORY } from '../../Category/infra/category.repository';
 import { ITransactionRepository } from '../../Transaction/infra/transaction.repository.interface';
-import { TRANSACTION_REPOSITORY } from '../../../utils/shared/infra/repository.tokens';
+import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository';
 
 @Injectable()
 export class EventService {

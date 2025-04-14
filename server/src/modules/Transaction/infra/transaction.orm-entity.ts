@@ -4,11 +4,13 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { TransactionStatus } from '../../../utils/shared/enums/transaction-status.enum';
 import { EventEntity } from '../../Event/infra/event.orm-entity';
 import { Ownership } from '../../../utils/shared/enums/ownership.enum';
 import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
+import { SettlementEntity } from '../../Settlement/infra/settlement.orm-entity';
 
 @Entity('transactions')
 export class TransactionEntity {
@@ -56,6 +58,18 @@ export class TransactionEntity {
 
   @Column({ nullable: true })
   notes?: string;
+
+  @OneToMany(
+    () => SettlementEntity,
+    (settlement) => settlement.originalTransaction,
+  )
+  originalSettlements: SettlementEntity[];
+
+  @OneToMany(
+    () => SettlementEntity,
+    (settlement) => settlement.linkedTransaction,
+  )
+  linkedSettlements: SettlementEntity[];
 
   @Column({
     type: 'timestamp',

@@ -6,8 +6,8 @@ import { EventEntity } from './infra/event.orm-entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionModule } from '../Transaction/transaction.module';
 import { CategoryModule } from '../Category/category.module';
-import { EVENT_REPOSITORY } from '../../utils/shared/infra/repository.tokens';
 import { EventMapper } from './infra/event.mapper';
+import { EVENT_REPOSITORY } from './infra/event.repository';
 
 @Module({
   imports: [

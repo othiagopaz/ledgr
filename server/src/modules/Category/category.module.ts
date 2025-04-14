@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { CategoryService } from './services/category.service';
 import { CategoryController } from './controllers/category.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CategoryRepository } from './infra/category.repository';
+import {
+  CATEGORY_REPOSITORY,
+  CategoryRepository,
+} from './infra/category.repository';
 import { CategoryMapper } from './infra/category.mapper';
 import { CategoryEntity } from './infra/category.orm-entity';
-import { CATEGORY_REPOSITORY } from '../../utils/shared/infra/repository.tokens';
 
 @Module({
   imports: [TypeOrmModule.forFeature([CategoryEntity])],

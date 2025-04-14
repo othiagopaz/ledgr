@@ -4,7 +4,7 @@ import { ICategoryRepository } from '../infra/category.repository.interface';
 import { CreateCategoryDto } from '../dtos/create-category.dto';
 import { Category } from '../domain/category.entity';
 import { UpdateCategoryDto } from '../dtos/update-category.dto';
-import { CATEGORY_REPOSITORY } from '../../../utils/shared/infra/repository.tokens';
+import { CATEGORY_REPOSITORY } from '../infra/category.repository';
 @Injectable()
 export class CategoryService {
   constructor(

@@ -1,35 +1,33 @@
 export class Money {
-  private readonly cents: number;
-  value: number;
+  readonly value: number;
 
   /**
    * Creates a Money instance from cents (integers).
    * This is the default constructor - use this when working with integer cents.
    * For decimal values, use Money.fromDecimal()
    */
-  constructor(cents: number) {
-    this.cents = cents;
-    this.value = cents;
+  constructor(value: number) {
+    this.value = value;
   }
 
   add(other: Money): Money {
-    return new Money(this.cents + other.cents);
+    return new Money(this.value + other.value);
   }
 
   subtract(other: Money): Money {
-    return new Money(this.cents - other.cents);
+    return new Money(this.value - other.value);
   }
 
   equals(other: Money): boolean {
-    return this.cents === other.cents;
+    return this.value === other.value;
   }
 
   toDecimal(): number {
-    return this.cents / 100;
+    return this.value / 100;
   }
 
   toCents(): number {
-    return this.cents;
+    return this.value;
   }
 
   /**
@@ -53,18 +51,18 @@ export class Money {
   }
 
   isNegative(): boolean {
-    return this.cents < 0;
+    return this.value < 0;
   }
 
   isPositive(): boolean {
-    return this.cents > 0;
+    return this.value > 0;
   }
 
   isZero(): boolean {
-    return this.cents === 0;
+    return this.value === 0;
   }
 
   toString(): string {
-    return (this.cents / 100).toFixed(2);
+    return (this.value / 100).toFixed(2);
   }
 }

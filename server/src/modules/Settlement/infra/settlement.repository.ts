@@ -20,4 +20,10 @@ export class SettlementRepository
   ) {
     super(repo, mapper);
   }
+
+  protected getRelations(): string[] {
+    return ['originalTransaction', 'linkedTransaction'];
+  }
 }
+
+export const SETTLEMENT_REPOSITORY = Symbol('SETTLEMENT_REPOSITORY');

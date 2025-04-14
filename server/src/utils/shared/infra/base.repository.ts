@@ -22,12 +22,17 @@ export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
   }
 
   async findById(id: string): Promise<TDomain | null> {
-    const found = await this.ormRepo.findOne({ where: { id } as any });
+    const found = await this.ormRepo.findOne({
+      where: { id } as any,
+      relations: this.getRelations(),
+    });
     return found ? this.mapper.toDomain(found) : null;
   }
 
   async findAll(): Promise<TDomain[]> {
-    const all = await this.ormRepo.find({ relations: ['transactions'] });
+    const all = await this.ormRepo.find({
+      relations: this.getRelations(),
+    });
     return all.map((f) => this.mapper.toDomain(f));
   }
 
@@ -38,5 +43,9 @@ export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
   async findWithFilters(filters: any): Promise<TDomain[]> {
     const found = await this.ormRepo.find({ where: filters });
     return found.map((f) => this.mapper.toDomain(f));
+  }
+
+  protected getRelations(): string[] {
+    return [];
   }
 }

@@ -1,0 +1,125 @@
+[
+  {
+    "description": "Monthly office supplies",
+    "date": "2024-03-20T10:00:00Z",
+    "categoryId": "9abdfeb4-84b5-41b7-9a02-8b9205117b1b",
+    "negotiatorId": "550e8400-e29b-41d4-a716-446655440001",
+    "transactions": [
+      {
+        "amount": 15000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-20T10:00:00Z",
+        "competenceDate": "2024-03-20T10:00:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "OWN",
+        "accountId": "910702a4-6282-46fb-bc55-a68502dd616b"
+      }
+    ]
+  },
+  {
+    "description": "Client payment received",
+    "date": "2024-03-21T14:30:00Z",
+    "categoryId": "9abdfeb4-84b5-41b7-9a02-8b9205117b1b",
+    "negotiatorId": "550e8400-e29b-41d4-a716-446655440003",
+    "transactions": [
+      {
+        "amount": 100000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-21T14:30:00Z",
+        "competenceDate": "2024-03-21T14:30:00Z",
+        "type": "INCOME",
+        "status": "PENDING",
+        "ownership": "OWN",
+        "accountId": "910702a4-6282-46fb-bc55-a68502dd616b"
+      }
+    ]
+  },
+  {
+    "description": "Business travel booking",
+    "date": "2024-03-22T09:15:00Z",
+    "categoryId": "9abdfeb4-84b5-41b7-9a02-8b9205117b1b",
+    "negotiatorId": "550e8400-e29b-41d4-a716-446655440005",
+    "transactions": [
+      {
+        "amount": 50000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-22T09:15:00Z",
+        "competenceDate": "2024-03-22T09:15:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "REFUNDABLE"
+      }
+    ]
+  },
+  {
+    "description": "Team building activity",
+    "date": "2024-03-23T11:00:00Z",
+    "categoryId": "9abdfeb4-84b5-41b7-9a02-8b9205117b1b",
+    "negotiatorId": "550e8400-e29b-41d4-a716-446655440007",
+    "transactions": [
+      {
+        "amount": 25000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-23T11:00:00Z",
+        "competenceDate": "2024-03-23T11:00:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "OWN"
+      },
+      {
+        "amount": 25000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-23T11:00:00Z",
+        "competenceDate": "2024-03-23T11:00:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "REFUNDABLE"
+      }
+    ]
+  },
+  {
+    "description": "Office renovation project",
+    "date": "2024-03-24T08:00:00Z",
+    "categoryId": "9abdfeb4-84b5-41b7-9a02-8b9205117b1b",
+    "negotiatorId": "550e8400-e29b-41d4-a716-446655440009",
+    "transactions": [
+      {
+        "amount": 200000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-24T08:00:00Z",
+        "competenceDate": "2024-03-24T08:00:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "OWN"
+      },
+      {
+        "amount": 80000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-24T08:00:00Z",
+        "competenceDate": "2024-03-24T08:00:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "OWN"
+      },
+      {
+        "amount": 150000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-24T08:00:00Z",
+        "competenceDate": "2024-03-24T08:00:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "OWN"
+      },
+      {
+        "amount": 120000,
+        "installmentNumber": 1,
+        "dueDate": "2024-03-24T08:00:00Z",
+        "competenceDate": "2024-03-24T08:00:00Z",
+        "type": "EXPENSE",
+        "status": "PAID",
+        "ownership": "OWN"
+      }
+    ]
+  }
+]
