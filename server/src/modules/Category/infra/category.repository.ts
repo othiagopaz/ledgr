@@ -20,6 +20,11 @@ export class CategoryRepository
   ) {
     super(repo, mapper);
   }
+
+  // Remove the getRelations override to avoid eager loading parentCategory
+  // protected override getRelations(): string[] {
+  //   return ['parentCategory'];
+  // }
 }
 
 export const CATEGORY_REPOSITORY = Symbol('CATEGORY_REPOSITORY');

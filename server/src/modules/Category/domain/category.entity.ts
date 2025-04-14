@@ -10,6 +10,7 @@ export class Category {
     public isArchived?: boolean,
     public userId?: string,
     public parentCategoryId?: string,
+    public parentCategory?: Category,
   ) {}
 
   archive() {

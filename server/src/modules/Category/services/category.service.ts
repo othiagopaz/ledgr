@@ -5,6 +5,7 @@ import { CreateCategoryDto } from '../dtos/create-category.dto';
 import { Category } from '../domain/category.entity';
 import { UpdateCategoryDto } from '../dtos/update-category.dto';
 import { CATEGORY_REPOSITORY } from '../infra/category.repository';
+
 @Injectable()
 export class CategoryService {
   constructor(
@@ -41,18 +42,39 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
-    const updatedCategory = new Category(
-      category.id,
-      dto.name ?? category.name,
-      dto.type ?? category.type,
-      dto.color ?? category.color,
-      dto.isDefault ?? category.isDefault,
-      dto.isArchived ?? category.isArchived,
-      dto.userId ?? category.userId,
-      dto.parentCategoryId ?? category.parentCategoryId,
-    );
+    if (
+      dto.parentCategoryId !== undefined &&
+      dto.parentCategoryId !== category.parentCategoryId
+    ) {
+      if (dto.parentCategoryId !== null) {
+        const parentExists = await this.categoryRepository.findById(
+          dto.parentCategoryId,
+        );
+        if (!parentExists) {
+          throw new NotFoundException(
+            `Parent category with ID ${dto.parentCategoryId} not found.`,
+          );
+        }
+      }
+    }
 
-    return this.categoryRepository.save(updatedCategory);
+    category.name = dto.name ?? category.name;
+    category.type = dto.type ?? category.type;
+    category.color = dto.color ?? category.color;
+    category.isDefault = dto.isDefault ?? category.isDefault;
+    category.isArchived = dto.isArchived ?? category.isArchived;
+    category.userId = dto.userId ?? category.userId;
+    category.parentCategoryId =
+      dto.parentCategoryId === undefined
+        ? category.parentCategoryId
+        : dto.parentCategoryId === null
+          ? undefined
+          : dto.parentCategoryId;
+    if (category.parentCategoryId == null) {
+      category.parentCategory = undefined;
+    }
+
+    return this.categoryRepository.save(category);
   }
 
   async findSubcategories(id: string): Promise<Category[]> {
