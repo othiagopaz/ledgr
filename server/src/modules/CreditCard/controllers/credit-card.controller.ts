@@ -11,7 +11,7 @@ import { CreateCreditCardDto } from '../dtos/create-credit-card.dto';
 import { CreditCard } from '../domain/credit-card.entity';
 import { Message } from '../../../utils/shared/decorators/message.decorator';
 
-@Controller('credit-card')
+@Controller('credit-cards')
 export class CreditCardController {
   constructor(private readonly creditCardService: CreditCardService) {}
 

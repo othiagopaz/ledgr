@@ -8,6 +8,7 @@ import { CategoryEntity } from '../../modules/Category/infra/category.orm-entity
 import { AccountEntity } from '../../modules/Account/infra/account.orm-entity';
 import { SettlementEntity } from '../../modules/Settlement/infra/settlement.orm-entity';
 import { CreditCardEntity } from '../../modules/CreditCard/infra/credit-card.orm-entity';
+import { InvoiceEntity } from '../../modules/Invoice/infra/invoice.orm-entity';
 export const typeOrmConfig: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DB_HOST,
@@ -22,6 +23,7 @@ export const typeOrmConfig: DataSourceOptions = {
     AccountEntity,
     SettlementEntity,
     CreditCardEntity,
+    InvoiceEntity,
   ],
   migrations: ['dist/utils/database/migrations/*.js'],
   synchronize: false,

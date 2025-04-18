@@ -12,6 +12,7 @@ import { Ownership } from '../../../utils/shared/enums/ownership.enum';
 import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
 import { SettlementEntity } from '../../Settlement/infra/settlement.orm-entity';
 import { AccountEntity } from '../../Account/infra/account.orm-entity';
+import { InvoiceEntity } from '../../Invoice/infra/invoice.orm-entity';
 @Entity('transactions')
 export class TransactionEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -80,4 +81,10 @@ export class TransactionEntity {
     default: () => 'CURRENT_TIMESTAMP',
   })
   updatedAt: Date;
+
+  @ManyToOne(() => InvoiceEntity, (invoice) => invoice.transactions, {
+    nullable: true,
+  })
+  @JoinColumn({ name: 'invoice_id' })
+  invoice?: InvoiceEntity;
 }
