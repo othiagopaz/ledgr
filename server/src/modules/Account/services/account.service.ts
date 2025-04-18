@@ -5,7 +5,7 @@ import { Account } from '../domain/account.entity';
 import { UpdateAccountDto } from '../dtos/update-account.dto';
 import { IAccountRepository } from '../infra/account.repository.interface';
 import { Money } from '../../../utils/shared/types/money';
-import { ACCOUNT_REPOSITORY } from '../infra/account.repository';
+import { ACCOUNT_REPOSITORY } from '../infra/account.repository.interface';
 @Injectable()
 export class AccountService {
   constructor(

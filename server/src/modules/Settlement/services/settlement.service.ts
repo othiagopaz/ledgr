@@ -10,8 +10,8 @@ import { Settlement } from '../domain/settlement.entity';
 import { ISettlementRepository } from '../infra/settlement.repository.interface';
 import { Money } from '../../../utils/shared/types/money';
 import { ITransactionRepository } from '../../Transaction/infra/transaction.repository.interface';
-import { SETTLEMENT_REPOSITORY } from '../infra/settlement.repository';
-import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository';
+import { SETTLEMENT_REPOSITORY } from '../infra/settlement.repository.interface';
+import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository.interface';
 @Injectable()
 export class SettlementService {
   constructor(

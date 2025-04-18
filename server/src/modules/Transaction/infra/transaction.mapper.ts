@@ -1,12 +1,13 @@
 // src/modules/installment/mappers/installment.mapper.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { Money } from '../../../utils/shared/types/money';
 import { Transaction } from '../domain/transaction.entity';
 import { TransactionEntity } from './transaction.orm-entity';
 import { Mapper } from '../../../utils/shared/infra/repository.interface';
 import { EventMapper } from '../../Event/infra/event.mapper';
 import { AccountMapper } from '../../Account/infra/account.mapper';
-
+import { InvoiceMapper } from '../../Invoice/infra/invoice.mapper';
+import { CreditCardMapper } from '../../CreditCard/infra/credit-card.mapper';
 @Injectable()
 export class TransactionMapper
   implements Mapper<Transaction, TransactionEntity>
@@ -14,6 +15,10 @@ export class TransactionMapper
   constructor(
     private readonly eventMapper: EventMapper,
     private readonly accountMapper: AccountMapper,
+    @Inject(forwardRef(() => InvoiceMapper))
+    private readonly invoiceMapper: InvoiceMapper,
+    @Inject(forwardRef(() => CreditCardMapper))
+    private readonly creditCardMapper: CreditCardMapper,
   ) {}
 
   toDomain(orm: TransactionEntity): Transaction {
@@ -29,8 +34,12 @@ export class TransactionMapper
       orm.type,
       orm.paymentDate,
       orm.account ? this.accountMapper.toDomain(orm.account) : undefined,
-      orm.creditCardId,
+      orm.creditCard
+        ? this.creditCardMapper.toDomain(orm.creditCard)
+        : undefined,
       orm.notes,
+      undefined,
+      orm.invoice ? this.invoiceMapper.toDomain(orm.invoice) : undefined,
     );
   }
 
@@ -47,10 +56,15 @@ export class TransactionMapper
     orm.account = domain.account
       ? this.accountMapper.toOrm(domain.account)
       : undefined;
-    orm.creditCardId = domain.creditCardId;
+    orm.creditCard = domain.creditCard
+      ? this.creditCardMapper.toOrm(domain.creditCard)
+      : undefined;
     orm.notes = domain.notes;
     orm.ownership = domain.ownership;
     orm.type = domain.type;
+    orm.invoice = domain.invoice
+      ? this.invoiceMapper.toOrm(domain.invoice)
+      : undefined;
     return orm;
   }
 }

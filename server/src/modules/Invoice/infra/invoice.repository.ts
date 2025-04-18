@@ -20,6 +20,10 @@ export class InvoiceRepository
   ) {
     super(repo, mapper);
   }
+
+  protected getRelations(): string[] {
+    return ['creditCard', 'transactions'];
+  }
 }
 
 export const INVOICE_REPOSITORY = Symbol('INVOICE_REPOSITORY');

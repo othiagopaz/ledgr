@@ -36,5 +36,3 @@ export class TransactionRepository
     return ['event', 'event.category', 'account'];
   }
 }
-
-export const TRANSACTION_REPOSITORY = Symbol('TRANSACTION_REPOSITORY');

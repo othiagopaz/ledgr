@@ -1,20 +1,24 @@
 // src/modules/financial-entry/mappers/financial-entry.mapper.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { Invoice } from '../domain/invoice.entity';
 import { InvoiceEntity } from './invoice.orm-entity';
 import { Mapper } from '../../../utils/shared/infra/repository.interface';
 import { Money } from '../../../utils/shared/types/money';
 import { TransactionMapper } from '../../Transaction/infra/transaction.mapper';
-import { CreditCardEntity } from '../../CreditCard/infra/credit-card.orm-entity';
+import { CreditCardMapper } from '../../CreditCard/infra/credit-card.mapper';
 
 @Injectable()
 export class InvoiceMapper implements Mapper<Invoice, InvoiceEntity> {
-  constructor(private readonly transactionMapper: TransactionMapper) {}
+  constructor(
+    @Inject(forwardRef(() => TransactionMapper))
+    private readonly transactionMapper: TransactionMapper,
+    private readonly creditCardMapper: CreditCardMapper,
+  ) {}
 
   toDomain(orm: InvoiceEntity): Invoice {
     return new Invoice(
       orm.id,
-      orm.creditCard.id,
+      this.creditCardMapper.toDomain(orm.creditCard),
       orm.referenceMonth,
       orm.referenceYear,
       orm.closingDate,
@@ -43,7 +47,7 @@ export class InvoiceMapper implements Mapper<Invoice, InvoiceEntity> {
       ) ?? [];
     orm.paymentDate = domain.paymentDate ?? undefined;
     orm.accountId = domain.accountId ?? undefined;
-    orm.creditCard = { id: domain.creditCardId } as CreditCardEntity;
+    orm.creditCard = this.creditCardMapper.toOrm(domain.creditCard);
     return orm;
   }
 }

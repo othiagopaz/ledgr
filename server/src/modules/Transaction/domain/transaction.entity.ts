@@ -8,7 +8,8 @@ import { Event } from '../../Event/domain/event.entity';
 import { Account } from '../../Account/domain/account.entity';
 import { Settlement } from '../../Settlement/domain/settlement.entity';
 import { BadRequestException } from '@nestjs/common';
-
+import { Invoice } from '../../Invoice/domain/invoice.entity';
+import { CreditCard } from '../../CreditCard/domain/credit-card.entity';
 export class Transaction {
   constructor(
     public readonly id: string,
@@ -22,9 +23,10 @@ export class Transaction {
     public type: TransactionType,
     public paymentDate?: Date,
     public account?: Account,
-    public creditCardId?: string,
+    public creditCard?: CreditCard,
     public notes?: string,
     public settlements?: Settlement[],
+    public invoice?: Invoice,
   ) {}
 
   static create(props: TransactionProps): Transaction {
@@ -58,7 +60,7 @@ export class Transaction {
       props.type,
       props.paymentDate,
       props.account,
-      props.creditCardId,
+      props.creditCard,
       props.notes,
       [],
     );
@@ -98,7 +100,7 @@ export class Transaction {
       );
     }
 
-    if (!props.account && !props.creditCardId) {
+    if (!props.account && !props.creditCard) {
       throw new Error('Account or credit card is required');
     }
 

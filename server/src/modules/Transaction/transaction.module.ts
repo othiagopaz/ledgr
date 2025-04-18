@@ -5,14 +5,18 @@ import { TransactionRepository } from './infra/transaction.repository';
 import { TransactionMapper } from './infra/transaction.mapper';
 import { TransactionEntity } from './infra/transaction.orm-entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TRANSACTION_REPOSITORY } from './infra/transaction.repository';
+import { TRANSACTION_REPOSITORY } from './infra/transaction.repository.interface';
 import { EventModule } from '../Event/event.module';
 import { AccountModule } from '../Account/account.module';
+import { InvoiceModule } from '../Invoice/invoice.module';
+import { CreditCardModule } from '../CreditCard/credit-card.module';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TransactionEntity]),
     forwardRef(() => EventModule),
     forwardRef(() => AccountModule),
+    forwardRef(() => InvoiceModule),
+    forwardRef(() => CreditCardModule),
+    TypeOrmModule.forFeature([TransactionEntity]),
   ],
   providers: [
     TransactionService,

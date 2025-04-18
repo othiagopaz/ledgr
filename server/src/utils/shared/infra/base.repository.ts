@@ -29,6 +29,14 @@ export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
     return found ? this.mapper.toDomain(found) : null;
   }
 
+  async findOne(filters: any): Promise<TDomain | null> {
+    const found = await this.ormRepo.findOne({
+      where: filters,
+      relations: this.getRelations(),
+    });
+    return found ? this.mapper.toDomain(found) : null;
+  }
+
   async findAll(): Promise<TDomain[]> {
     const all = await this.ormRepo.find({
       relations: this.getRelations(),

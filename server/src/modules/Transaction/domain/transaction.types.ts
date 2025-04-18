@@ -5,7 +5,7 @@ import { Event } from '../../Event/domain/event.entity';
 import { Account } from '../../Account/domain/account.entity';
 import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.enum';
 import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
-
+import { CreditCard } from '../../CreditCard/domain/credit-card.entity';
 export type SettlementCreationData = {
   negotiatorId: string;
   amount: number;
@@ -13,7 +13,8 @@ export type SettlementCreationData = {
   status: SettlementStatus;
   direction: SettlementDirection;
   paymentDate?: Date;
-  accountId?: string;
+  account?: Account;
+  creditCard?: CreditCard;
   notes?: string;
 };
 
@@ -28,7 +29,7 @@ export type TransactionProps = {
   type: TransactionType;
   paymentDate?: Date;
   account?: Account;
-  creditCardId?: string;
+  creditCard?: CreditCard;
   notes?: string;
   settlements?: SettlementCreationData[];
 };

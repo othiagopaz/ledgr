@@ -13,6 +13,7 @@ import { TransactionType } from '../../../utils/shared/enums/transaction-type.en
 import { SettlementEntity } from '../../Settlement/infra/settlement.orm-entity';
 import { AccountEntity } from '../../Account/infra/account.orm-entity';
 import { InvoiceEntity } from '../../Invoice/infra/invoice.orm-entity';
+import { CreditCardEntity } from '../../CreditCard/infra/credit-card.orm-entity';
 @Entity('transactions')
 export class TransactionEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -50,8 +51,9 @@ export class TransactionEntity {
   @JoinColumn({ name: 'account_id' })
   account?: AccountEntity;
 
-  @Column({ name: 'credit_card_id', nullable: true })
-  creditCardId?: string;
+  @ManyToOne(() => CreditCardEntity, { nullable: true })
+  @JoinColumn({ name: 'credit_card_id' })
+  creditCard?: CreditCardEntity;
 
   @Column({ nullable: true })
   notes?: string;

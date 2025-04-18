@@ -5,14 +5,27 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Transaction } from '../domain/transaction.entity';
-import { ITransactionRepository } from '../infra/transaction.repository.interface';
+import {
+  ITransactionRepository,
+  TRANSACTION_REPOSITORY,
+} from '../infra/transaction.repository.interface';
 import { UpdateTransactionDto } from '../dtos/update-transaction.dto';
 import { CreateTransactionDto } from '../dtos/create-transaction.dto';
-import { TRANSACTION_REPOSITORY } from '../infra/transaction.repository';
-import { IEventRepository } from '../../Event/infra/event.repository.interface';
-import { EVENT_REPOSITORY } from '../../Event/infra/event.repository';
-import { IAccountRepository } from '../../Account/infra/account.repository.interface';
-import { ACCOUNT_REPOSITORY } from '../../Account/infra/account.repository';
+import {
+  IEventRepository,
+  EVENT_REPOSITORY,
+} from '../../Event/infra/event.repository.interface';
+import {
+  IAccountRepository,
+  ACCOUNT_REPOSITORY,
+} from '../../Account/infra/account.repository.interface';
+import {
+  ICreditCardRepository,
+  CREDIT_CARD_REPOSITORY,
+} from '../../CreditCard/infra/credit-card.repository.interface';
+import { InvoiceService } from '../../Invoice/services/invoice.service';
+import { TransactionCreationData } from '../../Event/domain/event.types';
+
 @Injectable()
 export class TransactionService {
   constructor(
@@ -22,40 +35,63 @@ export class TransactionService {
     private readonly eventRepository: IEventRepository,
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accountRepository: IAccountRepository,
+    @Inject(CREDIT_CARD_REPOSITORY)
+    private readonly creditCardRepository: ICreditCardRepository,
+    private readonly invoiceService: InvoiceService,
   ) {}
 
-  async create(dto: CreateTransactionDto): Promise<Transaction> {
-    const event = await this.eventRepository.findById(dto.eventId);
-
-    if (!event) {
-      throw new NotFoundException('Event not found');
-    }
-
-    const account = dto.accountId
-      ? await this.accountRepository.findById(dto.accountId)
+  async prepareTransaction(
+    txDto: CreateTransactionDto,
+  ): Promise<TransactionCreationData> {
+    const account = txDto.accountId
+      ? await this.accountRepository.findById(txDto.accountId)
       : undefined;
 
-    if (!account) {
-      throw new NotFoundException('Account not found');
+    if (txDto.accountId && !account) {
+      throw new NotFoundException(
+        `Account with ID ${txDto.accountId} not found for transaction.`,
+      );
     }
 
-    const transaction = Transaction.create({
-      event,
-      amount: dto.amount,
-      dueDate: new Date(dto.dueDate),
-      competenceDate: new Date(dto.competenceDate),
-      installmentNumber: dto.installmentNumber,
-      status: dto.status,
-      ownership: dto.ownership,
-      type: dto.type,
-      paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
-      account,
-      creditCardId: dto.creditCardId,
-      notes: dto.notes,
-    });
+    const creditCard = txDto.creditCardId
+      ? await this.creditCardRepository.findById(txDto.creditCardId)
+      : undefined;
 
-    await this.repo.save(transaction);
-    return transaction;
+    if (txDto.creditCardId && !creditCard) {
+      throw new NotFoundException(
+        `Credit card with ID ${txDto.creditCardId} not found for transaction.`,
+      );
+    }
+
+    return {
+      amount: txDto.amount,
+      dueDate: txDto.dueDate,
+      competenceDate: txDto.competenceDate,
+      installmentNumber: txDto.installmentNumber,
+      status: txDto.status,
+      ownership: txDto.ownership,
+      type: txDto.type,
+      paymentDate: txDto.paymentDate,
+      account: account ?? undefined,
+      creditCard: creditCard ?? undefined,
+      notes: txDto.notes,
+      settlements: txDto.settlements,
+    };
+  }
+
+  async attachInvoices(transactions: Transaction[]): Promise<void> {
+    for (const tx of transactions) {
+      if (!tx.creditCard) continue;
+
+      const invoice = await this.invoiceService.findOrCreate(
+        tx.creditCard,
+        tx.dueDate,
+      );
+
+      tx.invoice = invoice;
+
+      await this.repo.save(tx);
+    }
   }
 
   findAll(): Promise<Transaction[]> {
@@ -102,6 +138,18 @@ export class TransactionService {
       account = foundAccount;
     }
 
+    let creditCard = transaction.creditCard;
+    if (dto.creditCardId) {
+      const foundCreditCard = await this.creditCardRepository.findById(
+        dto.creditCardId,
+      );
+
+      if (!foundCreditCard) {
+        throw new NotFoundException('Credit card not found');
+      }
+      creditCard = foundCreditCard;
+    }
+
     const updatedTransaction = Transaction.create({
       event,
       amount: dto.amount ?? transaction.amount.toDecimal(),
@@ -117,7 +165,7 @@ export class TransactionService {
         ? new Date(dto.paymentDate)
         : transaction.paymentDate,
       account,
-      creditCardId: dto.creditCardId ?? transaction.creditCardId,
+      creditCard,
       notes: dto.notes ?? transaction.notes,
     });
 

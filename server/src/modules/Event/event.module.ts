@@ -7,9 +7,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionModule } from '../Transaction/transaction.module';
 import { CategoryModule } from '../Category/category.module';
 import { EventMapper } from './infra/event.mapper';
-import { EVENT_REPOSITORY } from './infra/event.repository';
+import { EVENT_REPOSITORY } from './infra/event.repository.interface';
 import { AccountModule } from '../Account/account.module';
 import { SettlementModule } from '../Settlement/settlement.module';
+import { CreditCardModule } from '../CreditCard/credit-card.module';
+import { InvoiceModule } from '../Invoice/invoice.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([EventEntity]),
@@ -17,6 +19,8 @@ import { SettlementModule } from '../Settlement/settlement.module';
     forwardRef(() => CategoryModule),
     forwardRef(() => AccountModule),
     forwardRef(() => SettlementModule),
+    CreditCardModule,
+    InvoiceModule,
   ],
   controllers: [EventController],
   providers: [

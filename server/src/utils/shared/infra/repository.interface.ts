@@ -10,4 +10,5 @@ export interface IRepository<TDomain> {
   findAll(): Promise<TDomain[]>;
   delete(id: string): Promise<void>;
   findWithFilters(filters: any): Promise<TDomain[]>;
+  findOne(filters: any): Promise<TDomain | null>;
 }

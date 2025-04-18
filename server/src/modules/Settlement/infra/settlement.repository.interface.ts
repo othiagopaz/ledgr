@@ -3,4 +3,4 @@ import { Settlement } from '../domain/settlement.entity';
 
 export type ISettlementRepository = IRepository<Settlement>;
 
-export const ISettlementRepository = Symbol('ISettlementRepository');
+export const SETTLEMENT_REPOSITORY = Symbol('SETTLEMENT_REPOSITORY');

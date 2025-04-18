@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountRepository } from './infra/account.repository';
 import { AccountMapper } from './infra/account.mapper';
 import { AccountEntity } from './infra/account.orm-entity';
-import { ACCOUNT_REPOSITORY } from './infra/account.repository';
+import { ACCOUNT_REPOSITORY } from './infra/account.repository.interface';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AccountEntity])],

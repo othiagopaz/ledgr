@@ -1,20 +1,21 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { IEventRepository } from '../infra/event.repository.interface';
-import { EVENT_REPOSITORY } from '../infra/event.repository';
+import { EVENT_REPOSITORY } from '../infra/event.repository.interface';
 import { CreateEventDto } from '../dtos/create-event.dto';
 import { UpdateEventDto } from '../dtos/update-event.dto';
 import { Event } from '../domain/event.entity';
 import { ICategoryRepository } from '../../Category/infra/category.repository.interface';
 import { CATEGORY_REPOSITORY } from '../../Category/infra/category.repository';
-import { IAccountRepository } from '../../Account/infra/account.repository.interface';
-import { ACCOUNT_REPOSITORY } from '../../Account/infra/account.repository';
-import { Account } from '../../Account/domain/account.entity';
 import { TransactionCreationData } from '../domain/event.types';
-import { ITransactionRepository } from '../../Transaction/infra/transaction.repository.interface';
-import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository';
-import { ISettlementRepository } from '../../Settlement/infra/settlement.repository.interface';
-import { SETTLEMENT_REPOSITORY } from '../../Settlement/infra/settlement.repository';
-
+import {
+  ITransactionRepository,
+  TRANSACTION_REPOSITORY,
+} from '../../Transaction/infra/transaction.repository.interface';
+import {
+  ISettlementRepository,
+  SETTLEMENT_REPOSITORY,
+} from '../../Settlement/infra/settlement.repository.interface';
+import { TransactionService } from '../../Transaction/services/transaction.service';
 @Injectable()
 export class EventService {
   constructor(
@@ -22,12 +23,11 @@ export class EventService {
     private readonly eventRepository: IEventRepository,
     @Inject(CATEGORY_REPOSITORY)
     private readonly categoryRepository: ICategoryRepository,
-    @Inject(ACCOUNT_REPOSITORY)
-    private readonly accountRepository: IAccountRepository,
     @Inject(TRANSACTION_REPOSITORY)
     private readonly transactionRepository: ITransactionRepository,
     @Inject(SETTLEMENT_REPOSITORY)
     private readonly settlementRepository: ISettlementRepository,
+    private readonly transactionService: TransactionService,
   ) {}
 
   async create(dto: CreateEventDto): Promise<Event> {
@@ -37,34 +37,10 @@ export class EventService {
     }
 
     const transactionData: TransactionCreationData[] = [];
-    for (const txDto of dto.transactions) {
-      let account: Account | undefined = undefined;
-      if (txDto.accountId) {
-        const foundAccount = await this.accountRepository.findById(
-          txDto.accountId,
-        );
-        if (!foundAccount) {
-          throw new NotFoundException(
-            `Account with ID ${txDto.accountId} not found for transaction.`,
-          );
-        }
-        account = foundAccount;
-      }
 
-      transactionData.push({
-        amount: txDto.amount,
-        dueDate: txDto.dueDate,
-        competenceDate: txDto.competenceDate,
-        installmentNumber: txDto.installmentNumber,
-        status: txDto.status,
-        ownership: txDto.ownership,
-        type: txDto.type,
-        paymentDate: txDto.paymentDate,
-        account: account,
-        creditCardId: txDto.creditCardId,
-        notes: txDto.notes,
-        settlements: txDto.settlements,
-      });
+    for (const tx of dto.transactions) {
+      const transaction = await this.transactionService.prepareTransaction(tx);
+      transactionData.push(transaction);
     }
 
     const event = Event.create({
@@ -78,6 +54,8 @@ export class EventService {
     await this.eventRepository.save(event);
 
     await this.transactionRepository.saveMany(event.transactions ?? []);
+
+    await this.transactionService.attachInvoices(event.transactions ?? []);
 
     await this.settlementRepository.saveMany(
       event.transactions?.flatMap((tx) => tx.settlements ?? []) ?? [],

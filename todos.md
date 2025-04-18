@@ -8,15 +8,15 @@
 - Poder criar uma despesa 100% refundable [OK]
 - Poder criar uma despesa partially refundable [OK]
 - Poder criar receitas/despesas parceladas [OK]
-- Poder criar uma despesa no cartão de crédito 
+- Poder criar uma despesa no cartão de crédito
 - Poder visualizar uma fatura do cartão de crédito
 - Poder pagar uma fatura do cartão de crédito
 
 ## To-dos
 
-TODO: Criar Invoice
-TODO: Criar lógica de pagamento em cartão de crédito
-TODO: Atualizar entidades para receberem CreditCard
+TODO: Corrigir data da transaction para usar a paid ao invés de due_date
+TODO: Não está persistindo o InvoiceId depois de checar a Invoice
+TODO: Não está conseguindo buscar a Invoice no banco pelos filtros
 
 ## Questionamentos interessantes
 

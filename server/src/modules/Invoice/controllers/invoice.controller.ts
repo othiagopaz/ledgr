@@ -13,17 +13,6 @@ import { InvoiceService } from '../services/invoice.service';
 export class InvoiceController {
   constructor(private readonly service: InvoiceService) {}
 
-  @Post()
-  @Message('Invoice created successfully')
-  async create(@Body() dto: CreateInvoiceDto) {
-    try {
-      const invoice = await this.service.create(dto);
-      return invoice;
-    } catch (error) {
-      throw new BadRequestException(error.message);
-    }
-  }
-
   @Get()
   @Message('Invoices fetched successfully')
   async findAll() {

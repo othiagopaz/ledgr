@@ -19,6 +19,7 @@ import {
   ACCOUNT_REPOSITORY,
 } from '../../Account/infra/account.repository.interface';
 import { UpdateInvoiceDto } from '../dtos/update-invoice.dto';
+import { CreditCard } from '../../CreditCard/domain/credit-card.entity';
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -40,7 +41,7 @@ export class InvoiceService {
     }
 
     const invoice = Invoice.create({
-      creditCardId: dto.creditCardId,
+      creditCard,
       referenceMonth: dto.referenceMonth,
       referenceYear: dto.referenceYear,
       closingDate: new Date(dto.closingDate),
@@ -53,6 +54,20 @@ export class InvoiceService {
     await this.repo.save(invoice);
 
     return invoice;
+  }
+
+  async findOrCreate(creditCard: CreditCard, date: Date): Promise<Invoice> {
+    const invoice = await this.repo.findOne({
+      creditCard: { id: creditCard.id },
+      referenceMonth: date.getMonth(),
+      referenceYear: date.getFullYear(),
+    });
+    if (invoice) {
+      return invoice;
+    }
+    const newInvoice = Invoice.fromCreditCardAndDate(creditCard, date);
+    await this.repo.save(newInvoice);
+    return newInvoice;
   }
 
   findAll(): Promise<Invoice[]> {
@@ -73,7 +88,7 @@ export class InvoiceService {
       throw new NotFoundException('Invoice not found');
     }
 
-    let creditCardId = invoice.creditCardId;
+    let creditCard = invoice.creditCard;
     if (dto.creditCardId) {
       const foundCreditCard = await this.creditCardRepository.findById(
         dto.creditCardId,
@@ -82,7 +97,7 @@ export class InvoiceService {
       if (!foundCreditCard) {
         throw new NotFoundException('Credit card not found');
       }
-      creditCardId = foundCreditCard.id;
+      creditCard = foundCreditCard;
     } else {
       throw new BadRequestException('Credit card is required');
     }
@@ -98,7 +113,7 @@ export class InvoiceService {
     }
 
     const updatedInvoice = Invoice.create({
-      creditCardId,
+      creditCard,
       referenceMonth: dto.referenceMonth ?? invoice.referenceMonth,
       referenceYear: dto.referenceYear ?? invoice.referenceYear,
       closingDate: dto.closingDate

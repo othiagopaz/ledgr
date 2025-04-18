@@ -31,7 +31,7 @@ export class TransactionResponseDto {
     this.type = transaction.type;
     this.paymentDate = transaction.paymentDate?.toISOString().split('T')[0];
     this.accountId = transaction.account?.id;
-    this.creditCardId = transaction.creditCardId;
+    this.creditCardId = transaction.creditCard?.id;
     this.notes = transaction.notes;
   }
 }

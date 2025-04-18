@@ -8,6 +8,7 @@ import ormConfig from '../utils/config/typeorm.config';
 import { AccountModule } from './Account/account.module';
 import { SettlementModule } from './Settlement/settlement.module';
 import { CreditCardModule } from './CreditCard/credit-card.module';
+import { InvoiceModule } from './Invoice/invoice.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -21,6 +22,7 @@ import { CreditCardModule } from './CreditCard/credit-card.module';
     AccountModule,
     SettlementModule,
     CreditCardModule,
+    InvoiceModule,
   ],
   controllers: [],
   providers: [],
