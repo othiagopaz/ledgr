@@ -14,7 +14,6 @@
 
 ## To-dos
 
-TODO: Criar CreditCard
 TODO: Criar Invoice
 TODO: Criar lógica de pagamento em cartão de crédito
 TODO: Atualizar entidades para receberem CreditCard
