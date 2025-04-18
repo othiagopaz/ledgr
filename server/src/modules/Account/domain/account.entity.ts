@@ -7,6 +7,7 @@ export class Account {
     public name: string,
     public type: AccountType,
     public initialBalance: Money,
+    public isDefault: boolean,
     public institution?: string,
     public color?: string,
     public isArchived?: boolean,

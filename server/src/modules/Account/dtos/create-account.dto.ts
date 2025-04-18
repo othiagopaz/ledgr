@@ -21,6 +21,9 @@ export class CreateAccountDto {
   @IsNumber()
   initialBalance: number;
 
+  @IsBoolean()
+  isDefault: boolean;
+
   @IsString()
   @IsOptional()
   institution?: string;

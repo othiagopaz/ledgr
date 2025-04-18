@@ -16,6 +16,9 @@ export class AccountEntity {
   @Column({ type: 'integer', name: 'initial_balance' })
   initialBalance: number;
 
+  @Column({ default: false, name: 'is_default' })
+  isDefault: boolean;
+
   @Column({ nullable: true })
   institution?: string;
 

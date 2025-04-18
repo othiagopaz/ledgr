@@ -11,6 +11,7 @@ export class AccountMapper implements Mapper<Account, AccountEntity> {
       orm.name,
       orm.type,
       new Money(orm.initialBalance),
+      orm.isDefault,
       orm.institution,
       orm.color,
       orm.isArchived,
@@ -24,6 +25,7 @@ export class AccountMapper implements Mapper<Account, AccountEntity> {
     orm.name = domain.name;
     orm.type = domain.type;
     orm.initialBalance = domain.initialBalance.value;
+    orm.isDefault = domain.isDefault;
     orm.institution = domain.institution;
     orm.color = domain.color;
     orm.isArchived = domain.isArchived ?? false;
