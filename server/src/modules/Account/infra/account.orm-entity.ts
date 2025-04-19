@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { AccountType } from '../../../utils/shared/enums/account-type.enum';
 import { TransactionEntity } from '../../Transaction/infra/transaction.orm-entity';
+import { TransferenceEntity } from '../../Transference/infra/transference.orm-entity';
 
 @Entity('accounts')
 export class AccountEntity {
@@ -40,6 +41,18 @@ export class AccountEntity {
 
   @OneToMany(() => TransactionEntity, (transaction) => transaction.account)
   transactions: TransactionEntity[];
+
+  @OneToMany(
+    () => TransferenceEntity,
+    (transference) => transference.sourceAccount,
+  )
+  sourceTransferences: TransferenceEntity[];
+
+  @OneToMany(
+    () => TransferenceEntity,
+    (transference) => transference.destinationAccount,
+  )
+  destinationTransferences: TransferenceEntity[];
 
   @UpdateDateColumn({ nullable: false, name: 'updated_at' })
   updatedAt: Date;

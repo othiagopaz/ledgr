@@ -9,6 +9,7 @@ import { AccountModule } from './Account/account.module';
 import { SettlementModule } from './Settlement/settlement.module';
 import { CreditCardModule } from './CreditCard/credit-card.module';
 import { InvoiceModule } from './Invoice/invoice.module';
+import { TransferenceModule } from './Transference/transference.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -23,6 +24,7 @@ import { InvoiceModule } from './Invoice/invoice.module';
     SettlementModule,
     CreditCardModule,
     InvoiceModule,
+    TransferenceModule,
   ],
   controllers: [],
   providers: [],

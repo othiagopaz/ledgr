@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { CategoryEntity } from '../../Category/infra/category.orm-entity';
 import { TransactionEntity } from '../../Transaction/infra/transaction.orm-entity';
+import { TransferenceEntity } from '../../Transference/infra/transference.orm-entity';
 
 @Entity('events')
 export class EventEntity {
@@ -33,6 +34,18 @@ export class EventEntity {
     eager: true,
   })
   transactions: TransactionEntity[];
+
+  @OneToMany(
+    () => TransferenceEntity,
+    (transference) => transference.sourceEvent,
+  )
+  sourceTransferences: TransferenceEntity[];
+
+  @OneToMany(
+    () => TransferenceEntity,
+    (transference) => transference.destinationEvent,
+  )
+  destinationTransferences: TransferenceEntity[];
 
   @UpdateDateColumn({ nullable: false, name: 'updated_at' })
   updatedAt: Date;

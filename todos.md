@@ -13,8 +13,15 @@
 ## To-dos
 
 TODO: Criar a entidade Transference
+TODO: Criar lógica de pagamento da fatura do cartão (lembrar do pgto parcial e juros)
 
 ## Questionamentos interessantes
 
 - A transaction realmente precisa de um installmentNumber?
 - A transaction realmente precisa de um competenceDate?
+
+## On the watch
+
+- A lógica do dueDate do cartão de crédito vai precisar ser "calibrada" pelo usuário no front-end com os daysBeforeDue
+- Será preciso validar a lógica de número de parcelas nas installments
+- Criar lógica de transactions e events com pagination
