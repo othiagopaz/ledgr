@@ -10,18 +10,19 @@ import { Settlement } from '../../Settlement/domain/settlement.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Invoice } from '../../Invoice/domain/invoice.entity';
 import { CreditCard } from '../../CreditCard/domain/credit-card.entity';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 export class Transaction {
   constructor(
     public readonly id: string,
     public readonly event: Event,
     public amount: Money,
-    public dueDate: Date,
-    public competenceDate: Date,
+    public dueDate: PlainDate,
+    public competenceDate: PlainDate,
     public installmentNumber: number,
     public status: TransactionStatus,
     public ownership: Ownership,
     public type: TransactionType,
-    public paymentDate?: Date,
+    public paymentDate?: PlainDate,
     public account?: Account,
     public creditCard?: CreditCard,
     public notes?: string,
@@ -129,7 +130,7 @@ export class Transaction {
     return this.status === TransactionStatus.CANCELLED;
   }
 
-  markAsPaid(paymentDate: Date): void {
+  markAsPaid(paymentDate: PlainDate): void {
     if (this.isPaid) {
       throw new Error('Transaction already paid');
     }

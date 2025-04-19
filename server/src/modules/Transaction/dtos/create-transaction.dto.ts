@@ -1,5 +1,4 @@
 import {
-  IsDate,
   IsOptional,
   IsString,
   IsUUID,
@@ -8,6 +7,7 @@ import {
   IsInt,
   ValidateNested,
   IsArray,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TransactionStatus } from '../../../utils/shared/enums/transaction-status.enum';
@@ -28,13 +28,11 @@ export class CreateTransactionDto {
   @IsPositive()
   installmentNumber: number;
 
-  @IsDate()
-  @Type(() => Date)
-  dueDate: Date;
+  @IsDateString()
+  dueDate: string;
 
-  @IsDate()
-  @Type(() => Date)
-  competenceDate: Date;
+  @IsDateString()
+  competenceDate: string;
 
   @IsString()
   @IsEnum(TransactionStatus)
@@ -49,9 +47,8 @@ export class CreateTransactionDto {
   type: TransactionType;
 
   @IsOptional()
-  @IsDate()
-  @Type(() => Date)
-  paymentDate?: Date;
+  @IsDateString()
+  paymentDate?: string;
 
   @IsOptional()
   @IsUUID()

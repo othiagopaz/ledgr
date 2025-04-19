@@ -8,6 +8,7 @@ import { EventMapper } from '../../Event/infra/event.mapper';
 import { AccountMapper } from '../../Account/infra/account.mapper';
 import { InvoiceMapper } from '../../Invoice/infra/invoice.mapper';
 import { CreditCardMapper } from '../../CreditCard/infra/credit-card.mapper';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 @Injectable()
 export class TransactionMapper
   implements Mapper<Transaction, TransactionEntity>
@@ -26,13 +27,13 @@ export class TransactionMapper
       orm.id,
       this.eventMapper.toDomain(orm.event),
       new Money(orm.amount),
-      orm.dueDate,
-      orm.competenceDate,
+      PlainDate.fromDate(orm.dueDate),
+      PlainDate.fromDate(orm.competenceDate),
       orm.installmentNumber,
       orm.status,
       orm.ownership,
       orm.type,
-      orm.paymentDate,
+      orm.paymentDate ? PlainDate.fromDate(orm.paymentDate) : undefined,
       orm.account ? this.accountMapper.toDomain(orm.account) : undefined,
       orm.creditCard
         ? this.creditCardMapper.toDomain(orm.creditCard)
@@ -48,11 +49,11 @@ export class TransactionMapper
     orm.id = domain.id;
     orm.event = this.eventMapper.toOrm(domain.event);
     orm.amount = domain.amount.toCents();
-    orm.dueDate = domain.dueDate;
-    orm.competenceDate = domain.competenceDate;
+    orm.dueDate = domain.dueDate.toDate();
+    orm.competenceDate = domain.competenceDate.toDate();
     orm.installmentNumber = domain.installmentNumber;
     orm.status = domain.status;
-    orm.paymentDate = domain.paymentDate;
+    orm.paymentDate = domain.paymentDate?.toDate();
     orm.account = domain.account
       ? this.accountMapper.toOrm(domain.account)
       : undefined;

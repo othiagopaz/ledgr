@@ -12,6 +12,7 @@ import { Money } from '../../../utils/shared/types/money';
 import { ITransactionRepository } from '../../Transaction/infra/transaction.repository.interface';
 import { SETTLEMENT_REPOSITORY } from '../infra/settlement.repository.interface';
 import { TRANSACTION_REPOSITORY } from '../../Transaction/infra/transaction.repository.interface';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 @Injectable()
 export class SettlementService {
   constructor(
@@ -39,11 +40,11 @@ export class SettlementService {
       originalTransaction,
       dto.negotiatorId,
       new Money(dto.amount),
-      dto.dueDate,
+      PlainDate.fromDate(dto.dueDate),
       dto.status,
       dto.direction,
       linkedTransaction ?? undefined,
-      dto.paymentDate,
+      dto.paymentDate ? PlainDate.fromDate(dto.paymentDate) : undefined,
       dto.accountId,
       dto.notes,
     );

@@ -5,6 +5,7 @@ import { InvoiceStatus } from '../../../utils/shared/enums/invoice-status.enum';
 import { Transaction } from '../../Transaction/domain/transaction.entity';
 import { InvoiceProps } from './invoice.types';
 import { CreditCard } from '../../CreditCard/domain/credit-card.entity';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 
 export class Invoice {
   constructor(
@@ -12,12 +13,12 @@ export class Invoice {
     public readonly creditCard: CreditCard,
     public referenceMonth: number,
     public referenceYear: number,
-    public closingDate: Date,
-    public dueDate: Date,
+    public closingDate: PlainDate,
+    public dueDate: PlainDate,
     public status: InvoiceStatus,
     public _amount?: Money,
     public transactions?: Transaction[],
-    public paymentDate?: Date,
+    public paymentDate?: PlainDate,
     public accountId?: string,
   ) {}
 
@@ -54,16 +55,21 @@ export class Invoice {
     return invoice;
   }
 
-  static fromCreditCardAndDate(card: CreditCard, date: Date): Invoice {
-    const referenceMonth = date.getMonth() + 1;
-    const referenceYear = date.getFullYear();
+  static fromCreditCardAndDate(card: CreditCard, date: PlainDate): Invoice {
+    const referenceMonth = date.toDate().getMonth() + 1;
+    const referenceYear = date.toDate().getFullYear();
 
-    const closingDate = new Date(
+    const closingDate = PlainDate.fromComponents(
       referenceYear,
-      referenceMonth - 1,
+      referenceMonth,
       card.closingDay,
     );
-    const dueDate = new Date(referenceYear, referenceMonth - 1, card.dueDay);
+
+    const dueDate = PlainDate.fromComponents(
+      referenceYear,
+      referenceMonth,
+      card.dueDay,
+    );
 
     return Invoice.create({
       creditCard: card,

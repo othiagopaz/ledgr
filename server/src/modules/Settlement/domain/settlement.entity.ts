@@ -4,6 +4,7 @@ import { SettlementDirection } from '../../../utils/shared/enums/settlement.dire
 import { Transaction } from '../../Transaction/domain/transaction.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { SettlementProps } from './settlement.types';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 
 export class Settlement {
   constructor(
@@ -11,11 +12,11 @@ export class Settlement {
     public readonly originalTransaction: Transaction,
     public readonly negotiatorId: string,
     public readonly amount: Money,
-    public readonly dueDate: Date,
+    public readonly dueDate: PlainDate,
     public readonly status: SettlementStatus,
     public readonly direction: SettlementDirection,
     public readonly linkedTransaction?: Transaction,
-    public readonly paymentDate?: Date,
+    public readonly paymentDate?: PlainDate,
     public readonly accountId?: string, //TODO: fix this
     public readonly notes?: string,
   ) {}

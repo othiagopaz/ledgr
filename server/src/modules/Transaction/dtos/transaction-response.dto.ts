@@ -21,15 +21,13 @@ export class TransactionResponseDto {
     this.id = transaction.id;
     this.eventId = transaction.event.id;
     this.amount = transaction.amount.toCents();
-    this.dueDate = transaction.dueDate.toISOString().split('T')[0];
+    this.dueDate = transaction.dueDate.toString();
     this.installmentNumber = transaction.installmentNumber;
-    this.competenceDate = transaction.competenceDate
-      .toISOString()
-      .split('T')[0];
+    this.competenceDate = transaction.competenceDate.toString();
     this.status = transaction.status;
     this.ownership = transaction.ownership;
     this.type = transaction.type;
-    this.paymentDate = transaction.paymentDate?.toISOString().split('T')[0];
+    this.paymentDate = transaction.paymentDate?.toString();
     this.accountId = transaction.account?.id;
     this.creditCardId = transaction.creditCard?.id;
     this.notes = transaction.notes;

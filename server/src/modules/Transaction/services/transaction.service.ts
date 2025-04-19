@@ -25,6 +25,7 @@ import {
 } from '../../CreditCard/infra/credit-card.repository.interface';
 import { InvoiceService } from '../../Invoice/services/invoice.service';
 import { TransactionCreationData } from '../../Event/domain/event.types';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 
 @Injectable()
 export class TransactionService {
@@ -65,17 +66,25 @@ export class TransactionService {
 
     return {
       amount: txDto.amount,
-      dueDate: txDto.dueDate,
-      competenceDate: txDto.competenceDate,
+      dueDate: PlainDate.parse(txDto.dueDate),
+      competenceDate: PlainDate.parse(txDto.competenceDate),
       installmentNumber: txDto.installmentNumber,
       status: txDto.status,
       ownership: txDto.ownership,
       type: txDto.type,
-      paymentDate: txDto.paymentDate,
+      paymentDate: txDto.paymentDate
+        ? PlainDate.parse(txDto.paymentDate)
+        : undefined,
       account: account ?? undefined,
       creditCard: creditCard ?? undefined,
       notes: txDto.notes,
-      settlements: txDto.settlements,
+      settlements: txDto.settlements?.map((settlement) => ({
+        amount: settlement.amount,
+        dueDate: PlainDate.parse(settlement.dueDate),
+        status: settlement.status,
+        direction: settlement.direction,
+        negotiatorId: settlement.negotiatorId,
+      })),
     };
   }
 
@@ -85,7 +94,7 @@ export class TransactionService {
 
       const invoice = await this.invoiceService.findOrCreate(
         tx.creditCard,
-        new Date(tx.paymentDate ?? tx.dueDate),
+        tx.paymentDate ?? tx.dueDate,
       );
 
       tx.invoice = invoice;
@@ -153,16 +162,18 @@ export class TransactionService {
     const updatedTransaction = Transaction.create({
       event,
       amount: dto.amount ?? transaction.amount.toDecimal(),
-      dueDate: dto.dueDate ? new Date(dto.dueDate) : transaction.dueDate,
+      dueDate: dto.dueDate
+        ? PlainDate.fromDate(new Date(dto.dueDate))
+        : transaction.dueDate,
       competenceDate: dto.competenceDate
-        ? new Date(dto.competenceDate)
+        ? PlainDate.fromDate(new Date(dto.competenceDate))
         : transaction.competenceDate,
       installmentNumber: dto.installmentNumber ?? transaction.installmentNumber,
       status: dto.status ?? transaction.status,
       ownership: dto.ownership ?? transaction.ownership,
       type: dto.type ?? transaction.type,
       paymentDate: dto.paymentDate
-        ? new Date(dto.paymentDate)
+        ? PlainDate.fromDate(new Date(dto.paymentDate))
         : transaction.paymentDate,
       account,
       creditCard,

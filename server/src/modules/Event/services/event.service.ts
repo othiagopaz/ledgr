@@ -16,6 +16,7 @@ import {
   SETTLEMENT_REPOSITORY,
 } from '../../Settlement/infra/settlement.repository.interface';
 import { TransactionService } from '../../Transaction/services/transaction.service';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 @Injectable()
 export class EventService {
   constructor(
@@ -45,7 +46,7 @@ export class EventService {
 
     const event = Event.create({
       description: dto.description,
-      date: new Date(dto.date),
+      date: PlainDate.fromString(dto.date),
       category: category,
       negotiatorId: dto.negotiatorId,
       transactions: transactionData,
@@ -91,7 +92,7 @@ export class EventService {
     const updatedEntry = new Event(
       entry.id,
       dto.description ?? entry.description,
-      dto.date ? new Date(dto.date) : entry.date,
+      dto.date ? PlainDate.fromString(dto.date) : entry.date,
       category,
       dto.negotiatorId ?? entry.negotiatorId,
     );

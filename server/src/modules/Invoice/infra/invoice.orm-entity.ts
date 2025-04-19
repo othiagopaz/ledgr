@@ -43,7 +43,10 @@ export class InvoiceEntity {
   @Column({ nullable: true, name: 'account_id' })
   accountId?: string;
 
-  @ManyToOne(() => CreditCardEntity, { nullable: false })
+  @Column({ name: 'credit_card_id' })
+  creditCardId: string;
+
+  @ManyToOne(() => CreditCardEntity)
   @JoinColumn({ name: 'credit_card_id' })
   creditCard: CreditCardEntity;
 

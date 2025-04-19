@@ -13,7 +13,6 @@
 ## To-dos
 
 TODO: Checar datas e competências de Invoice
-TODO: Entender porque o paymentDate da transaction está sendo alterado
 TODO: Criar a entidade Transference
 
 ## Questionamentos interessantes

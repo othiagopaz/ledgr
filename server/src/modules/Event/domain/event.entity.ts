@@ -3,12 +3,13 @@ import { EventProps } from './event.types';
 import { Transaction } from '../../Transaction/domain/transaction.entity';
 import { Category } from '../../Category/domain/category.entity';
 import { BadRequestException } from '@nestjs/common';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 
 export class Event {
   constructor(
     public readonly id: string,
     public readonly description: string,
-    public readonly date: Date,
+    public readonly date: PlainDate,
     public readonly category: Category,
     public readonly negotiatorId: string,
     public transactions?: Transaction[],

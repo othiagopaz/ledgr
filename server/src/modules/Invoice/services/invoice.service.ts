@@ -20,6 +20,7 @@ import {
 } from '../../Account/infra/account.repository.interface';
 import { UpdateInvoiceDto } from '../dtos/update-invoice.dto';
 import { CreditCard } from '../../CreditCard/domain/credit-card.entity';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -44,10 +45,12 @@ export class InvoiceService {
       creditCard,
       referenceMonth: dto.referenceMonth,
       referenceYear: dto.referenceYear,
-      closingDate: new Date(dto.closingDate),
-      dueDate: new Date(dto.dueDate),
+      closingDate: PlainDate.fromString(dto.closingDate),
+      dueDate: PlainDate.fromString(dto.dueDate),
       status: dto.status,
-      paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
+      paymentDate: dto.paymentDate
+        ? PlainDate.fromString(dto.paymentDate)
+        : undefined,
       accountId: dto.accountId,
     });
 
@@ -56,12 +59,15 @@ export class InvoiceService {
     return invoice;
   }
 
-  async findOrCreate(creditCard: CreditCard, date: Date): Promise<Invoice> {
-    const referenceMonth = date.getMonth() + 1;
-    const referenceYear = date.getFullYear();
+  async findOrCreate(
+    creditCard: CreditCard,
+    date: PlainDate,
+  ): Promise<Invoice> {
+    const referenceMonth = date.toDate().getMonth() + 1;
+    const referenceYear = date.toDate().getFullYear();
 
     const invoice = await this.repo.findOne({
-      creditCard: { id: creditCard.id },
+      creditCardId: creditCard.id,
       referenceMonth,
       referenceYear,
     });
@@ -120,12 +126,14 @@ export class InvoiceService {
       referenceMonth: dto.referenceMonth ?? invoice.referenceMonth,
       referenceYear: dto.referenceYear ?? invoice.referenceYear,
       closingDate: dto.closingDate
-        ? new Date(dto.closingDate)
+        ? PlainDate.fromString(dto.closingDate)
         : invoice.closingDate,
-      dueDate: dto.dueDate ? new Date(dto.dueDate) : invoice.dueDate,
+      dueDate: dto.dueDate
+        ? PlainDate.fromString(dto.dueDate)
+        : invoice.dueDate,
       status: dto.status ?? invoice.status,
       paymentDate: dto.paymentDate
-        ? new Date(dto.paymentDate)
+        ? PlainDate.fromString(dto.paymentDate)
         : invoice.paymentDate,
       accountId,
     });

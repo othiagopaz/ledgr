@@ -4,7 +4,7 @@ import { Event } from '../domain/event.entity';
 import { EventEntity } from './event.orm-entity';
 import { Mapper } from '../../../utils/shared/infra/repository.interface';
 import { CategoryMapper } from '../../Category/infra/category.mapper';
-
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 @Injectable()
 export class EventMapper implements Mapper<Event, EventEntity> {
   constructor(private readonly categoryMapper: CategoryMapper) {}
@@ -13,7 +13,7 @@ export class EventMapper implements Mapper<Event, EventEntity> {
     return new Event(
       orm.id,
       orm.description,
-      orm.date,
+      PlainDate.fromDate(orm.date),
       this.categoryMapper.toDomain(orm.category),
       orm.negotiatorId,
     );
@@ -23,7 +23,7 @@ export class EventMapper implements Mapper<Event, EventEntity> {
     const orm = new EventEntity();
     orm.id = domain.id;
     orm.description = domain.description;
-    orm.date = domain.date;
+    orm.date = domain.date.toDate();
     orm.negotiatorId = domain.negotiatorId;
     orm.category = this.categoryMapper.toOrm(domain.category);
     return orm;

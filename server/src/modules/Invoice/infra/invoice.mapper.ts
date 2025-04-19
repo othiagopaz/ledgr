@@ -6,6 +6,7 @@ import { Mapper } from '../../../utils/shared/infra/repository.interface';
 import { Money } from '../../../utils/shared/types/money';
 import { TransactionMapper } from '../../Transaction/infra/transaction.mapper';
 import { CreditCardMapper } from '../../CreditCard/infra/credit-card.mapper';
+import { PlainDate } from '../../../utils/shared/types/plain-date';
 
 @Injectable()
 export class InvoiceMapper implements Mapper<Invoice, InvoiceEntity> {
@@ -21,17 +22,18 @@ export class InvoiceMapper implements Mapper<Invoice, InvoiceEntity> {
           this.transactionMapper.toDomain(transaction),
         )
       : undefined;
+
     return new Invoice(
       orm.id,
       this.creditCardMapper.toDomain(orm.creditCard),
       orm.referenceMonth,
       orm.referenceYear,
-      orm.closingDate,
-      orm.dueDate,
+      PlainDate.parse(orm.closingDate),
+      PlainDate.parse(orm.dueDate),
       orm.status,
       new Money(0),
       transactions,
-      orm.paymentDate,
+      orm.paymentDate ? PlainDate.parse(orm.paymentDate) : undefined,
       orm.accountId,
     );
   }
@@ -41,14 +43,14 @@ export class InvoiceMapper implements Mapper<Invoice, InvoiceEntity> {
     orm.id = domain.id;
     orm.referenceMonth = domain.referenceMonth;
     orm.referenceYear = domain.referenceYear;
-    orm.closingDate = domain.closingDate;
-    orm.dueDate = domain.dueDate;
+    orm.closingDate = domain.closingDate.toDate();
+    orm.dueDate = domain.dueDate.toDate();
     orm.status = domain.status;
     orm.transactions =
       domain.transactions?.map((transaction) =>
         this.transactionMapper.toOrm(transaction),
       ) ?? [];
-    orm.paymentDate = domain.paymentDate ?? undefined;
+    orm.paymentDate = domain.paymentDate?.toDate();
     orm.accountId = domain.accountId ?? undefined;
     orm.creditCard = this.creditCardMapper.toOrm(domain.creditCard);
     return orm;
