@@ -19,9 +19,13 @@
     "server:test:e2e": "cd server && npm run test:e2e",
     "server:migration:generate": "cd server && npm run migration:generate",
     "server:migration:run": "cd server && npm run migration:run",
-    "install:all": "npm install && cd server && npm install"
+    "install:all": "npm install && cd server && npm install",
+    "dev-time": "npx git-dev-time -w 65 -s 15 -n -a"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "git-dev-time": "^1.2.1"
   }
 }
