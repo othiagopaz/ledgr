@@ -21,7 +21,7 @@ export class CreateCreditCardDto {
   @IsNotEmpty()
   @IsPositive()
   @Max(31)
-  closingDay: number;
+  estimatedDaysBeforeDue: number;
 
   @IsNumber()
   @IsNotEmpty()

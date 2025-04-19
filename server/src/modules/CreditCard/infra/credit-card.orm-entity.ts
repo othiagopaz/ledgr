@@ -15,8 +15,8 @@ export class CreditCardEntity {
   @Column({ nullable: false })
   name: string;
 
-  @Column({ nullable: false, name: 'closing_day' })
-  closingDay: number;
+  @Column({ nullable: false, name: 'estimated_days_before_due' })
+  estimatedDaysBeforeDue: number;
 
   @Column({ nullable: false, name: 'due_day' })
   dueDay: number;

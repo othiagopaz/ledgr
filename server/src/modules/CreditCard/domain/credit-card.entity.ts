@@ -8,7 +8,7 @@ export class CreditCard {
   constructor(
     public readonly id: string,
     public name: string,
-    public closingDay: number,
+    public estimatedDaysBeforeDue: number,
     public dueDay: number,
     public flag: CreditCardFlag,
     public isArchived: boolean,
@@ -20,7 +20,7 @@ export class CreditCard {
   static create(props: CreditCardProps): CreditCard {
     if (
       !props.name ||
-      !props.closingDay ||
+      !props.estimatedDaysBeforeDue ||
       !props.dueDay ||
       !props.flag ||
       !props.limit ||
@@ -35,7 +35,7 @@ export class CreditCard {
     const creditCard = new CreditCard(
       creditCardId,
       props.name,
-      props.closingDay,
+      props.estimatedDaysBeforeDue,
       props.dueDay,
       props.flag,
       props.isArchived,

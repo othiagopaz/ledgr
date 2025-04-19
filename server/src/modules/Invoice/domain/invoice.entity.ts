@@ -56,20 +56,46 @@ export class Invoice {
   }
 
   static fromCreditCardAndDate(card: CreditCard, date: PlainDate): Invoice {
-    const referenceMonth = date.toDate().getMonth() + 1;
-    const referenceYear = date.toDate().getFullYear();
+    const purchaseDate = date.toDate();
 
-    const closingDate = PlainDate.fromComponents(
-      referenceYear,
-      referenceMonth,
-      card.closingDay,
+    // Primeiro dueDate estimado (fatura candidata)
+    let dueDate = PlainDate.fromDate(
+      new Date(
+        purchaseDate.getFullYear(),
+        purchaseDate.getMonth(),
+        card.dueDay,
+      ),
     );
 
-    const dueDate = PlainDate.fromComponents(
-      referenceYear,
-      referenceMonth,
-      card.dueDay,
+    let closingDate = PlainDate.fromDate(
+      new Date(
+        dueDate.toDate().getFullYear(),
+        dueDate.toDate().getMonth(),
+        dueDate.toDate().getDate() - card.estimatedDaysBeforeDue,
+      ),
     );
+
+    // Se a compra for depois do fechamento, joga para próxima fatura
+    if (purchaseDate > closingDate.toDate()) {
+      dueDate = PlainDate.fromDate(
+        new Date(
+          dueDate.toDate().getFullYear(),
+          dueDate.toDate().getMonth() + 1,
+          card.dueDay,
+        ),
+      );
+
+      closingDate = PlainDate.fromDate(
+        new Date(
+          dueDate.toDate().getFullYear(),
+          dueDate.toDate().getMonth(),
+          dueDate.toDate().getDate() - card.estimatedDaysBeforeDue,
+        ),
+      );
+    }
+
+    const referenceMonth = dueDate.toDate().getMonth() + 1;
+    const referenceYear = dueDate.toDate().getFullYear();
 
     return Invoice.create({
       creditCard: card,

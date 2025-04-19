@@ -61,22 +61,20 @@ export class InvoiceService {
 
   async findOrCreate(
     creditCard: CreditCard,
-    date: PlainDate,
+    purchaseDate: PlainDate,
   ): Promise<Invoice> {
-    const referenceMonth = date.toDate().getMonth() + 1;
-    const referenceYear = date.toDate().getFullYear();
+    const draft = Invoice.fromCreditCardAndDate(creditCard, purchaseDate);
 
-    const invoice = await this.repo.findOne({
+    const existing = await this.repo.findOne({
       creditCardId: creditCard.id,
-      referenceMonth,
-      referenceYear,
+      referenceMonth: draft.referenceMonth,
+      referenceYear: draft.referenceYear,
     });
-    if (invoice) {
-      return invoice;
-    }
-    const newInvoice = Invoice.fromCreditCardAndDate(creditCard, date);
-    await this.repo.save(newInvoice);
-    return newInvoice;
+
+    if (existing) return existing;
+
+    await this.repo.save(draft);
+    return draft;
   }
 
   findAll(): Promise<Invoice[]> {

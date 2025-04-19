@@ -16,7 +16,7 @@ export class CreditCardService {
   async create(dto: CreateCreditCardDto): Promise<CreditCard> {
     const creditCard = CreditCard.create({
       name: dto.name,
-      closingDay: dto.closingDay,
+      estimatedDaysBeforeDue: dto.estimatedDaysBeforeDue,
       dueDay: dto.dueDay,
       flag: dto.flag,
       isArchived: dto.isArchived,
@@ -43,7 +43,8 @@ export class CreditCardService {
     }
 
     creditCard.name = dto.name ?? creditCard.name;
-    creditCard.closingDay = dto.closingDay ?? creditCard.closingDay;
+    creditCard.estimatedDaysBeforeDue =
+      dto.estimatedDaysBeforeDue ?? creditCard.estimatedDaysBeforeDue;
     creditCard.dueDay = dto.dueDay ?? creditCard.dueDay;
     creditCard.flag = dto.flag ?? creditCard.flag;
     creditCard.isArchived = dto.isArchived ?? creditCard.isArchived;

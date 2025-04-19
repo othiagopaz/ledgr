@@ -11,7 +11,7 @@ export class CreditCardMapper implements Mapper<CreditCard, CreditCardEntity> {
     return new CreditCard(
       orm.id,
       orm.name,
-      orm.closingDay,
+      orm.estimatedDaysBeforeDue,
       orm.dueDay,
       orm.flag,
       orm.isArchived,
@@ -25,7 +25,7 @@ export class CreditCardMapper implements Mapper<CreditCard, CreditCardEntity> {
     const orm = new CreditCardEntity();
     orm.id = domain.id;
     orm.name = domain.name;
-    orm.closingDay = domain.closingDay;
+    orm.estimatedDaysBeforeDue = domain.estimatedDaysBeforeDue;
     orm.dueDay = domain.dueDay;
     orm.flag = domain.flag;
     orm.isArchived = domain.isArchived;

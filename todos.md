@@ -12,7 +12,6 @@
 
 ## To-dos
 
-TODO: Checar datas e competências de Invoice
 TODO: Criar a entidade Transference
 
 ## Questionamentos interessantes
