@@ -17,22 +17,27 @@ export class InvoiceEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ nullable: false, name: 'reference_month' })
+  @Column({ nullable: false, name: 'reference_month', type: 'integer' })
   referenceMonth: number;
 
-  @Column({ nullable: false, name: 'reference_year' })
+  @Column({ nullable: false, name: 'reference_year', type: 'integer' })
   referenceYear: number;
 
-  @Column({ nullable: false, name: 'closing_date' })
+  @Column({ nullable: false, name: 'closing_date', type: 'date' })
   closingDate: Date;
 
-  @Column({ nullable: false, name: 'due_date' })
+  @Column({ nullable: false, name: 'due_date', type: 'date' })
   dueDate: Date;
 
-  @Column({ nullable: false, name: 'status' })
+  @Column({
+    nullable: false,
+    name: 'status',
+    type: 'enum',
+    enum: InvoiceStatus,
+  })
   status: InvoiceStatus;
 
-  @Column({ nullable: true, name: 'payment_date' })
+  @Column({ nullable: true, name: 'payment_date', type: 'date' })
   paymentDate?: Date;
 
   @Column({ nullable: true, name: 'account_id' })

@@ -34,10 +34,6 @@ export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
       where: filters,
       relations: this.getRelations(),
     });
-    console.log(
-      'SQL Query:',
-      this.ormRepo.createQueryBuilder().where(filters).getSql(),
-    );
     return found ? this.mapper.toDomain(found) : null;
   }
 
