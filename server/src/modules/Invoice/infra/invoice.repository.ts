@@ -22,7 +22,7 @@ export class InvoiceRepository
   }
 
   protected getRelations(): string[] {
-    return ['creditCard', 'transactions'];
+    return ['creditCard'];
   }
 }
 

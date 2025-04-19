@@ -14,9 +14,7 @@
 
 ## To-dos
 
-TODO: Corrigir data da transaction para usar a paid ao invés de due_date
-TODO: Não está persistindo o InvoiceId depois de checar a Invoice
-TODO: Não está conseguindo buscar a Invoice no banco pelos filtros
+TODO: Checar datas e competências de Invoice
 
 ## Questionamentos interessantes
 

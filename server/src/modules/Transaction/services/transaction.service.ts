@@ -85,7 +85,7 @@ export class TransactionService {
 
       const invoice = await this.invoiceService.findOrCreate(
         tx.creditCard,
-        tx.dueDate,
+        new Date(tx.paymentDate ?? tx.dueDate),
       );
 
       tx.invoice = invoice;

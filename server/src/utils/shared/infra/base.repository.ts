@@ -1,4 +1,4 @@
-import { ObjectLiteral, Repository } from 'typeorm';
+import { FindOptionsWhere, ObjectLiteral, Repository } from 'typeorm';
 import { IRepository, Mapper } from './repository.interface';
 
 export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
@@ -29,11 +29,15 @@ export abstract class BaseRepository<TDomain, TOrm extends ObjectLiteral>
     return found ? this.mapper.toDomain(found) : null;
   }
 
-  async findOne(filters: any): Promise<TDomain | null> {
+  async findOne(filters: FindOptionsWhere<TOrm>): Promise<TDomain | null> {
     const found = await this.ormRepo.findOne({
       where: filters,
       relations: this.getRelations(),
     });
+    console.log(
+      'SQL Query:',
+      this.ormRepo.createQueryBuilder().where(filters).getSql(),
+    );
     return found ? this.mapper.toDomain(found) : null;
   }
 

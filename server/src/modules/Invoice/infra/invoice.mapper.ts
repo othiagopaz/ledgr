@@ -16,6 +16,11 @@ export class InvoiceMapper implements Mapper<Invoice, InvoiceEntity> {
   ) {}
 
   toDomain(orm: InvoiceEntity): Invoice {
+    const transactions = orm.transactions
+      ? orm.transactions.map((transaction) =>
+          this.transactionMapper.toDomain(transaction),
+        )
+      : undefined;
     return new Invoice(
       orm.id,
       this.creditCardMapper.toDomain(orm.creditCard),
@@ -25,9 +30,7 @@ export class InvoiceMapper implements Mapper<Invoice, InvoiceEntity> {
       orm.dueDate,
       orm.status,
       new Money(0),
-      orm.transactions.map((transaction) =>
-        this.transactionMapper.toDomain(transaction),
-      ),
+      transactions,
       orm.paymentDate,
       orm.accountId,
     );
