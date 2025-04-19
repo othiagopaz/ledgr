@@ -1,4 +1,10 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { CreditCardFlag } from '../../../utils/shared/enums/credit-card-flags.enum';
 
 @Entity('credit_cards')
@@ -29,4 +35,10 @@ export class CreditCardEntity {
 
   @Column({ nullable: true, name: 'user_id' })
   userId: string;
+
+  @UpdateDateColumn({ nullable: false, name: 'updated_at' })
+  updatedAt: Date;
+
+  @CreateDateColumn({ nullable: false, name: 'created_at' })
+  createdAt: Date;
 }

@@ -4,6 +4,8 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  UpdateDateColumn,
+  CreateDateColumn,
 } from 'typeorm';
 import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.enum';
 import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
@@ -52,4 +54,10 @@ export class SettlementEntity {
 
   @Column({ name: 'notes', nullable: true })
   notes?: string;
+
+  @UpdateDateColumn({ nullable: false, name: 'updated_at' })
+  updatedAt: Date;
+
+  @CreateDateColumn({ nullable: false, name: 'created_at' })
+  createdAt: Date;
 }

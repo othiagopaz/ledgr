@@ -5,6 +5,8 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  UpdateDateColumn,
+  CreateDateColumn,
 } from 'typeorm';
 import { TransactionStatus } from '../../../utils/shared/enums/transaction-status.enum';
 import { EventEntity } from '../../Event/infra/event.orm-entity';
@@ -70,23 +72,15 @@ export class TransactionEntity {
   )
   linkedSettlements: SettlementEntity[];
 
-  @Column({
-    type: 'timestamp',
-    name: 'created_at',
-    default: () => 'CURRENT_TIMESTAMP',
-  })
-  createdAt: Date;
-
-  @Column({
-    type: 'timestamp',
-    name: 'updated_at',
-    default: () => 'CURRENT_TIMESTAMP',
-  })
-  updatedAt: Date;
-
   @ManyToOne(() => InvoiceEntity, (invoice) => invoice.transactions, {
     nullable: true,
   })
   @JoinColumn({ name: 'invoice_id' })
   invoice?: InvoiceEntity;
+
+  @UpdateDateColumn({ nullable: false, name: 'updated_at' })
+  updatedAt: Date;
+
+  @CreateDateColumn({ nullable: false, name: 'created_at' })
+  createdAt: Date;
 }

@@ -5,6 +5,8 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  UpdateDateColumn,
+  CreateDateColumn,
 } from 'typeorm';
 import { CategoryEntity } from '../../Category/infra/category.orm-entity';
 import { TransactionEntity } from '../../Transaction/infra/transaction.orm-entity';
@@ -32,17 +34,9 @@ export class EventEntity {
   })
   transactions: TransactionEntity[];
 
-  @Column({
-    type: 'timestamp',
-    name: 'created_at',
-    default: () => 'CURRENT_TIMESTAMP',
-  })
-  createdAt: Date;
-
-  @Column({
-    type: 'timestamp',
-    name: 'updated_at',
-    default: () => 'CURRENT_TIMESTAMP',
-  })
+  @UpdateDateColumn({ nullable: false, name: 'updated_at' })
   updatedAt: Date;
+
+  @CreateDateColumn({ nullable: false, name: 'created_at' })
+  createdAt: Date;
 }

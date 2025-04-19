@@ -5,6 +5,8 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  UpdateDateColumn,
+  CreateDateColumn,
 } from 'typeorm';
 import { InvoiceStatus } from '../../../utils/shared/enums/invoice-status.enum';
 import { TransactionEntity } from '../../Transaction/infra/transaction.orm-entity';
@@ -42,4 +44,10 @@ export class InvoiceEntity {
 
   @OneToMany(() => TransactionEntity, (transaction) => transaction.invoice)
   transactions: TransactionEntity[];
+
+  @UpdateDateColumn({ nullable: false, name: 'updated_at' })
+  updatedAt: Date;
+
+  @CreateDateColumn({ nullable: false, name: 'created_at' })
+  createdAt: Date;
 }
