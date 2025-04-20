@@ -49,15 +49,15 @@
 
 ### V0
 
-- Poder criar uma despesa
-- Poder criar uma receita
-- Poder criar uma transferência
-- Poder criar uma despesa 100% refundable
-- Poder criar uma despesa partially refundable
-- Poder criar despesas/receitas parceladas
-- Poder criar despesa no cartão de crédito
-- Poder visualizar cashflow statement
-- Poder visualizar todas as despesas
-- Poder visualizar todas as receitas
-- Poder visualizar P&L
-- Poder visualizar saldo da fatura
+- Criar uma despesa
+- Criar uma receita
+- Criar uma transferência
+- Criar uma despesa 100% refundable
+- Criar uma despesa partially refundable
+- Criar despesas/receitas parceladas
+- Criar despesa no cartão de crédito
+- Visualizar cashflow statement
+- Visualizar todas as despesas
+- Visualizar todas as receitas
+- Visualizar P&L
+- Visualizar saldo da fatura
