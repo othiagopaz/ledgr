@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -21,10 +21,20 @@ export class CategoryRepository
     super(repo, mapper);
   }
 
+  async findTransferCategory(): Promise<Category[]> {
+    //FIXME: this is a temporary solution, we need to find a better way to do this
+    const categories = await this.findWithFilters({
+      isDefault: true,
+      name: 'Transference',
+    });
+    if (!categories) {
+      throw new NotFoundException('Transferência categories not found');
+    }
+    return categories;
+  }
+
   // Remove the getRelations override to avoid eager loading parentCategory
   // protected override getRelations(): string[] {
   //   return ['parentCategory'];
   // }
 }
-
-export const CATEGORY_REPOSITORY = Symbol('CATEGORY_REPOSITORY');

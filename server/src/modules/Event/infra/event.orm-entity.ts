@@ -23,8 +23,8 @@ export class EventEntity {
   @Column({ type: 'date', nullable: false })
   date: Date;
 
-  @Column({ name: 'negotiator_id', nullable: false, type: 'uuid' })
-  negotiatorId: string;
+  @Column({ name: 'negotiator_id', nullable: true, type: 'uuid' })
+  negotiatorId?: string;
 
   @ManyToOne(() => CategoryEntity, { nullable: false })
   @JoinColumn({ name: 'category_id' })

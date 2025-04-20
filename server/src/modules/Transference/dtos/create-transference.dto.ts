@@ -1,10 +1,16 @@
-import { IsString, IsNumber, IsUUID, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsUUID,
+  IsOptional,
+  IsPositive,
+  IsInt,
+} from 'class-validator';
 
 export class CreateTransferenceDto {
-  @IsString()
-  description: string;
-
   @IsNumber()
+  @IsPositive()
+  @IsInt()
   amount: number;
 
   @IsString()
@@ -15,12 +21,6 @@ export class CreateTransferenceDto {
 
   @IsUUID()
   destinationAccountId: string;
-
-  @IsUUID()
-  sourceEventId: string;
-
-  @IsUUID()
-  destinationEventId: string;
 
   @IsString()
   @IsOptional()

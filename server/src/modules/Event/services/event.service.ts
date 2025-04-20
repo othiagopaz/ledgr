@@ -4,8 +4,10 @@ import { EVENT_REPOSITORY } from '../infra/event.repository.interface';
 import { CreateEventDto } from '../dtos/create-event.dto';
 import { UpdateEventDto } from '../dtos/update-event.dto';
 import { Event } from '../domain/event.entity';
-import { ICategoryRepository } from '../../Category/infra/category.repository.interface';
-import { CATEGORY_REPOSITORY } from '../../Category/infra/category.repository';
+import {
+  ICategoryRepository,
+  CATEGORY_REPOSITORY,
+} from '../../Category/infra/category.repository.interface';
 import { TransactionCreationData } from '../domain/event.types';
 import {
   ITransactionRepository,

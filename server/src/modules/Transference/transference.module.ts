@@ -8,15 +8,18 @@ import { AccountModule } from '../Account/account.module';
 import { EventModule } from '../Event/event.module';
 import { TransferenceController } from './controllers/transference.controller';
 import { TransferenceService } from './services/transference.service';
+import { CategoryModule } from '../Category/category.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TransferenceEntity]),
     forwardRef(() => AccountModule),
-    forwardRef(() => EventModule),
+    EventModule,
+    forwardRef(() => CategoryModule),
   ],
   providers: [
     TransferenceMapper,
+    TransferenceService,
     {
       provide: TRANSFERENCE_REPOSITORY,
       useClass: TransferenceRepository,

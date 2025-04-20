@@ -8,12 +8,11 @@
 - Poder criar uma despesa partially refundable [OK]
 - Poder criar receitas/despesas parceladas [OK]
 - Poder criar uma despesa no cartão de crédito [OK]
-- Poder criar uma transferência
+- Poder criar uma transferência [OK]
 
 ## To-dos
 
-TODO: Criar a entidade Transference
-TODO: Criar lógica de pagamento da fatura do cartão (lembrar do pgto parcial e juros)
+TODO: Criar lógicas de transferences
 
 ## Questionamentos interessantes
 
@@ -22,7 +21,7 @@ TODO: Criar lógica de pagamento da fatura do cartão (lembrar do pgto parcial e
 
 ## On the watch
 
-- A lógica do dueDate do cartão de crédito vai precisar ser "calibrada" pelo usuário no front-end com os daysBeforeDue
-- Será preciso validar a lógica de número de parcelas nas installments
-- Criar lógica de transactions e events com pagination
-
+[ ] Criar lógica de pagamento da fatura do cartão (lembrar do pgto parcial e juros)
+[ ] A lógica do dueDate do cartão de crédito vai precisar ser "calibrada" pelo usuário no front-end com os daysBeforeDue
+[ ] Será preciso validar a lógica de número de parcelas nas installments
+[ ] Criar lógica de transactions e events com pagination

@@ -25,6 +25,6 @@ export type EventProps = {
   description: string;
   date: PlainDate;
   category: Category;
-  negotiatorId: string;
+  negotiatorId?: string;
   transactions?: TransactionCreationData[];
 };

@@ -11,17 +11,12 @@ export class Event {
     public readonly description: string,
     public readonly date: PlainDate,
     public readonly category: Category,
-    public readonly negotiatorId: string,
+    public readonly negotiatorId?: string,
     public transactions?: Transaction[],
   ) {}
 
   static create(props: EventProps): Event {
-    if (
-      !props.description ||
-      !props.date ||
-      !props.category ||
-      !props.negotiatorId
-    ) {
+    if (!props.description || !props.date || !props.category) {
       throw new BadRequestException('Missing required event properties.');
     }
 

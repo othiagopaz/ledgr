@@ -15,7 +15,7 @@ export class EventMapper implements Mapper<Event, EventEntity> {
       orm.description,
       PlainDate.fromDate(orm.date),
       this.categoryMapper.toDomain(orm.category),
-      orm.negotiatorId,
+      orm.negotiatorId ?? undefined,
     );
   }
 
@@ -24,7 +24,7 @@ export class EventMapper implements Mapper<Event, EventEntity> {
     orm.id = domain.id;
     orm.description = domain.description;
     orm.date = domain.date.toDate();
-    orm.negotiatorId = domain.negotiatorId;
+    orm.negotiatorId = domain.negotiatorId ?? undefined;
     orm.category = this.categoryMapper.toOrm(domain.category);
     return orm;
   }

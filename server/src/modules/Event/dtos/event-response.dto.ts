@@ -7,7 +7,7 @@ export class EventResponseDto {
   description: string;
   date: PlainDate;
   category: Category;
-  negotiatorId: string;
+  negotiatorId?: string;
   transactions?: TransactionResponseDto[];
 
   constructor(event: Event) {
