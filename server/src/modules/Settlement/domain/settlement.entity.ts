@@ -17,7 +17,7 @@ export class Settlement {
     public readonly direction: SettlementDirection,
     public readonly linkedTransaction?: Transaction,
     public readonly paymentDate?: PlainDate,
-    public readonly accountId?: string, //TODO: fix this
+    public readonly accountId?: string,
     public readonly notes?: string,
   ) {}
 
