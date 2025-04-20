@@ -1,6 +1,6 @@
-dock# 💰 Ledger: Controle Financeiro Pessoal com Inteligência Contábil
+dock# 💰 Ledgr: Controle Financeiro Pessoal com Inteligência Contábil
 
-O **Ledger** é um sistema de controle financeiro pessoal com uma pegada contábil real.  
+O **Ledgr** é um sistema de controle financeiro pessoal com uma pegada contábil real.  
 Inspirado nos conceitos mais sólidos da contabilidade (regime de caixa e competência), ele é uma versão moderna, poderosa e automatizável do antigo Microsoft Money — só que com cérebro.
 
 ---
@@ -54,7 +54,7 @@ sudo systemctl start docker
 sudo systemctl enable docker #starts docker on login
 ```
 
-> Isso sobe um PostgreSQL local na porta 5432 com o banco `ledger`
+> Isso sobe um PostgreSQL local na porta 5432 com o banco `ledgr`
 
 ---
 
@@ -65,9 +65,9 @@ Crie um arquivo `.env.local` com as variáveis:
 ```env
 DB_HOST=localhost
 DB_PORT=5432
-DB_USERNAME=ledger
-DB_PASSWORD=ledger
-DB_DATABASE=ledger
+DB_USERNAME=ledgr
+DB_PASSWORD=ledgr
+DB_DATABASE=ledgr
 NODE_ENV=development
 ```
 
