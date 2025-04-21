@@ -25,6 +25,9 @@ export class TransactionEntity {
   @JoinColumn({ name: 'event_id' })
   event: EventEntity;
 
+  @Column({ type: 'uuid', name: 'event_id', nullable: false })
+  eventId: string;
+
   @Column({ type: 'integer' })
   amount: number;
 

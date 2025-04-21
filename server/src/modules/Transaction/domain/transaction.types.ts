@@ -20,7 +20,7 @@ export type SettlementCreationData = {
 };
 
 export type TransactionProps = {
-  event: Event;
+  eventId: string;
   amount: number;
   dueDate: PlainDate;
   competenceDate: PlainDate;

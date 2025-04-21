@@ -125,14 +125,12 @@ export class TransactionService {
       throw new NotFoundException('Transaction not found');
     }
 
-    let event = transaction.event;
     if (dto.eventId) {
       const foundEvent = await this.eventRepository.findById(dto.eventId);
 
       if (!foundEvent) {
         throw new NotFoundException('Event not found');
       }
-      event = foundEvent;
     } else {
       throw new BadRequestException('Event is required');
     }
@@ -160,7 +158,7 @@ export class TransactionService {
     }
 
     const updatedTransaction = Transaction.create({
-      event,
+      eventId: transaction.eventId,
       amount: dto.amount ?? transaction.amount.toDecimal(),
       dueDate: dto.dueDate
         ? PlainDate.fromDate(new Date(dto.dueDate))

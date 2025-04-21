@@ -5,6 +5,7 @@ import {
   Param,
   Post,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { EventService } from '../services/event.service';
 import { CreateEventDto } from '../dtos/create-event.dto';
@@ -26,17 +27,38 @@ export class EventController {
     }
   }
 
-  @Get()
-  @Message('Events fetched successfully')
-  async findAll() {
-    const events = await this.service.findAll();
-    return events.map((event) => new EventResponseDto(event));
-  }
-
   @Get(':id')
   @Message('Event fetched successfully')
   async findById(@Param('id') id: string) {
     const event = await this.service.findById(id);
     return new EventResponseDto(event);
+  }
+
+  @Get('')
+  @Message('Events fetched successfully')
+  async findWithPagination(
+    @Query('page') page: number,
+    @Query('limit') limit: number,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    if (!page) {
+      page = 1;
+    }
+    if (!limit) {
+      limit = 10;
+    }
+    if (!from) {
+      from = new Date().toISOString();
+    }
+    if (!to) {
+      to = new Date().toISOString();
+    }
+
+    const result = await this.service.findWithPagination(page, limit, from, to);
+    return {
+      data: result.data.map((event) => new EventResponseDto(event)),
+      total: result.total,
+    };
   }
 }

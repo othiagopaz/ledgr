@@ -79,6 +79,22 @@ export class EventService {
     return entry;
   }
 
+  async findWithPagination(
+    page: number,
+    limit: number,
+    from: string,
+    to: string,
+  ): Promise<{ data: Event[]; total: number }> {
+    const fromDate = PlainDate.fromString(from).toDate();
+    const toDate = PlainDate.fromString(to).toDate();
+    return this.eventRepository.findWithPagination(
+      page,
+      limit,
+      fromDate,
+      toDate,
+    );
+  }
+
   async update(id: string, dto: UpdateEventDto): Promise<Event> {
     const entry = await this.findById(id);
     if (!entry) {

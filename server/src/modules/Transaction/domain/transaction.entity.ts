@@ -4,17 +4,17 @@ import { TransactionStatus } from '../../../utils/shared/enums/transaction-statu
 import { Ownership } from '../../../utils/shared/enums/ownership.enum';
 import { TransactionType } from '../../../utils/shared/enums/transaction-type.enum';
 import { Money } from '../../../utils/shared/types/money';
-import { Event } from '../../Event/domain/event.entity';
 import { Account } from '../../Account/domain/account.entity';
 import { Settlement } from '../../Settlement/domain/settlement.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Invoice } from '../../Invoice/domain/invoice.entity';
 import { CreditCard } from '../../CreditCard/domain/credit-card.entity';
 import { PlainDate } from '../../../utils/shared/types/plain-date';
+
 export class Transaction {
   constructor(
     public readonly id: string,
-    public readonly event: Event,
+    public readonly eventId: string,
     public amount: Money,
     public dueDate: PlainDate,
     public competenceDate: PlainDate,
@@ -51,7 +51,7 @@ export class Transaction {
 
     const transaction = new Transaction(
       uuidv4(),
-      props.event,
+      props.eventId,
       transactionAmount,
       props.dueDate,
       props.competenceDate,
@@ -79,7 +79,7 @@ export class Transaction {
   }
 
   private static validateTransaction(props: TransactionProps) {
-    if (!props.event) {
+    if (!props.eventId) {
       throw new Error('Event is required');
     }
 

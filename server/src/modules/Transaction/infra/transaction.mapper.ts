@@ -14,7 +14,9 @@ export class TransactionMapper
   implements Mapper<Transaction, TransactionEntity>
 {
   constructor(
+    @Inject(forwardRef(() => EventMapper))
     private readonly eventMapper: EventMapper,
+    @Inject(forwardRef(() => AccountMapper))
     private readonly accountMapper: AccountMapper,
     @Inject(forwardRef(() => InvoiceMapper))
     private readonly invoiceMapper: InvoiceMapper,
@@ -25,15 +27,15 @@ export class TransactionMapper
   toDomain(orm: TransactionEntity): Transaction {
     return new Transaction(
       orm.id,
-      this.eventMapper.toDomain(orm.event),
+      orm.eventId ?? undefined,
       new Money(orm.amount),
-      PlainDate.fromDate(orm.dueDate),
-      PlainDate.fromDate(orm.competenceDate),
+      PlainDate.parse(orm.dueDate),
+      PlainDate.parse(orm.competenceDate),
       orm.installmentNumber,
       orm.status,
       orm.ownership,
       orm.type,
-      orm.paymentDate ? PlainDate.fromDate(orm.paymentDate) : undefined,
+      orm.paymentDate ? PlainDate.parse(orm.paymentDate) : undefined,
       orm.account ? this.accountMapper.toDomain(orm.account) : undefined,
       orm.creditCard
         ? this.creditCardMapper.toDomain(orm.creditCard)
@@ -47,7 +49,7 @@ export class TransactionMapper
   toOrm(domain: Transaction): TransactionEntity {
     const orm = new TransactionEntity();
     orm.id = domain.id;
-    orm.event = this.eventMapper.toOrm(domain.event);
+    orm.eventId = domain.eventId;
     orm.amount = domain.amount.toCents();
     orm.dueDate = domain.dueDate.toDate();
     orm.competenceDate = domain.competenceDate.toDate();

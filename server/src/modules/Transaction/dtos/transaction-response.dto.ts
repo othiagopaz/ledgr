@@ -19,7 +19,7 @@ export class TransactionResponseDto {
 
   constructor(transaction: Transaction) {
     this.id = transaction.id;
-    this.eventId = transaction.event.id;
+    this.eventId = transaction.eventId;
     this.amount = transaction.amount.toCents();
     this.dueDate = transaction.dueDate.toString();
     this.installmentNumber = transaction.installmentNumber;

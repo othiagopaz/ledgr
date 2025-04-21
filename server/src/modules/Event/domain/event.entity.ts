@@ -45,7 +45,7 @@ export class Event {
 
         return Transaction.create({
           ...txData,
-          event: event,
+          eventId: event.id,
         });
       });
     } else {
