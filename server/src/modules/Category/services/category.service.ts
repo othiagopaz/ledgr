@@ -7,12 +7,14 @@ import {
 import { CreateCategoryDto } from '../dtos/create-category.dto';
 import { Category } from '../domain/category.entity';
 import { UpdateCategoryDto } from '../dtos/update-category.dto';
+import { CategoryRelationRepository } from '../infra/category-relation.repository';
 
 @Injectable()
 export class CategoryService {
   constructor(
     @Inject(CATEGORY_REPOSITORY)
     private readonly categoryRepository: ICategoryRepository,
+    private readonly categoryRelationRepository: CategoryRelationRepository,
   ) {}
 
   async create(dto: CreateCategoryDto): Promise<Category> {
@@ -24,10 +26,25 @@ export class CategoryService {
       dto.isDefault ?? false,
       dto.isArchived ?? false,
       dto.userId ?? undefined,
-      dto.parentCategoryId ?? undefined,
     );
 
-    return this.categoryRepository.save(category);
+    const saved = await this.categoryRepository.save(category);
+
+    if (dto.parentCategoryId) {
+      const parent = await this.categoryRepository.findById(
+        dto.parentCategoryId,
+      );
+      if (!parent) {
+        throw new NotFoundException('Parent category not found');
+      }
+
+      await this.categoryRelationRepository.createRelation(
+        dto.parentCategoryId,
+        saved.id,
+      );
+    }
+
+    return saved;
   }
 
   async findActiveCategories(): Promise<Category[]> {
@@ -35,30 +52,25 @@ export class CategoryService {
       isArchived: false,
     });
 
-    const categoryMap = new Map<string, Category>();
-    const rootCategories: Category[] = [];
+    const relations = await this.categoryRelationRepository.findAllRelations();
 
-    for (const category of categories) {
-      category.subcategories = [];
-      categoryMap.set(category.id, category);
-    }
+    const map = new Map<string, Category>();
+    categories.forEach((cat) => {
+      cat.subcategories = [];
+      map.set(cat.id, cat);
+    });
 
-    for (const category of categories) {
-      if (category.parentCategoryId) {
-        const parent = categoryMap.get(category.parentCategoryId);
-        if (parent) {
-          category.parentCategory = parent;
-          parent.subcategories!.push(category);
-        }
-      } else {
-        rootCategories.push(category);
+    for (const rel of relations) {
+      const parent = map.get(rel.parentId);
+      const child = map.get(rel.child.id);
+      if (parent && child) {
+        parent.subcategories!.push(child);
       }
     }
 
-    // 💥 Remove referência circular antes de retornar
-    categories.forEach((cat) => {
-      cat.parentCategory = undefined;
-    });
+    const rootCategories = categories.filter(
+      (cat) => !relations.some((rel) => rel.child.id === cat.id),
+    );
 
     return rootCategories;
   }
@@ -73,37 +85,12 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
-    if (
-      dto.parentCategoryId !== undefined &&
-      dto.parentCategoryId !== category.parentCategoryId
-    ) {
-      if (dto.parentCategoryId !== null) {
-        const parentExists = await this.categoryRepository.findById(
-          dto.parentCategoryId,
-        );
-        if (!parentExists) {
-          throw new NotFoundException(
-            `Parent category with ID ${dto.parentCategoryId} not found.`,
-          );
-        }
-      }
-    }
-
     category.name = dto.name ?? category.name;
     category.type = dto.type ?? category.type;
     category.color = dto.color ?? category.color;
     category.isDefault = dto.isDefault ?? category.isDefault;
     category.isArchived = dto.isArchived ?? category.isArchived;
     category.userId = dto.userId ?? category.userId;
-    category.parentCategoryId =
-      dto.parentCategoryId === undefined
-        ? category.parentCategoryId
-        : dto.parentCategoryId === null
-          ? undefined
-          : dto.parentCategoryId;
-    if (category.parentCategoryId == null) {
-      category.parentCategory = undefined;
-    }
 
     return this.categoryRepository.save(category);
   }

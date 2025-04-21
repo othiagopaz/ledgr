@@ -10,6 +10,7 @@ import { SettlementEntity } from '../../modules/Settlement/infra/settlement.orm-
 import { CreditCardEntity } from '../../modules/CreditCard/infra/credit-card.orm-entity';
 import { InvoiceEntity } from '../../modules/Invoice/infra/invoice.orm-entity';
 import { TransferenceEntity } from '../../modules/Transference/infra/transference.orm-entity';
+import { CategoryRelationEntity } from '../../modules/Category/infra/category-relation.orm-entity';
 export const typeOrmConfig: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DB_HOST,
@@ -26,6 +27,7 @@ export const typeOrmConfig: DataSourceOptions = {
     CreditCardEntity,
     InvoiceEntity,
     TransferenceEntity,
+    CategoryRelationEntity,
   ],
   migrations: ['dist/utils/database/migrations/*.js'],
   synchronize: false,

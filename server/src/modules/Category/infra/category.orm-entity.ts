@@ -1,10 +1,8 @@
 import {
   Column,
   Entity,
-  JoinColumn,
-  ManyToOne,
-  OneToMany,
   PrimaryColumn,
+  OneToMany,
   UpdateDateColumn,
   CreateDateColumn,
 } from 'typeorm';
@@ -33,18 +31,6 @@ export class CategoryEntity {
 
   @Column({ nullable: true, name: 'user_id' })
   userId?: string;
-
-  @ManyToOne(() => CategoryEntity, (category) => category.subcategories, {
-    nullable: true,
-  })
-  @JoinColumn({ name: 'parent_category_id' })
-  parentCategory?: CategoryEntity;
-
-  @OneToMany(() => CategoryEntity, (category) => category.parentCategory)
-  subcategories?: CategoryEntity[];
-
-  @Column({ name: 'parent_category_id', nullable: true })
-  parentCategoryId?: string;
 
   @OneToMany(() => EventEntity, (entry) => entry.category)
   events?: EventEntity[];

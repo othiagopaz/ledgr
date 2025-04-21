@@ -13,7 +13,7 @@ export class EventMapper implements Mapper<Event, EventEntity> {
     return new Event(
       orm.id,
       orm.description,
-      PlainDate.fromDate(orm.date),
+      PlainDate.parse(orm.date),
       this.categoryMapper.toDomain(orm.category),
       orm.negotiatorId ?? undefined,
     );

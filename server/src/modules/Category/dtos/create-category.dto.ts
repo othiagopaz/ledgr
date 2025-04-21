@@ -26,30 +26,3 @@ export class CreateCategoryDto {
   @IsUUID()
   parentCategoryId?: string;
 }
-
-// Sample JSON for testing controllers:
-/*
-{
-  "name": "Groceries",
-  "type": "EXPENSE",
-  "color": "#FF5733",
-  "isDefault": false,
-  "isArchived": false,
-  "userId": "123e4567-e89b-12d3-a456-426614174000",
-  "parentCategoryId": "987fcdeb-51a2-43f7-9abc-def012345678"
-}
-
-// Minimal required fields:
-{
-  "name": "Salary",
-  "type": "INCOME"
-}
-
-// With optional fields:
-{
-  "name": "Shopping",
-  "type": "EXPENSE",
-  "color": "#33FF57",
-  "isDefault": true
-}
-*/

@@ -9,8 +9,6 @@ export class Category {
     public isDefault?: boolean,
     public isArchived?: boolean,
     public userId?: string,
-    public parentCategoryId?: string,
-    public parentCategory?: Category,
     public subcategories?: Category[],
   ) {}
 

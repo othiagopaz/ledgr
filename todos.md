@@ -50,8 +50,8 @@
 
 ### V0
 
-- Criar uma despesa
-- Criar uma receita
+- Criar uma despesa [OK]
+- Criar uma receita [OK]
 - Criar uma transferência
 - Criar uma despesa 100% refundable
 - Criar uma despesa partially refundable

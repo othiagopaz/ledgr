@@ -6,9 +6,10 @@ import { CATEGORY_REPOSITORY } from './infra/category.repository.interface';
 import { CategoryMapper } from './infra/category.mapper';
 import { CategoryEntity } from './infra/category.orm-entity';
 import { CategoryRepository } from './infra/category.repository';
-
+import { CategoryRelationEntity } from './infra/category-relation.orm-entity';
+import { CategoryRelationRepository } from './infra/category-relation.repository';
 @Module({
-  imports: [TypeOrmModule.forFeature([CategoryEntity])],
+  imports: [TypeOrmModule.forFeature([CategoryEntity, CategoryRelationEntity])],
   providers: [
     CategoryService,
     {
@@ -16,6 +17,7 @@ import { CategoryRepository } from './infra/category.repository';
       useClass: CategoryRepository,
     },
     CategoryMapper,
+    CategoryRelationRepository,
   ],
   controllers: [CategoryController],
   exports: [CategoryService, CategoryMapper, CATEGORY_REPOSITORY],
