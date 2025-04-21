@@ -18,7 +18,7 @@ export class AccountController {
   @Get()
   @Message('Accounts fetched successfully')
   async findAll(): Promise<Account[]> {
-    return this.accountService.findAll();
+    return this.accountService.findActiveAccounts();
   }
 
   @Get(':id')

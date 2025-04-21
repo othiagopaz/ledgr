@@ -6,6 +6,14 @@ import { ResponseInterceptor } from './utils/shared/interceptors/response.interc
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Enable CORS
+  app.enableCors({
+    origin: 'http://localhost:5173', // Allow only the frontend origin
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Allowed methods
+    allowedHeaders: 'Content-Type, Accept, Authorization', // Allowed headers
+    credentials: true, // If you need to send cookies or Authorization headers
+  });
+
   app.useGlobalInterceptors(new ResponseInterceptor(app.get(Reflector)));
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

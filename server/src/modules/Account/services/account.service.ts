@@ -29,8 +29,8 @@ export class AccountService {
     return this.accountRepository.save(account);
   }
 
-  async findAll(): Promise<Account[]> {
-    return this.accountRepository.findAll();
+  async findActiveAccounts(): Promise<Account[]> {
+    return this.accountRepository.findWithFilters({ isArchived: false });
   }
 
   async findById(id: string): Promise<Account | null> {

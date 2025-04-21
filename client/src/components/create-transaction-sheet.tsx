@@ -14,6 +14,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -26,29 +34,39 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CheckedState } from "@radix-ui/react-checkbox";
+import { cn } from "@/lib/utils";
+import { FinancialInstrument, Category } from "@/services/api";
+import {
+  CategorySelectOption,
+  CategoryGroup,
+  CategorySelectItem,
+  mapCategoriesToSelectOptions,
+} from "@/utils/mappers";
 
 type FormTransactionType = "INCOME" | "EXPENSE";
 
 interface CreateTransactionSheetProps {
-  children: React.ReactNode; // Trigger button
-  initialType: FormTransactionType; // Type determined by trigger button
+  children: React.ReactNode;
+  initialType: FormTransactionType;
+  financialInstruments: FinancialInstrument[];
+  rawCategories: Category[];
 }
 
-// Mock data (replace with API data later)
-const mockCategories = ["Salário", "Alimentação", "Transporte", "Lazer"];
 const mockNegotiators = ["Empresa X", "Mercado Y", "Restaurante Z", "Outro"];
-const mockAccounts = ["Conta Corrente A", "Cartão B", "Poupança C"];
 const installmentOptions = [
-  ...Array.from({ length: 12 }, (_, i) => `${i + 1}x`),
+  "À vista",
+  ...Array.from({ length: 11 }, (_, i) => `${i + 2}x`),
 ];
 
 export function CreateTransactionSheet({
   children,
   initialType,
+  financialInstruments,
+  rawCategories,
 }: CreateTransactionSheetProps) {
   const [value, setValue] = React.useState<number | string>("");
   const [description, setDescription] = React.useState("");
@@ -62,6 +80,31 @@ export function CreateTransactionSheet({
   );
   const [installmentOption, setInstallmentOption] =
     React.useState<string>("À vista");
+  const [accountPopoverOpen, setAccountPopoverOpen] = React.useState(false);
+  const [categoryPopoverOpen, setCategoryPopoverOpen] = React.useState(false);
+
+  const displayCategoryOptions = React.useMemo(() => {
+    if (!rawCategories) return [];
+
+    const filteredCategories = rawCategories.filter(
+      (cat) => cat.type === initialType
+    );
+
+    return mapCategoriesToSelectOptions(filteredCategories);
+  }, [rawCategories, initialType]);
+
+  const selectedAccountDetails = React.useMemo(() => {
+    return financialInstruments.find((inst) => inst.id === account);
+  }, [account, financialInstruments]);
+
+  const selectedCategoryName = React.useMemo(() => {
+    if (!category) return null;
+    for (const group of displayCategoryOptions) {
+      const found = group.options.find((opt) => opt.id === category);
+      if (found) return found.name;
+    }
+    return null;
+  }, [category, displayCategoryOptions]);
 
   React.useEffect(() => {
     if (isPending) {
@@ -124,19 +167,83 @@ export function CreateTransactionSheet({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="account">Conta/Cartão</Label>
-                  <Select value={account} onValueChange={setAccount}>
-                    <SelectTrigger id="account" className="w-full">
-                      <SelectValue placeholder="Selecione conta ou cartão" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mockAccounts.map((acc) => (
-                        <SelectItem key={acc} value={acc}>
-                          {acc}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="account-combobox">Conta/Cartão</Label>
+                  <Popover
+                    open={accountPopoverOpen}
+                    onOpenChange={setAccountPopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={accountPopoverOpen}
+                        id="account-combobox"
+                        className="w-full justify-between text-left font-normal"
+                      >
+                        <span className="truncate">
+                          {selectedAccountDetails
+                            ? `${selectedAccountDetails.name} (${selectedAccountDetails.displayDetail})`
+                            : "Selecione conta ou cartão"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Buscar conta/cartão..."
+                          className="w-full"
+                        />
+                        <CommandList>
+                          <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                          <CommandItem
+                            key="clear-account-sheet"
+                            value="__clear_account_sheet__"
+                            onSelect={() => {
+                              setAccount(undefined);
+                              setAccountPopoverOpen(false);
+                            }}
+                            className="flex items-center justify-between w-full"
+                          >
+                            <span>Limpar Seleção</span>
+                          </CommandItem>
+                          {financialInstruments.map((instrument) => (
+                            <CommandItem
+                              key={instrument.id}
+                              value={instrument.name}
+                              onSelect={(currentValue: string) => {
+                                const selectedItem = financialInstruments.find(
+                                  (inst) =>
+                                    inst.name.toLowerCase() ===
+                                    currentValue.toLowerCase()
+                                );
+                                setAccount(
+                                  selectedItem ? selectedItem.id : undefined
+                                );
+                                setAccountPopoverOpen(false);
+                              }}
+                              className="flex items-center justify-between w-full"
+                            >
+                              <div className="flex items-center">
+                                <span>{instrument.name}</span>
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  {instrument.displayDetail}
+                                </span>
+                              </div>
+                              <Check
+                                className={cn(
+                                  "ml-2 h-4 w-4",
+                                  account === instrument.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -182,19 +289,90 @@ export function CreateTransactionSheet({
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="category">Categoria</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger id="category" className="w-full">
-                      <SelectValue placeholder="Selecione uma categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mockCategories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="category-combobox">Categoria</Label>
+                  <Popover
+                    open={categoryPopoverOpen}
+                    onOpenChange={setCategoryPopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={categoryPopoverOpen}
+                        id="category-combobox"
+                        className="w-full justify-between text-left font-normal"
+                      >
+                        <span className="truncate">
+                          {selectedCategoryName ?? "Selecione uma categoria"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Buscar categoria..."
+                          className="w-full"
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            Nenhuma categoria encontrada para{" "}
+                            {initialType === "INCOME" ? "receitas" : "despesas"}
+                            .
+                          </CommandEmpty>
+
+                          <CommandItem
+                            key="clear-category-sheet"
+                            value="__clear__sheet__"
+                            onSelect={() => {
+                              setCategory(undefined);
+                              setCategoryPopoverOpen(false);
+                            }}
+                          >
+                            Limpar Seleção
+                          </CommandItem>
+
+                          {displayCategoryOptions.map((group) => (
+                            <CommandGroup
+                              key={`sheet-${group.label}`}
+                              heading={group.label}
+                            >
+                              {group.options.map((item) => (
+                                <CommandItem
+                                  key={item.id}
+                                  value={item.name}
+                                  onSelect={(currentValue: string) => {
+                                    const selectedItem = displayCategoryOptions
+                                      .flatMap((g) => g.options)
+                                      .find(
+                                        (opt) =>
+                                          opt.name.toLowerCase() ===
+                                          currentValue.toLowerCase()
+                                      );
+                                    setCategory(
+                                      selectedItem ? selectedItem.id : undefined
+                                    );
+                                    setCategoryPopoverOpen(false);
+                                  }}
+                                  className="flex items-center justify-between w-full"
+                                >
+                                  <span>{item.name}</span>
+                                  <Check
+                                    className={cn(
+                                      "ml-2 h-4 w-4",
+                                      category === item.id
+                                        ? "opacity-100"
+                                        : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="negotiator">Negociador</Label>

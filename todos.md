@@ -39,6 +39,7 @@
 [ ] A lógica do dueDate do cartão de crédito vai precisar ser "calibrada" pelo usuário no front-end com os daysBeforeDue
 [ ] Será preciso validar a lógica de número de parcelas nas installments
 [ ] Criar lógica de transactions e events com pagination
+[ ] Adicionar últimos 4 digitos do cartão
 
 ### Questionamentos interessantes
 
@@ -61,3 +62,7 @@
 - Visualizar todas as receitas
 - Visualizar P&L
 - Visualizar saldo da fatura
+
+### On the watch
+
+[ ] Filtros no dashboard "se mexem" ao existir uma seleção

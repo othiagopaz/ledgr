@@ -30,8 +30,37 @@ export class CategoryService {
     return this.categoryRepository.save(category);
   }
 
-  async findAll(): Promise<Category[]> {
-    return this.categoryRepository.findAll();
+  async findActiveCategories(): Promise<Category[]> {
+    const categories = await this.categoryRepository.findWithFilters({
+      isArchived: false,
+    });
+
+    const categoryMap = new Map<string, Category>();
+    const rootCategories: Category[] = [];
+
+    for (const category of categories) {
+      category.subcategories = [];
+      categoryMap.set(category.id, category);
+    }
+
+    for (const category of categories) {
+      if (category.parentCategoryId) {
+        const parent = categoryMap.get(category.parentCategoryId);
+        if (parent) {
+          category.parentCategory = parent;
+          parent.subcategories!.push(category);
+        }
+      } else {
+        rootCategories.push(category);
+      }
+    }
+
+    // 💥 Remove referência circular antes de retornar
+    categories.forEach((cat) => {
+      cat.parentCategory = undefined;
+    });
+
+    return rootCategories;
   }
 
   async findById(id: string): Promise<Category | null> {
@@ -77,9 +106,5 @@ export class CategoryService {
     }
 
     return this.categoryRepository.save(category);
-  }
-
-  async findSubcategories(id: string): Promise<Category[]> {
-    return this.categoryRepository.findWithFilters({ parentCategoryId: id });
   }
 }

@@ -27,8 +27,8 @@ export class CreditCardController {
 
   @Get()
   @Message('Credit cards fetched successfully')
-  async findAll(): Promise<CreditCard[]> {
-    return this.creditCardService.findAll();
+  async findActiveCreditCards(): Promise<CreditCard[]> {
+    return this.creditCardService.findActiveCreditCards();
   }
 
   @Get(':id')

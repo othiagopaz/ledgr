@@ -28,8 +28,8 @@ export class CreditCardService {
     return this.creditCardRepository.save(creditCard);
   }
 
-  async findAll(): Promise<CreditCard[]> {
-    return this.creditCardRepository.findAll();
+  async findActiveCreditCards(): Promise<CreditCard[]> {
+    return this.creditCardRepository.findWithFilters({ isArchived: false });
   }
 
   async findById(id: string): Promise<CreditCard | null> {

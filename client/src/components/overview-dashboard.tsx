@@ -14,6 +14,31 @@ import {
 import { SummaryCards } from "./summary-cards";
 import { PeriodFilter } from "./period-filter";
 import { TransactionFilters } from "./transaction-filters";
+import {
+  getAccounts,
+  getCreditCards,
+  FinancialInstrument,
+  getCategories,
+  Category,
+} from "@/services/api";
+// Import the new mapper functions
+import {
+  mapAccountToFinancialInstrument,
+  mapCreditCardToFinancialInstrument,
+} from "@/utils/mappers";
+
+// --- Helper Functions for Formatting (Move to utils later) ---
+// function formatAccountType(type: string): string {...}
+// function formatCardFlag(flag: string): string {...}
+
+// --- Define a unified type for the dropdown ---
+// Remove the commented out definition below, as it's now imported from api.ts
+// // Move this definition to api.ts or a shared types file if FinancialInstrument is not exported from api.ts
+// // export interface FinancialInstrument {
+// //   id: string;
+// //   name: string;
+// //   kind: 'ACCOUNT' | 'CREDIT_CARD'; // Differentiator
+// // }
 
 // --- Placeholder Data ---
 const summaryData = {
@@ -97,15 +122,6 @@ const transactions: Transaction[] = [
   // ... add more transactions as needed
 ];
 
-// Example filter options (replace with dynamic data later)
-const accountOptions = [
-  "Conta Corrente A",
-  "Cartão de Crédito B",
-  "Poupança C",
-];
-// const typeOptions: TransactionType[] = ["INCOME", "EXPENSE", "TRANSFERENCE"]; // Removed unused variable
-const categoryOptions = ["Salário", "Alimentação", "Lazer", "Transferência"];
-
 // --- Component ---
 export function OverviewDashboard() {
   // State for filters (example)
@@ -120,15 +136,68 @@ export function OverviewDashboard() {
     number | null
   >(currentMonth);
   const [searchTerm, setSearchTerm] = React.useState("");
-  const [selectedAccount, setSelectedAccount] = React.useState<
-    string | undefined
-  >();
+  // selectedAccount now holds an array of FinancialInstrument IDs
+  const [selectedAccount, setSelectedAccount] = React.useState<string[]>([]);
   const [selectedType, setSelectedType] = React.useState<
     TransactionType | undefined
   >();
-  const [selectedCategory, setSelectedCategory] = React.useState<
-    string | undefined
-  >();
+  // selectedCategory now holds an array of category IDs
+  const [selectedCategory, setSelectedCategory] = React.useState<string[]>([]);
+
+  // State for unified Financial Instruments
+  const [financialInstruments, setFinancialInstruments] = React.useState<
+    FinancialInstrument[]
+  >([]);
+  const [isLoadingInstruments, setIsLoadingInstruments] = React.useState(true);
+  const [instrumentsError, setInstrumentsError] = React.useState<string | null>(
+    null
+  );
+
+  // State holds raw categories now
+  const [rawCategories, setRawCategories] = React.useState<Category[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
+  const [categoriesError, setCategoriesError] = React.useState<string | null>(
+    null
+  );
+
+  // Fetch and map data using imported mappers
+  React.useEffect(() => {
+    async function fetchAllData() {
+      setIsLoadingInstruments(true);
+      setIsLoadingCategories(true);
+      setInstrumentsError(null);
+      setCategoriesError(null);
+
+      try {
+        const [accountsData, creditCardsData, categoriesData] =
+          await Promise.all([getAccounts(), getCreditCards(), getCategories()]);
+
+        // Use mapper functions
+        const mappedAccounts = accountsData.map(
+          mapAccountToFinancialInstrument
+        );
+        const mappedCreditCards = creditCardsData.map(
+          mapCreditCardToFinancialInstrument
+        );
+
+        setFinancialInstruments([...mappedAccounts, ...mappedCreditCards]);
+
+        // Store raw categories
+        setRawCategories(categoriesData);
+      } catch (error) {
+        console.error("Erro ao buscar dados iniciais:", error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Falha ao carregar dados.";
+        setInstrumentsError(errorMessage);
+        setCategoriesError(errorMessage);
+      } finally {
+        setIsLoadingInstruments(false);
+        setIsLoadingCategories(false);
+      }
+    }
+
+    fetchAllData();
+  }, []);
 
   const formatCurrency = (value: number) => {
     return value.toLocaleString("pt-BR", {
@@ -167,8 +236,13 @@ export function OverviewDashboard() {
 
       {/* Filters Row - Replaced with component */}
       <TransactionFilters
-        accountOptions={accountOptions}
-        categoryOptions={categoryOptions}
+        financialInstruments={financialInstruments}
+        isLoadingInstruments={isLoadingInstruments}
+        instrumentsError={instrumentsError}
+        rawCategories={rawCategories}
+        isLoadingCategories={isLoadingCategories}
+        categoriesError={categoriesError}
+        selectedType={selectedType}
         selectedAccount={selectedAccount}
         setSelectedAccount={setSelectedAccount}
         selectedCategory={selectedCategory}

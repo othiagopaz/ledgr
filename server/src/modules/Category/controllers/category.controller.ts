@@ -27,19 +27,13 @@ export class CategoryController {
 
   @Get()
   @Message('Categories fetched successfully')
-  async findAll(): Promise<Category[]> {
-    return this.categoryService.findAll();
+  async findActiveCategories(): Promise<Category[]> {
+    return this.categoryService.findActiveCategories();
   }
 
   @Get(':id')
   @Message('Category fetched successfully')
   async findById(@Param('id') id: string): Promise<Category | null> {
     return this.categoryService.findById(id);
-  }
-
-  @Get('sub/:id')
-  @Message('Subcategories fetched successfully')
-  async findSubcategories(@Param('id') id: string): Promise<Category[]> {
-    return this.categoryService.findSubcategories(id);
   }
 }
