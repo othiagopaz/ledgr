@@ -21,7 +21,7 @@
     "server:migration:run": "cd server && npm run migration:run",
     "install:all": "npm install && cd server && npm install",
     "dev-time": "npx git-dev-time -w 65 -s 15 -n -a",
-    "client:dev": "cd client && npm run dev",
+    "client:start": "cd client && npm run dev",
     "client:build": "cd client && npm run build",
     "client:preview": "cd client && npm run preview"
   },

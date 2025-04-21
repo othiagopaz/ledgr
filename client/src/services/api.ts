@@ -12,6 +12,7 @@ export interface FinancialInstrument {
 export * from "./Account";
 export * from "./CreditCard";
 export * from "./Category";
+export * from "./Event";
 
 // No futuro, podemos adicionar exportações para outros serviços:
 // export * from './Transaction';
