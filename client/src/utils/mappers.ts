@@ -3,27 +3,14 @@ import {
   CreditCard,
   FinancialInstrument,
   Category,
-} from "@/services/api";
+} from "@/modules/api";
 import { formatAccountType, formatCardFlag } from "./formatters";
 
 // --- Interfaces for Select Component Structure ---
 
 /** Represents a single selectable item in the category dropdown. */
-export interface CategorySelectItem {
-  id: string;
-  name: string;
-  isGroup: false; // Type discriminator
-}
-
-/** Represents a group of selectable items with a label. */
-export interface CategoryGroup {
-  label: string;
-  options: CategorySelectItem[];
-  isGroup: true; // Type discriminator
-}
 
 /** Type alias for the items rendered in the category select. */
-export type CategorySelectOption = CategoryGroup | CategorySelectItem;
 
 /**
  * Maps an Account object to a FinancialInstrument object.
@@ -68,28 +55,5 @@ export function mapCreditCardToFinancialInstrument(
  * @param categories - The raw Category array from the API.
  * @returns An array of CategoryGroup objects.
  */
-export function mapCategoriesToSelectOptions(
-  categories: Category[]
-): CategoryGroup[] {
-  const options: CategoryGroup[] = [];
-
-  categories.forEach((category) => {
-    // ONLY create a Group if it has subcategories
-    if (category.subcategories && category.subcategories.length > 0) {
-      options.push({
-        label: category.name,
-        isGroup: true, // Technically redundant if the return type is CategoryGroup[] but kept for clarity
-        options: category.subcategories.map((sub) => ({
-          id: sub.id,
-          name: sub.name,
-          isGroup: false, // Items are never groups
-        })),
-      });
-    }
-    // Ignore categories without subcategories
-  });
-
-  return options;
-}
 
 // Add other mapping functions as needed

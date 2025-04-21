@@ -1,26 +1,7 @@
+import { Category, ApiResponse } from "./category.types";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-// Estrutura da resposta da API (pode ser movida para um tipo genérico global)
-interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
-
-// Define a interface recursiva para Categoria
-export interface Category {
-  id: string;
-  name: string;
-  type: "INCOME" | "EXPENSE"; // Ou outros tipos se houver
-  color: string | null;
-  isDefault: boolean;
-  isArchived: boolean;
-  userId: string | null;
-  parentCategoryId: string | null;
-  subcategories: Category[]; // Campo recursivo
-}
-
-// Função para buscar as categorias
 export async function getCategories(): Promise<Category[]> {
   if (!API_BASE_URL) {
     console.error("VITE_API_BASE_URL não está definida no .env");
@@ -28,7 +9,6 @@ export async function getCategories(): Promise<Category[]> {
   }
 
   try {
-    // Assumindo o endpoint /categories
     const response = await fetch(`${API_BASE_URL}/categories`);
 
     if (!response.ok) {

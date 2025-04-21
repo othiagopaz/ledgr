@@ -1,4 +1,4 @@
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppSidebar } from "@/components/shared/app-sidebar";
 import { Button } from "@/components/ui/button"; // Example import for trigger
 import {
   SidebarProvider,

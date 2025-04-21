@@ -47,7 +47,7 @@ import {
   TransactionStatus,
   Ownership,
   TransactionType,
-} from "@/services/api";
+} from "@/modules/api";
 import { mapCategoriesToSelectOptions } from "@/utils/mappers";
 import { formatCurrencyToCents } from "@/utils/formatters";
 import { toast } from "sonner";

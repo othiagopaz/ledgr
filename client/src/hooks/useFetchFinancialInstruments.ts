@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 // import { getAccounts, Account } from "@/services/Account"; // Account type unused
-import { getAccounts } from "@/services/Account";
+import { getAccounts } from "@/modules/Account";
 // import { getCreditCards, CreditCard } from "@/services/CreditCard"; // CreditCard type unused
-import { getCreditCards } from "@/services/CreditCard";
-import { FinancialInstrument } from "@/services/api"; // Assuming FinancialInstrument is exported from api.ts
+import { getCreditCards } from "@/modules/CreditCard";
+import { FinancialInstrument } from "@/modules/api"; // Assuming FinancialInstrument is exported from api.ts
 import {
   mapAccountToFinancialInstrument,
   mapCreditCardToFinancialInstrument,

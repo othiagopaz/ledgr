@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getEvents, Event } from "@/services/Event"; // Removed unused PaginatedData, ApiResponse
+import { getEvents, Event } from "@/modules/Event"; // Removed unused PaginatedData, ApiResponse
 // import { getStartAndEndOfMonth, getStartAndEndOfYear } from "@/utils/dateUtils"; // Incorrect path
 import { format } from "date-fns"; // Import format from date-fns
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createEvent, CreateEventPayload } from "@/services/api";
+import { createEvent, CreateEventPayload } from "@/modules/api";
 import { toast } from "sonner";
 
 interface UseCreateEventOptions {

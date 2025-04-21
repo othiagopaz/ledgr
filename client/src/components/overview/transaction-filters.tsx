@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown, Search, Plus } from "lucide-react";
 import { CreateTransactionSheet } from "./create-transaction-sheet";
-import { FinancialInstrument, Category } from "@/services/api";
+import { FinancialInstrument, Category } from "@/modules/api";
 import { mapCategoriesToSelectOptions, CategoryGroup } from "@/utils/mappers";
 import { cn } from "@/lib/utils";
 
