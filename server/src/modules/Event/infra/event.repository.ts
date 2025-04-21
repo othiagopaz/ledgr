@@ -35,7 +35,9 @@ export class EventRepository
       .leftJoinAndSelect('transaction.account', 'account')
       .leftJoinAndSelect('transaction.creditCard', 'creditCard')
       .where('transaction.competenceDate BETWEEN :from AND :to', { from, to })
-      .where('transaction.ownership = :ownership', { ownership: Ownership.OWN })
+      .andWhere('transaction.ownership = :ownership', {
+        ownership: Ownership.OWN,
+      })
       .orderBy('event.date', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)

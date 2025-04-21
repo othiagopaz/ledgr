@@ -8,39 +8,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-// Removed Carousel, Input, Select, Button, Search imports as they are now in sub-components
-
-// Import the new components
+import { Badge } from "@/components/ui/badge";
+import { TransactionFilters } from "@/components/transaction-filters";
+import { Event, TransactionPayload, TransactionStatus } from "@/services/Event";
+import { useFetchEvents } from "@/hooks/useFetchEvents";
+import { useFetchFinancialInstruments } from "@/hooks/useFetchFinancialInstruments";
+import { useFetchCategories } from "@/hooks/useFetchCategories";
 import { SummaryCards } from "./summary-cards";
 import { PeriodFilter } from "./period-filter";
-import { TransactionFilters } from "./transaction-filters";
-import {
-  getAccounts,
-  getCreditCards,
-  FinancialInstrument,
-  getCategories,
-  Category,
-} from "@/services/api";
-// Import the new mapper functions
-import {
-  mapAccountToFinancialInstrument,
-  mapCreditCardToFinancialInstrument,
-} from "@/utils/mappers";
+import { Button } from "./ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Category } from "@/services/Category";
+import { FinancialInstrument } from "@/services/api";
 
-// --- Helper Functions for Formatting (Move to utils later) ---
-// function formatAccountType(type: string): string {...}
-// function formatCardFlag(flag: string): string {...}
-
-// --- Define a unified type for the dropdown ---
-// Remove the commented out definition below, as it's now imported from api.ts
-// // Move this definition to api.ts or a shared types file if FinancialInstrument is not exported from api.ts
-// // export interface FinancialInstrument {
-// //   id: string;
-// //   name: string;
-// //   kind: 'ACCOUNT' | 'CREDIT_CARD'; // Differentiator
-// // }
-
-// --- Placeholder Data ---
 const summaryData = {
   totalReceitas: 12530.5,
   totalSaidas: 7840.2,
@@ -62,275 +42,273 @@ const months = [
   "Dez",
 ];
 
-// Placeholder transaction type
-type TransactionType = "INCOME" | "EXPENSE" | "TRANSFERENCE";
-
-// Placeholder transaction data structure
-interface Transaction {
-  id: string;
-  date: string; // Format: YYYY-MM-DD or similar
-  type: TransactionType;
-  description: string;
-  negotiator: string | null; // e.g., person or company
-  category: string;
-  accountOrCard: string; // Name of the bank account or credit card
-  value: number;
-}
-
-// Example transactions
-const transactions: Transaction[] = [
-  {
-    id: "1",
-    date: "2024-07-15",
-    type: "INCOME",
-    description: "Salário",
-    negotiator: "Empresa X",
-    category: "Salário",
-    accountOrCard: "Conta Corrente A",
-    value: 5000,
-  },
-  {
-    id: "2",
-    date: "2024-07-16",
-    type: "EXPENSE",
-    description: "Supermercado",
-    negotiator: "Mercado Y",
-    category: "Alimentação",
-    accountOrCard: "Cartão de Crédito B",
-    value: -350.75,
-  },
-  {
-    id: "3",
-    date: "2024-07-18",
-    type: "EXPENSE",
-    description: "Restaurante",
-    negotiator: "Restaurante Z",
-    category: "Lazer",
-    accountOrCard: "Cartão de Crédito B",
-    value: -85.5,
-  },
-  {
-    id: "4",
-    date: "2024-07-20",
-    type: "TRANSFERENCE",
-    description: "Transferência para Poupança",
-    negotiator: null,
-    category: "Transferência",
-    accountOrCard: "Conta Corrente A -> Poupança C",
-    value: -1000.0,
-  },
-  // ... add more transactions as needed
-];
-
-// --- Component ---
 export function OverviewDashboard() {
-  // State for filters (example)
-  const currentYear = new Date().getFullYear();
-  const years = [currentYear - 2, currentYear - 1, currentYear];
-  const [selectedYear, setSelectedYear] = React.useState<number>(currentYear);
-  const currentMonth = new Date().getMonth();
-  const [selectedMonthIndex, setSelectedMonthIndex] = React.useState<
-    number | null
-  >(currentMonth);
+  // State for filters
+  const [selectedMonthIndex, setSelectedMonthIndex] = React.useState<number>(
+    new Date().getMonth()
+  );
+  const [selectedYear, setSelectedYear] = React.useState<number>(
+    new Date().getFullYear()
+  );
+  const selectedType = undefined; // Use undefined directly if state setter removed
+  const selectedCategoryId = undefined; // Use undefined directly if state setter removed
+  const [searchTerm, setSearchTerm] = React.useState<string>("");
   const [lastSelectedMonthIndex, setLastSelectedMonthIndex] = React.useState<
     number | null
-  >(currentMonth);
-  const [searchTerm, setSearchTerm] = React.useState("");
-  // selectedAccount now holds an array of FinancialInstrument IDs
+  >(null);
   const [selectedAccount, setSelectedAccount] = React.useState<string[]>([]);
-  const [selectedType, setSelectedType] = React.useState<
-    TransactionType | undefined
-  >();
-  // selectedCategory now holds an array of category IDs
   const [selectedCategory, setSelectedCategory] = React.useState<string[]>([]);
 
-  // State for unified Financial Instruments
-  const [financialInstruments, setFinancialInstruments] = React.useState<
-    FinancialInstrument[]
-  >([]);
-  const [isLoadingInstruments, setIsLoadingInstruments] = React.useState(true);
-  const [instrumentsError, setInstrumentsError] = React.useState<string | null>(
-    null
-  );
+  // State for data fetching (Instruments and Categories)
+  const {
+    data: financialInstruments,
+    isLoading: isLoadingInstruments,
+    error: instrumentsError,
+  } = useFetchFinancialInstruments();
+  const {
+    data: categories,
+    isLoading: isLoadingCategories,
+    error: categoriesError,
+  } = useFetchCategories();
 
-  // State holds raw categories now
-  const [rawCategories, setRawCategories] = React.useState<Category[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
-  const [categoriesError, setCategoriesError] = React.useState<string | null>(
-    null
-  );
-
-  // Fetch and map data using imported mappers
+  // Log fetched categories
   React.useEffect(() => {
-    async function fetchAllData() {
-      setIsLoadingInstruments(true);
-      setIsLoadingCategories(true);
-      setInstrumentsError(null);
-      setCategoriesError(null);
+    console.log("Fetched Categories:", categories);
+  }, [categories]);
 
-      try {
-        const [accountsData, creditCardsData, categoriesData] =
-          await Promise.all([getAccounts(), getCreditCards(), getCategories()]);
+  // State for pagination
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const ITEMS_PER_PAGE = 50; // Define items per page
 
-        // Use mapper functions
-        const mappedAccounts = accountsData.map(
-          mapAccountToFinancialInstrument
-        );
-        const mappedCreditCards = creditCardsData.map(
-          mapCreditCardToFinancialInstrument
-        );
+  // Fetch Events using the hook
+  const {
+    events,
+    isLoading: isLoadingEvents,
+    error: eventsError,
+    totalPages,
+  } = useFetchEvents({
+    selectedYear,
+    selectedMonthIndex,
+    currentPage,
+    limit: ITEMS_PER_PAGE,
+    // Pass other filters here later
+  });
 
-        setFinancialInstruments([...mappedAccounts, ...mappedCreditCards]);
+  // Reset pagination when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedYear, selectedMonthIndex, searchTerm, selectedCategoryId]);
 
-        // Store raw categories
-        setRawCategories(categoriesData);
-      } catch (error) {
-        console.error("Erro ao buscar dados iniciais:", error);
-        const errorMessage =
-          error instanceof Error ? error.message : "Falha ao carregar dados.";
-        setInstrumentsError(errorMessage);
-        setCategoriesError(errorMessage);
-      } finally {
-        setIsLoadingInstruments(false);
-        setIsLoadingCategories(false);
-      }
-    }
-
-    fetchAllData();
-  }, []);
-
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
+  // Re-added helper function to get category name by ID
+  const getCategoryName = (categoryId: string): string => {
+    const category = categories?.find((cat: Category) => cat.id === categoryId);
+    return category?.name || categoryId; // Fallback to ID if not found
   };
 
-  const formatDate = (dateString: string) => {
-    // Basic date formatting, consider using a library like date-fns for robustness
-    const [year, month, day] = dateString.split("-");
-    return `${day}/${month}/${year}`;
+  // Re-added helper function to get financial instrument name by ID
+  const getFinancialInstrumentName = (
+    accountId?: string,
+    creditCardId?: string
+  ): string => {
+    const instrument = financialInstruments?.find(
+      (inst: FinancialInstrument) =>
+        inst.id === accountId || inst.id === creditCardId
+    );
+    // Fallback to ID if not found
+    return instrument?.name || accountId || creditCardId || "N/A";
+  };
+
+  // Flatten Events into Transactions for display
+  const flattenedTransactions = React.useMemo(() => {
+    console.log("Calculating flattenedTransactions. Categories:", categories);
+    console.log("Calculating flattenedTransactions. Events:", events);
+    return events.flatMap((event: Event) =>
+      event.transactions.map((transaction: TransactionPayload) => {
+        const categoryId = event.category.id;
+        const categoryName = getCategoryName(categoryId);
+        console.log(
+          `Event ID: ${event.id}, Category ID: ${categoryId}, Found Name: ${categoryName}`
+        ); // Log mapping
+
+        return {
+          id: transaction.id, // Use transaction ID for the row key
+          date: transaction.competenceDate, // Use transaction competence date
+          type: transaction.type, // From transaction
+          description: event.description, // From event
+          negotiator: event.negotiatorId ?? "N/A", // Use negotiatorId directly
+          category: categoryName, // Use the already looked-up name
+          accountOrCard: getFinancialInstrumentName(
+            transaction.accountId,
+            transaction.creditCardId
+          ), // Map account/card ID to name
+          value: transaction.amount, // From transaction (in cents)
+          status: transaction.status, // From transaction
+        };
+      })
+    );
+  }, [events, categories, financialInstruments]); // Dependencies
+
+  // Wrapper for setSelectedMonthIndex to match PeriodFilter prop type
+  const handleMonthChange = (index: number | null) => {
+    if (index !== null) {
+      setSelectedMonthIndex(index);
+    }
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 p-4 md:p-6">
       {/* Section Cards - Replaced with component */}
       <SummaryCards
         summaryData={summaryData}
-        formatCurrency={formatCurrency}
         selectedType={selectedType}
-        setSelectedType={setSelectedType}
+        formatCurrency={() => ""}
+        setSelectedType={() => {}}
       />
 
       {/* Year and Month Carousel Section - Replaced with component */}
       <PeriodFilter
-        years={years}
+        years={[selectedYear - 2, selectedYear - 1, selectedYear]}
         months={months}
         selectedYear={selectedYear}
         setSelectedYear={setSelectedYear}
         selectedMonthIndex={selectedMonthIndex}
-        setSelectedMonthIndex={setSelectedMonthIndex}
+        setSelectedMonthIndex={handleMonthChange}
         lastSelectedMonthIndex={lastSelectedMonthIndex}
         setLastSelectedMonthIndex={setLastSelectedMonthIndex}
       />
 
       {/* Filters Row - Replaced with component */}
       <TransactionFilters
-        financialInstruments={financialInstruments}
+        financialInstruments={financialInstruments || []}
+        rawCategories={categories || []}
+        selectedType={selectedType}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
         isLoadingInstruments={isLoadingInstruments}
         instrumentsError={instrumentsError}
-        rawCategories={rawCategories}
         isLoadingCategories={isLoadingCategories}
         categoriesError={categoriesError}
-        selectedType={selectedType}
         selectedAccount={selectedAccount}
         setSelectedAccount={setSelectedAccount}
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
       />
 
-      {/* Data Table Section - Remains here */}
+      {/* Transactions Table */}
       <Card>
         <CardHeader>
           <CardTitle>Transações</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="hidden w-[100px] sm:table-cell">
-                  Data
-                </TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead className="hidden md:table-cell">
-                  Negociador
-                </TableHead>
-                <TableHead className="hidden md:table-cell">
-                  Categoria
-                </TableHead>
-                <TableHead className="hidden lg:table-cell">
-                  Conta/Cartão
-                </TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions
-                // Add filtering logic here based on searchTerm, selectedMonthIndex, dropdown filters etc.
-                .map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell className="hidden sm:table-cell">
-                      {formatDate(transaction.date)}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          transaction.type === "INCOME"
-                            ? "bg-green-100 text-green-900"
-                            : transaction.type === "EXPENSE"
-                            ? "bg-red-100 text-red-900"
-                            : "bg-blue-100 text-blue-900" // TRANSFERENCE
-                        }`}
-                      >
-                        {transaction.type}
-                      </span>
-                    </TableCell>
-                    <TableCell>{transaction.description}</TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {transaction.negotiator ?? "-"}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {transaction.category}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      {transaction.accountOrCard}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right font-medium ${
-                        transaction.value > 0
-                          ? "text-green-800"
-                          : "text-red-800"
-                      }`}
-                    >
-                      {formatCurrency(transaction.value)}
+          {/* Loading and Error States */}
+          {isLoadingEvents && (
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-[80%]" />
+              <Skeleton className="h-8 w-[90%]" />
+            </div>
+          )}
+          {eventsError && (
+            <p className="p-4 text-center text-red-600">
+              Erro ao carregar transações: {eventsError}
+            </p>
+          )}
+
+          {!isLoadingEvents && !eventsError && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="hidden w-[100px] sm:table-cell">
+                    Data
+                  </TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Negociador
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Categoria
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Conta/Cartão
+                  </TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="hidden md:table-cell">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {flattenedTransactions.length > 0 ? (
+                  flattenedTransactions.map((tx) => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="hidden sm:table-cell">
+                        {tx.date}
+                      </TableCell>
+                      <TableCell>{tx.type}</TableCell>
+                      <TableCell>{tx.description}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {tx.negotiator}
+                      </TableCell>
+                      <TableCell>{tx.category}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {tx.accountOrCard}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {tx.value / 100}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge
+                          variant={
+                            tx.status === TransactionStatus.PAID
+                              ? "default"
+                              : tx.status === TransactionStatus.PENDING
+                              ? "secondary"
+                              : "secondary"
+                          }
+                        >
+                          {tx.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center">
+                      Nenhuma transação encontrada para o período/filtros
+                      selecionados.
                     </TableCell>
                   </TableRow>
-                ))}
-              {/* Add a row for loading state or if no transactions match filters */}
-              {transactions.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
-                    Nenhuma transação encontrada.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          )}
+          {/* Pagination Controls */}
+          {!isLoadingEvents && !eventsError && totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+              >
+                Anterior
+              </Button>
+              <span>
+                Página {currentPage} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
+                disabled={currentPage === totalPages}
+              >
+                Próxima
+              </Button>
+            </div>
+          )}
         </CardContent>
-        {/* Optional: Add CardFooter for pagination if needed */}
       </Card>
     </div>
   );
