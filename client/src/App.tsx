@@ -1,10 +1,10 @@
 import "./App.css";
-import { CategoryView } from "./modules/Category";
+import { Button } from "./components/ui/button";
 
 function App() {
   return (
     <div>
-      <CategoryView />
+      <Button>Click me</Button>
     </div>
   );
 }

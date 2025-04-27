@@ -1,4 +1,4 @@
-import { api } from "../../../lib/api";
+import { api } from "../../../../../client/src/lib/api";
 import { CategoryApiResponse } from "./category.types";
 
 export class CategoryModel {

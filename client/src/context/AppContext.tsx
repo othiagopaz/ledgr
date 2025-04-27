@@ -1,5 +1,5 @@
 import { createContext, useContext, ReactNode } from "react";
-import { useCategory } from "../modules/Category/viewmodel/useCategory";
+import { useCategory } from "@/modules/Category/viewmodel/useCategory";
 import { useFinancialInstruments } from "@/modules/FinancialInstrument/viewmodel/useFinancialInstruments";
 
 interface AppContextProps {
