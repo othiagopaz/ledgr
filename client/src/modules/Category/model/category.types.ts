@@ -32,6 +32,7 @@ export interface CategorySelectOption {
 }
 
 export interface CategoryGroup {
+  id: string;
   label: string;
   options: CategorySelectOption[];
 }

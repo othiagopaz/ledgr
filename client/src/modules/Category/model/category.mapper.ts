@@ -4,6 +4,7 @@ export function mapToHierarchicalCategories(
   categories: Category[]
 ): CategoryGroup[] {
   return categories.map((cat) => ({
+    id: cat.id,
     label: cat.name,
     options: cat.subcategories.map((sub) => ({
       id: sub.id,

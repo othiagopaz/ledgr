@@ -1,27 +1,29 @@
-// src/context/AppContext.tsx
 import { createContext, useContext, ReactNode } from "react";
 import { useCategory } from "../modules/Category/viewmodel/useCategory";
+import { useFinancialInstruments } from "@/modules/FinancialInstrument/viewmodel/useFinancialInstruments";
 
-// 1. Definir a estrutura dos dados que o contexto vai expor
 interface AppContextProps {
   categories: ReturnType<typeof useCategory>;
+  financialInstruments: ReturnType<typeof useFinancialInstruments>;
 }
 
-// 2. Criar o contexto
 const AppContext = createContext<AppContextProps | undefined>(undefined);
 
-// 3. Provider: responsável por carregar os dados globais
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const categoryViewModel = useCategory(); // chama o viewModel!
-
+  const categoryViewModel = useCategory();
+  const financialInstrumentsViewModel = useFinancialInstruments();
   return (
-    <AppContext.Provider value={{ categories: categoryViewModel }}>
+    <AppContext.Provider
+      value={{
+        categories: categoryViewModel,
+        financialInstruments: financialInstrumentsViewModel,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
 };
 
-// 4. Hook para consumir o contexto (boa prática)
 export const useAppContext = (): AppContextProps => {
   const context = useContext(AppContext);
   if (!context) {

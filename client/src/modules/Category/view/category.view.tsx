@@ -18,7 +18,7 @@ export function CategoryView() {
       </thead>
       <tbody>
         {categories.hierarchicalCategories.map((group) => (
-          <React.Fragment key={group.label}>
+          <React.Fragment key={group.id}>
             {/* Categoria principal */}
             <tr className="bg-blue-50 font-semibold">
               <td className="border p-2">{group.label}</td>
