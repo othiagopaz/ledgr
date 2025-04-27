@@ -1,19 +1,12 @@
 import React from "react";
-import { CategoryGroup } from "../model/category.types";
+import { useAppContext } from "@/context/AppContext";
 
-interface CategoryViewProps {
-  isLoading: boolean;
-  error: string | null;
-  hierarchicalCategories: CategoryGroup[];
-}
+export function CategoryView() {
+  const { categories } = useAppContext();
 
-export function CategoryView({
-  isLoading,
-  error,
-  hierarchicalCategories,
-}: CategoryViewProps) {
-  if (isLoading) return <div>Carregando categorias...</div>;
-  if (error) return <div>Erro ao carregar categorias: {error}</div>;
+  if (categories.isLoading) return <div>Carregando categorias...</div>;
+  if (categories.error)
+    return <div>Erro ao carregar categorias: {categories.error}</div>;
 
   return (
     <table className="w-full border-collapse border border-gray-300">
@@ -24,12 +17,14 @@ export function CategoryView({
         </tr>
       </thead>
       <tbody>
-        {hierarchicalCategories.map((group) => (
+        {categories.hierarchicalCategories.map((group) => (
           <React.Fragment key={group.label}>
             {/* Categoria principal */}
             <tr className="bg-blue-50 font-semibold">
               <td className="border p-2">{group.label}</td>
-              <td className="border p-2">-</td>
+              <td className="border p-2">
+                {group.options.length ? group.options.length : "-"}
+              </td>
             </tr>
 
             {/* Subcategorias */}

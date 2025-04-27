@@ -1,12 +1,10 @@
 import "./App.css";
-import { CategoryView, useCategory } from "./modules/Category";
+import { CategoryView } from "./modules/Category";
 
 function App() {
-  const categoryViewModel = useCategory();
-
   return (
     <div>
-      <CategoryView {...categoryViewModel} />
+      <CategoryView />
     </div>
   );
 }
