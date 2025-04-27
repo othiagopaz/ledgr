@@ -1,19 +1,7 @@
 import * as React from "react";
-import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
-  Settings2,
-  Banknote,
-} from "lucide-react";
+import { Settings2, Banknote } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
-import { NavProjects } from "@/components/nav-projects";
 import { NavUser } from "@/components/nav-user";
 import { TeamSwitcher } from "@/components/team-switcher";
 import {
@@ -40,15 +28,15 @@ const data = {
       items: [
         {
           title: "P&L",
-          url: "#",
+          url: "/overview",
         },
         {
-          title: "Cashflow Statement",
-          url: "#",
+          title: "Cashflow statement",
+          url: "/",
         },
         {
           title: "Invoices",
-          url: "#",
+          url: "/",
         },
       ],
     },
