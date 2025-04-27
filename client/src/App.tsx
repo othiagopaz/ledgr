@@ -1,10 +1,9 @@
 import "./App.css";
-import { Button } from "./components/ui/button";
-
+import DashboardPage from "./app/dashboard/page";
 function App() {
   return (
     <div>
-      <Button>Click me</Button>
+      <DashboardPage />
     </div>
   );
 }
