@@ -31,4 +31,4 @@ import { TransferenceModule } from './Transference/transference.module';
 })
 export class AppModule {}
 
-console.log('DB_HOST via process.env:', process.env.NODE_ENV);
+// console.log('DB_HOST via process.env:', process.env.NODE_ENV);

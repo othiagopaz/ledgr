@@ -1,116 +1,72 @@
 import * as React from "react";
-import { Command, Banknote, Settings } from "lucide-react";
+import { Settings2, Banknote } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
-// import { NavProjects } from "@/components/nav-projects";
-// import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
+import { TeamSwitcher } from "@/components/team-switcher";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 
+// This is sample data.
 const data = {
   user: {
     name: "Thiago Paz",
-    email: "thiagovlpaz@gmail.com",
+    email: "paz@ledgr.com.br",
     avatar: "/avatars/shadcn.jpg",
   },
   navMain: [
     {
-      title: "Lançamentos",
+      title: "Views",
       url: "#",
       icon: Banknote,
+      isActive: true,
       items: [
         {
-          title: "Visão geral",
+          title: "P&L",
           url: "/overview",
         },
         {
-          title: "Visão de caixa",
-          url: "/cashflow",
+          title: "Cashflow statement",
+          url: "/",
         },
         {
-          title: "Faturas de cartão",
-          url: "/invoices",
+          title: "Invoices",
+          url: "/",
         },
       ],
     },
     {
-      title: "Configurações",
+      title: "Settings",
       url: "#",
-      icon: Settings,
+      icon: Settings2,
       items: [
         {
-          title: "Contas",
-          url: "/settings/accounts",
+          title: "Categories",
+          url: "#",
         },
         {
-          title: "Cartões",
-          url: "/settings/cards",
+          title: "Credit Cards",
+          url: "#",
         },
         {
-          title: "Categorias",
-          url: "/settings/categories",
+          title: "Bank Accounts",
+          url: "#",
         },
       ],
     },
   ],
-  // navSecondary: [
-  //   {
-  //     title: "Support",
-  //     url: "#",
-  //     icon: LifeBuoy,
-  //   },
-  //   {
-  //     title: "Feedback",
-  //     url: "#",
-  //     icon: Send,
-  //   },
-  // ],
-  // projects: [
-  //   {
-  //     name: "Design Engineering",
-  //     url: "#",
-  //     icon: Frame,
-  //   },
-  //   {
-  //     name: "Sales & Marketing",
-  //     url: "#",
-  //     icon: PieChart,
-  //   },
-  //   {
-  //     name: "Travel",
-  //     url: "#",
-  //     icon: Map,
-  //   },
-  // ],
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <a href="#">
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Command className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">Ledgr</span>
-                  <span className="truncate text-xs">Personal</span>
-                </div>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <TeamSwitcher />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
@@ -118,6 +74,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <NavUser user={data.user} />
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

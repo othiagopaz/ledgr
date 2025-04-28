@@ -1,0 +1,70 @@
+[
+  {
+    "id": "80826153-90e8-49df-b306-d2feea96c95b",
+    "description": "Show do John Mayer",
+    "date": {
+      "value": "2025-04-21"
+    },
+    "category": {
+      "id": "a860c268-c535-4e45-b798-fc96ac569ff7",
+      "name": "Supermercado",
+      "type": "EXPENSE",
+      "color": "FF3300",
+      "isDefault": true,
+      "isArchived": false,
+      "userId": null,
+      "subcategories": []
+    },
+    "negotiatorId": "00000000-0000-0000-0000-000000000000",
+    "transactions": [
+      {
+        "id": "467d5471-ddd0-4fa1-b14a-f68205f6eba1",
+        "eventId": "80826153-90e8-49df-b306-d2feea96c95b",
+        "amount": 22390,
+        "dueDate": "2025-04-21",
+        "installmentNumber": 1,
+        "competenceDate": "2025-04-21",
+        "status": "PAID",
+        "ownership": "OWN",
+        "type": "EXPENSE",
+        "paymentDate": "2025-04-21",
+        "accountId": "66dd7e0b-093d-4575-ab7b-db9d0e8a24c0",
+        "notes": null
+      }
+    ]
+  },
+  {
+    "id": "99b900e8-57ed-40d7-bf32-239463ac888d",
+    "description": "Show",
+    "date": {
+      "value": "2025-04-21"
+    },
+    "category": {
+      "id": "a860c268-c535-4e45-b798-fc96ac569ff7",
+      "name": "Supermercado",
+      "type": "EXPENSE",
+      "color": "FF3300",
+      "isDefault": true,
+      "isArchived": false,
+      "userId": null,
+      "subcategories": []
+    },
+    "negotiatorId": "00000000-0000-0000-0000-000000000000",
+    "transactions": [
+      {
+        "id": "f010f8a6-a9b2-4bc0-aaca-6a34e7c911f6",
+        "eventId": "99b900e8-57ed-40d7-bf32-239463ac888d",
+        "amount": 22390,
+        "dueDate": "2025-04-21",
+        "installmentNumber": 1,
+        "competenceDate": "2025-04-21",
+        "status": "PAID",
+        "ownership": "OWN",
+        "type": "EXPENSE",
+        "paymentDate": "2025-04-21",
+        "creditCardId": "bcf76b82-6531-45a5-a677-f79bbb3e0070",
+        "notes": null
+      }
+    ]
+  }
+]
