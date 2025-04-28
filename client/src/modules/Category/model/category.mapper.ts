@@ -8,7 +8,7 @@ export function mapToHierarchicalCategories(
     label: cat.name,
     options: cat.subcategories.map((sub) => ({
       id: sub.id,
-      name: `${cat.name} > ${sub.name}`,
+      name: `${sub.name}`,
       type: sub.type,
     })),
   }));

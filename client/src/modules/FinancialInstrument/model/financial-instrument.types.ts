@@ -4,4 +4,5 @@ export interface FinancialInstrument {
   id: string;
   name: string;
   type: FinancialInstrumentType;
+  helper: string;
 }

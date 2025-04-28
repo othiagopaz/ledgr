@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode } from "react";
+import { createContext, useContext, ReactNode, useMemo } from "react";
 import { useCategory } from "@/modules/Category/viewmodel/useCategory";
 import { useFinancialInstruments } from "@/modules/FinancialInstrument/viewmodel/useFinancialInstruments";
 
@@ -12,15 +12,18 @@ const AppContext = createContext<AppContextProps | undefined>(undefined);
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const categoryViewModel = useCategory();
   const financialInstrumentsViewModel = useFinancialInstruments();
+
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      categories: categoryViewModel,
+      financialInstruments: financialInstrumentsViewModel,
+    }),
+    [categoryViewModel, financialInstrumentsViewModel]
+  );
+
   return (
-    <AppContext.Provider
-      value={{
-        categories: categoryViewModel,
-        financialInstruments: financialInstrumentsViewModel,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+    <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>
   );
 };
 
