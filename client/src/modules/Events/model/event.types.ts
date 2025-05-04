@@ -1,6 +1,5 @@
 import {
   Category,
-  CategoryGroup,
   TransactionType,
 } from "@/modules/Category/model/category.types";
 import {
@@ -124,7 +123,7 @@ export interface TransactionRow {
 
 export function flattenTransactions(
   events: Event[],
-  categories: CategoryGroup[],
+  categories: Category[],
   financialInstruments: FinancialInstrument[]
 ): TransactionRow[] {
   return events.flatMap((event) =>
@@ -132,7 +131,7 @@ export function flattenTransactions(
       // 1. Buscar nome da categoria correta olhando apenas nas OPTIONS
       let categoryName = event.category.name;
       for (const group of categories) {
-        const foundOption = group.options.find(
+        const foundOption = group.subcategories.find(
           (opt) => opt.id === event.category.id
         );
         if (foundOption) {
@@ -168,7 +167,7 @@ export function flattenTransactions(
         accountOrCard: {
           id: accountOrCardEntity?.id ?? "N/A",
           name: accountOrCardEntity?.name ?? "N/A",
-          type: accountOrCardEntity?.type ?? "N/A",
+          type: accountOrCardEntity?.type ?? "ACCOUNT",
           helper: accountOrCardEntity?.helper ?? "N/A",
         },
         value: transaction.amount,

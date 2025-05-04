@@ -28,12 +28,14 @@ export function useFinancialInstruments() {
         name: acc.name,
         type: "ACCOUNT" as const,
         helper: acc.institution || "",
+        isDefault: acc.isDefault,
       })),
       ...creditCards.map((cc) => ({
         id: cc.id,
         name: cc.name,
         type: "CREDIT_CARD" as const,
         helper: cc.flag || "",
+        isDefault: false, // TODO: Add isDefault to credit card on backend
       })),
     ];
   }, [accounts, creditCards]);

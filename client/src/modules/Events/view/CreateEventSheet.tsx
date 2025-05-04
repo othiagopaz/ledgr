@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   IconPlus,
   IconCircleCheckFilled,
@@ -69,10 +69,22 @@ export const CreateEventSheet = () => {
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
+  // Set default account when sheet opens
+  useEffect(() => {
+    if (isOpen && !selectedAccount) {
+      const defaultAccount = financialInstruments.financialInstruments.find(
+        (account) => account.isDefault
+      );
+      if (defaultAccount) {
+        setSelectedAccount(defaultAccount.id);
+      }
+    }
+  }, [isOpen, financialInstruments.financialInstruments, selectedAccount]);
+
   console.log("Categories from context:", categories);
   console.log("Transaction type:", transactionType);
 
-  const filteredCategories = categories.hierarchicalCategories.filter(
+  const filteredCategories = categories.categories.filter(
     (group) => group.type === transactionType
   );
 
@@ -223,7 +235,7 @@ export const CreateEventSheet = () => {
                         ? "Loading categories..."
                         : selectedCategory
                         ? filteredCategories
-                            .flatMap((group) => group.options)
+                            .flatMap((group) => group.subcategories)
                             .find((option) => option.id === selectedCategory)
                             ?.name
                         : "Select category..."}
@@ -241,27 +253,27 @@ export const CreateEventSheet = () => {
                           <CommandEmpty>No categories found.</CommandEmpty>
                         ) : (
                           filteredCategories.map((group) => (
-                            <CommandGroup key={group.id} heading={group.label}>
-                              {group.options.map((option) => (
+                            <CommandGroup key={group.id} heading={group.name}>
+                              {group.subcategories.map((subcategory) => (
                                 <CommandItem
-                                  key={option.id}
-                                  value={option.name}
+                                  key={subcategory.id}
+                                  value={subcategory.name}
                                   onSelect={() => {
-                                    setSelectedCategory(option.id);
+                                    setSelectedCategory(subcategory.id);
                                     setOpen(false);
                                   }}
                                 >
                                   <div
                                     className={cn(
                                       "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                      selectedCategory === option.id
+                                      selectedCategory === subcategory.id
                                         ? "bg-primary text-primary-foreground"
                                         : "opacity-50 [&_svg]:invisible"
                                     )}
                                   >
                                     <IconCircleCheckFilled className="h-3 w-3" />
                                   </div>
-                                  {option.name}
+                                  {subcategory.name}
                                 </CommandItem>
                               ))}
                             </CommandGroup>

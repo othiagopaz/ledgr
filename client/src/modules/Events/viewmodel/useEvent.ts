@@ -37,8 +37,8 @@ export function useEvent() {
 
   // Memoize the dependencies to prevent unnecessary re-renders
   const memoizedCategories = useMemo(
-    () => categories.hierarchicalCategories,
-    [categories.hierarchicalCategories]
+    () => categories.categories,
+    [categories.categories]
   );
   const memoizedFinancialInstruments = useMemo(
     () => financialInstruments.financialInstruments,

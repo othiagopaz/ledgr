@@ -20,16 +20,3 @@ export interface CategoryApiResponse {
   data: Category[];
   message: string;
 }
-
-export interface CategorySelectOption {
-  id: string;
-  name: string;
-  type: TransactionType;
-}
-
-export interface CategoryGroup {
-  id: string;
-  label: string;
-  type: TransactionType;
-  options: CategorySelectOption[];
-}
