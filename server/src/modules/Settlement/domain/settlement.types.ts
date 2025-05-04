@@ -1,5 +1,5 @@
 import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.enum';
-import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
+import { SettlementDirection } from '../../../utils/shared/enums/settlement-direction.enum';
 import { Transaction } from '../../Transaction/domain/transaction.entity';
 import { PlainDate } from '../../../utils/shared/types/plain-date';
 export type SettlementProps = {

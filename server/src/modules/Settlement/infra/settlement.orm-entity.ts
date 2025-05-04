@@ -8,7 +8,7 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.enum';
-import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
+import { SettlementDirection } from '../../../utils/shared/enums/settlement-direction.enum';
 import { TransactionEntity } from '../../Transaction/infra/transaction.orm-entity';
 
 @Entity('settlements')

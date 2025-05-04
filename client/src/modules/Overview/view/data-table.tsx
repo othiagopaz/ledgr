@@ -5,7 +5,6 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconCircleCheckFilled,
-  IconPlus,
 } from "@tabler/icons-react";
 import {
   ColumnDef,
@@ -60,6 +59,7 @@ import {
   TransactionRow,
   TransactionStatus,
 } from "@/modules/Events/model/event.types";
+import { CreateEventSheet } from "@/modules/Events/view/CreateEventSheet";
 
 export const schema = z.object({
   id: z.string(),
@@ -329,10 +329,9 @@ function TableContent({ data }: { data: TransactionRow[] }) {
             onChange={setCategoryFilter}
           />
         </div>
-        <Button variant="default" size="sm">
-          <IconPlus />
-          <span className="hidden lg:inline">Add Section</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <CreateEventSheet />
+        </div>
       </div>
       <div className="overflow-hidden rounded-lg border">
         <Table>

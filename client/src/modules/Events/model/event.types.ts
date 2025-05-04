@@ -57,6 +57,53 @@ export type Transaction = {
   notes?: string;
 };
 
+export type CreateEventDto = {
+  description: string;
+  date: string;
+  categoryId: string;
+  negotiatorId?: string;
+  transactions: CreateTransactionDto[];
+};
+
+export enum SettlementStatus {
+  EXPECTED = "EXPECTED",
+  PAID = "PAID",
+  CANCELED = "CANCELED",
+}
+
+export enum SettlementDirection {
+  RECEIVABLE = "RECEIVABLE",
+  PAYABLE = "PAYABLE",
+}
+
+export type CreateSettlementDto = {
+  originalTransactionId?: string;
+  linkedTransactionId?: string;
+  negotiatorId: string;
+  amount: number;
+  dueDate: string;
+  status: SettlementStatus;
+  direction: SettlementDirection;
+  accountId: string;
+  paymentDate?: string;
+  notes?: string;
+};
+
+export type CreateTransactionDto = {
+  amount: number;
+  installmentNumber: number;
+  dueDate: string;
+  competenceDate: string;
+  status: TransactionStatus;
+  ownership: Ownership;
+  type: TransactionType;
+  paymentDate?: string;
+  accountId?: string;
+  creditCardId?: string;
+  notes?: string;
+  settlements?: CreateSettlementDto[];
+};
+
 export interface TransactionRow {
   id: string;
   eventId: string;

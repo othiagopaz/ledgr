@@ -50,19 +50,15 @@
 
 ### V0
 
-- Criar uma despesa [OK]
-- Criar uma receita [OK]
+- Visualizar todas as despesas [90%]
+- Visualizar todas as receitas [90%]
+- Visualizar P&L [90%]
+- Criar uma despesa
+- Criar uma receita
 - Criar uma transferência
 - Criar uma despesa 100% refundable
 - Criar uma despesa partially refundable
 - Criar despesas/receitas parceladas
 - Criar despesa no cartão de crédito
 - Visualizar cashflow statement
-- Visualizar todas as despesas
-- Visualizar todas as receitas
-- Visualizar P&L
 - Visualizar saldo da fatura
-
-### On the watch
-
-[ ] Filtros no dashboard "se mexem" ao existir uma seleção

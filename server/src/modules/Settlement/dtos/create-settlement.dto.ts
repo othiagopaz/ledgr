@@ -8,7 +8,7 @@ import {
   IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
+import { SettlementDirection } from '../../../utils/shared/enums/settlement-direction.enum';
 import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.enum';
 
 export class CreateSettlementDto {

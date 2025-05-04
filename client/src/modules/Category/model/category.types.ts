@@ -4,7 +4,6 @@ export enum TransactionType {
   EXPENSE = "EXPENSE",
 }
 
-// Interface da categoria principal e suas subcategorias (recursiva)
 export interface Category {
   id: string;
   name: string;
@@ -13,26 +12,24 @@ export interface Category {
   isDefault: boolean;
   isArchived: boolean;
   userId: string | null;
-  subcategories: Category[]; // recursivo
+  subcategories: Category[];
 }
 
-// Estrutura da resposta da API
 export interface CategoryApiResponse {
   success: boolean;
   data: Category[];
   message: string;
 }
 
-// Tipo auxiliar para exibir no select com grupos
 export interface CategorySelectOption {
   id: string;
   name: string;
-  isGroup?: boolean;
   type: TransactionType;
 }
 
 export interface CategoryGroup {
   id: string;
   label: string;
+  type: TransactionType;
   options: CategorySelectOption[];
 }

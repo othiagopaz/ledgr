@@ -1,5 +1,8 @@
 import { api } from "@/lib/api";
-import { EventApiResponse } from "@/modules/Events/model/event.types";
+import {
+  CreateEventDto,
+  EventApiResponse,
+} from "@/modules/Events/model/event.types";
 
 export class EventModel {
   constructor(private client = api) {}
@@ -11,6 +14,11 @@ export class EventModel {
     to: string;
   }): Promise<EventApiResponse> {
     const response = await this.client.get("/events", { params });
+    return response.data as EventApiResponse;
+  }
+
+  async createEvent(createEventDto: CreateEventDto): Promise<EventApiResponse> {
+    const response = await this.client.post("/events", createEventDto);
     return response.data as EventApiResponse;
   }
 }

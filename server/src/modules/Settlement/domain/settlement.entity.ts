@@ -1,6 +1,6 @@
 import { Money } from '../../../utils/shared/types/money';
 import { SettlementStatus } from '../../../utils/shared/enums/settlement-status.enum';
-import { SettlementDirection } from '../../../utils/shared/enums/settlement.direction.enum';
+import { SettlementDirection } from '../../../utils/shared/enums/settlement-direction.enum';
 import { Transaction } from '../../Transaction/domain/transaction.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { SettlementProps } from './settlement.types';
