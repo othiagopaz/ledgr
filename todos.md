@@ -31,21 +31,6 @@
 [x] Criar a entidade Transference
 [x] Criar lógicas de transferences
 
-### On the watch
-
-[ ] Criar campo balance em Account
-[ ] Atualizar o balance sempre que houver uma transaction naquela conta
-[ ] Criar lógica de pagamento da fatura do cartão (lembrar do pgto parcial e juros)
-[ ] A lógica do dueDate do cartão de crédito vai precisar ser "calibrada" pelo usuário no front-end com os daysBeforeDue
-[ ] Será preciso validar a lógica de número de parcelas nas installments
-[ ] Criar lógica de transactions e events com pagination
-[ ] Adicionar últimos 4 digitos do cartão
-
-### Questionamentos interessantes
-
-- A transaction realmente precisa de um installmentNumber?
-- A transaction realmente precisa de um competenceDate?
-
 ## Frontend
 
 ### V0
@@ -62,3 +47,21 @@
 - Criar despesa no cartão de crédito
 - Visualizar cashflow statement
 - Visualizar saldo da fatura
+
+### To-dos
+
+[ ] Concluir lógica de criar evento básico
+[ ] Incluir lógica de evento parcelado
+[ ] Incluir lógica de settlements e refunds no sheets
+[ ] Remover filtro no front e fazer filtro no back-end com paginação
+[ ] Incluir resposta para atualizar section-cards
+
+### On the watch
+
+- Criar campo balance em Account
+- Atualizar o balance sempre que houver uma transaction naquela conta
+- Criar lógica de pagamento da fatura do cartão (lembrar do pgto parcial e juros)
+- A lógica do dueDate do cartão de crédito vai precisar ser "calibrada" pelo usuário no front-end com os daysBeforeDue
+- Será preciso validar a lógica de número de parcelas nas installments
+- Criar lógica de transactions e events com pagination
+- Adicionar últimos 4 digitos do cartão

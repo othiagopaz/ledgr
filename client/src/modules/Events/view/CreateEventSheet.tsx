@@ -42,13 +42,7 @@ import {
 import { TransactionType } from "@/modules/Category/model/category.types";
 import { useAppContext } from "@/context/AppContext";
 import { cn } from "@/lib/utils";
-
-interface FinancialInstrument {
-  id: string;
-  name: string;
-  type: "ACCOUNT" | "CREDIT_CARD";
-  helper: string;
-}
+import { FinancialInstrument } from "@/modules/FinancialInstrument/model/financial-instrument.types";
 
 export const CreateEventSheet = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -93,10 +87,7 @@ export const CreateEventSheet = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Convert the Brazilian format (123,00) to number (123.00)
-      const numericAmount = parseFloat(
-        amount.replace(".", "").replace(",", ".")
-      );
+      const numericAmount = parseInt(amount.replace(".", ""));
       await createEvent({
         ...formData,
         categoryId: selectedCategory,
