@@ -49,8 +49,8 @@ export const CreateEventSheet = () => {
   const { createEvent, isLoading, error } = useCreateEvent();
   const { categories, financialInstruments } = useAppContext();
   const [formData, setFormData] = useState<CreateEventDto>({
-    description: "",
-    date: "",
+    description: "This is a test event",
+    date: new Date().toISOString().split("T")[0],
     categoryId: "",
     transactions: [],
   });
@@ -63,7 +63,6 @@ export const CreateEventSheet = () => {
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
-  // Set default account when sheet opens
   useEffect(() => {
     if (isOpen && !selectedAccount) {
       const defaultAccount = financialInstruments.financialInstruments.find(
@@ -91,6 +90,7 @@ export const CreateEventSheet = () => {
       await createEvent({
         ...formData,
         categoryId: selectedCategory,
+        date: formData.date,
         transactions: [
           {
             amount: numericAmount,
