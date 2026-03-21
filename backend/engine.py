@@ -310,11 +310,57 @@ class LedgrEngine:
             for e in self.errors
         ]
 
+    def get_suggestions(self, payee: str) -> dict:
+        """Return the most common transfer account and amount for a payee."""
+        txns = [e for e in self.entries if isinstance(e, data.Transaction) and e.payee == payee]
+        if not txns:
+            return {"payee": payee, "account": None, "amount": None, "currency": None}
+
+        account_counts: dict[str, int] = {}
+        amounts: list[float] = []
+        for t in txns:
+            if len(t.postings) == 2:
+                acct = t.postings[0].account
+                account_counts[acct] = account_counts.get(acct, 0) + 1
+                if t.postings[0].units:
+                    amounts.append(float(t.postings[0].units.number))
+
+        most_common = max(account_counts, key=account_counts.get) if account_counts else None
+
+        typical_amount = None
+        currency = None
+        if amounts:
+            from collections import Counter
+            count = Counter(amounts)
+            top_amount, top_count = count.most_common(1)[0]
+            if top_count / len(amounts) > 0.5:
+                typical_amount = top_amount
+                for t in reversed(txns):
+                    if t.postings[0].units:
+                        currency = t.postings[0].units.currency
+                        break
+
+        return {
+            "payee": payee,
+            "account": most_common,
+            "amount": str(typical_amount) if typical_amount else None,
+            "currency": currency,
+        }
+
     def get_options(self) -> dict:
+        # Look for custom "ledgr-locale" directive in entries
+        locale = None
+        for e in self.entries:
+            if isinstance(e, data.Custom) and e.type == "ledgr-locale":
+                if e.values and len(e.values) > 0:
+                    locale = str(e.values[0].value)
+                    break
+
         return {
             "operating_currency": self.options.get("operating_currency", []),
             "title": self.options.get("title", ""),
             "filename": self.options.get("filename", ""),
+            "locale": locale,
         }
 
 

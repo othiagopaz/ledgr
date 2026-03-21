@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { AccountNode, Balance } from "../types";
+import { useAppStore } from "../stores/appStore";
+import { formatAmount } from "../utils/format";
 
 interface Props {
   accounts: AccountNode[];
@@ -12,6 +14,8 @@ function isZeroBalance(balances: Balance[]): boolean {
 }
 
 function BalanceDisplay({ balances }: { balances: Balance[] }) {
+  const operatingCurrency = useAppStore((s) => s.operatingCurrency);
+
   if (balances.length === 0) return <span className="balance amount">—</span>;
 
   // Group by currency, summing positions (for cost-basis positions of same commodity)
@@ -25,13 +29,10 @@ function BalanceDisplay({ balances }: { balances: Balance[] }) {
   // Single currency — show inline
   if (entries.length === 1) {
     const [currency, number] = entries[0];
-    const formatted = number.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    const formatted = formatAmount(number, operatingCurrency);
     return (
       <span className="balance amount">
-        {currency === "USD" ? formatted : `${formatted} ${currency}`}
+        {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
       </span>
     );
   }
@@ -40,13 +41,10 @@ function BalanceDisplay({ balances }: { balances: Balance[] }) {
   return (
     <span className="balance amount multi-balance">
       {entries.map(([currency, number]) => {
-        const formatted = number.toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
+        const formatted = formatAmount(number, operatingCurrency);
         return (
           <span key={currency} className="balance-line">
-            {currency === "USD" ? formatted : `${formatted} ${currency}`}
+            {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
           </span>
         );
       })}
@@ -120,7 +118,7 @@ function AccountGroup({
         }}
       >
         <span className="indent" style={{ width: (depth - 1) * 12 }} />
-        <span style={{ width: 12, fontSize: 10, color: "#999" }}>
+        <span style={{ width: 12, fontSize: 10, color: "var(--text-muted)" }}>
           {collapsed ? "▸" : "▾"}
         </span>
         <span className="name">{shortName}</span>

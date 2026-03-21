@@ -89,4 +89,5 @@ export interface OptionsResponse {
   operating_currency: string[];
   title: string;
   filename: string;
+  locale: string | null;
 }

@@ -7,7 +7,7 @@
 option "title" "Example Beancount file"
 option "operating_currency" "USD"
 
-
+custom "ledgr-locale" "pt-BR"
 
 
 * Commodities

@@ -82,3 +82,14 @@ export async function fetchErrors(): Promise<ErrorsResponse> {
 export async function fetchOptions(): Promise<OptionsResponse> {
   return get("/api/options");
 }
+
+export interface Suggestion {
+  payee: string;
+  account: string | null;
+  amount: string | null;
+  currency: string | null;
+}
+
+export async function fetchSuggestions(payee: string): Promise<Suggestion> {
+  return get(`/api/suggestions?payee=${encodeURIComponent(payee)}`);
+}

@@ -1,16 +1,57 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchAccounts, fetchTransactions } from "./api/client";
+import { fetchAccounts, fetchTransactions, fetchOptions } from "./api/client";
 import AccountTree from "./components/AccountTree";
 import AccountRegister from "./components/AccountRegister";
-import TransactionForm from "./components/TransactionForm";
-import type { Transaction } from "./types";
+import TabBar from "./components/TabBar";
+import StatusBar from "./components/StatusBar";
+import CommandPalette from "./components/CommandPalette";
+import { useAppStore } from "./stores/appStore";
+import { useKeyboardNav } from "./hooks/useKeyboardNav";
 
 export default function App() {
-  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
   const queryClient = useQueryClient();
+  const theme = useAppStore((s) => s.theme);
+  const { tabs, activeTabId, openTab } = useAppStore();
+  const setOperatingCurrency = useAppStore((s) => s.setOperatingCurrency);
+  const setLocale = useAppStore((s) => s.setLocale);
+  const commandPaletteOpen = useAppStore((s) => s.commandPaletteOpen);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const selectedAccount = activeTab?.type === "register" ? activeTab.account : null;
+
+  // Theme
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  // Currency & Locale
+  useEffect(() => {
+    fetchOptions().then((opts) => {
+      if (opts.operating_currency.length > 0) {
+        setOperatingCurrency(opts.operating_currency[0]);
+      }
+      if (opts.locale) {
+        setLocale(opts.locale);
+      }
+    });
+  }, [setOperatingCurrency, setLocale]);
+
+  // Keyboard nav
+  useKeyboardNav();
+
+  // Cmd+W to close tab
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "w") {
+        e.preventDefault();
+        const { activeTabId, closeTab } = useAppStore.getState();
+        if (activeTabId) closeTab(activeTabId);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const accountsQuery = useQuery({
     queryKey: ["accounts"],
@@ -23,56 +64,38 @@ export default function App() {
     enabled: !!selectedAccount,
   });
 
-  function handleSuccess() {
-    setShowForm(false);
-    setEditingTxn(null);
-    queryClient.invalidateQueries({ queryKey: ["accounts"] });
-    queryClient.invalidateQueries({ queryKey: ["transactions"] });
-  }
-
   function handleMutated() {
     queryClient.invalidateQueries({ queryKey: ["accounts"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
   }
 
-  function handleEdit(txn: Transaction) {
-    setEditingTxn(txn);
-    setShowForm(true);
+  function handleSelect(accountName: string) {
+    const shortName =
+      accountName.split(":").length > 2
+        ? accountName.split(":").slice(1).join(":")
+        : accountName;
+    openTab({
+      id: `register:${accountName}`,
+      type: "register",
+      account: accountName,
+      label: shortName,
+    });
   }
 
   const accounts = accountsQuery.data?.accounts || [];
   const errors = accountsQuery.data?.errors || [];
-  const assets = accounts.find((a) => a.name === "Assets");
-  const liabilities = accounts.find((a) => a.name === "Liabilities");
-
-  let netAssets = "—";
-  if (assets && liabilities) {
-    const a = parseFloat(assets.balance.find((b) => b.currency === "USD")?.number || "0");
-    const l = parseFloat(liabilities.balance.find((b) => b.currency === "USD")?.number || "0");
-    netAssets = (a + l).toLocaleString("en-US", { style: "currency", currency: "USD" });
-  }
-
-  const income = accounts.find((a) => a.name === "Income");
-  const expenses = accounts.find((a) => a.name === "Expenses");
-  let profit = "—";
-  if (income && expenses) {
-    const i = parseFloat(income.balance.find((b) => b.currency === "USD")?.number || "0");
-    const e = parseFloat(expenses.balance.find((b) => b.currency === "USD")?.number || "0");
-    profit = (-(i + e)).toLocaleString("en-US", { style: "currency", currency: "USD" });
-  }
 
   return (
     <div className="app">
       <div className="app-header">
         <h1>Ledgr</h1>
-        <button className="header-btn" onClick={() => { setEditingTxn(null); setShowForm(true); }}>
-          + Transaction
-        </button>
       </div>
 
       {errors.length > 0 && (
         <div className="error-banner">
-          <strong>{errors.length} parsing error{errors.length > 1 ? "s" : ""}:</strong>{" "}
+          <strong>
+            {errors.length} parsing error{errors.length > 1 ? "s" : ""}:
+          </strong>{" "}
           {errors.slice(0, 3).join(" | ")}
           {errors.length > 3 && ` ... and ${errors.length - 3} more`}
         </div>
@@ -83,40 +106,36 @@ export default function App() {
           {accountsQuery.data && (
             <AccountTree
               accounts={accounts}
-              selectedAccount={selectedAccount}
-              onSelect={setSelectedAccount}
+              selectedAccount={selectedAccount || null}
+              onSelect={handleSelect}
             />
           )}
         </div>
 
         <div className="main-content">
-          {selectedAccount && txnsQuery.data ? (
-            <AccountRegister
-              account={selectedAccount}
-              transactions={txnsQuery.data.transactions}
-              onEdit={handleEdit}
-              onMutated={handleMutated}
-            />
-          ) : (
-            <div className="welcome">
-              Select an account to view transactions
-            </div>
-          )}
+          <TabBar />
+          <div className="register-content">
+            {selectedAccount && txnsQuery.data ? (
+              <AccountRegister
+                account={selectedAccount}
+                transactions={txnsQuery.data.transactions}
+                onMutated={handleMutated}
+              />
+            ) : (
+              <div className="welcome">
+                Select an account to view transactions
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="app-footer">
-        <span>Net Assets: {netAssets}</span>
-        <span>Profit: {profit}</span>
-      </div>
+      <StatusBar
+        account={selectedAccount || null}
+        transactions={txnsQuery.data?.transactions || []}
+      />
 
-      {showForm && (
-        <TransactionForm
-          onClose={() => { setShowForm(false); setEditingTxn(null); }}
-          onSuccess={handleSuccess}
-          editingTxn={editingTxn}
-        />
-      )}
+      {commandPaletteOpen && <CommandPalette />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
 
 router = APIRouter()
 
@@ -34,3 +34,9 @@ def get_errors(request: Request):
 def get_options(request: Request):
     engine = request.app.state.engine
     return engine.get_options()
+
+
+@router.get("/api/suggestions")
+def get_suggestions(request: Request, payee: str = Query(...)):
+    engine = request.app.state.engine
+    return engine.get_suggestions(payee)

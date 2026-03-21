@@ -9,3 +9,4 @@ frontend/dist/
 
 # OS
 .DS_Store
+backend/__pycache__/*
