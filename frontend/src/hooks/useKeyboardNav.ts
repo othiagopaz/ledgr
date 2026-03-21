@@ -14,13 +14,25 @@ export function useKeyboardNav() {
         return;
       }
 
+      // Cmd+Shift+N: open transaction modal (always works)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        useAppStore.getState().openTxnModal();
+        return;
+      }
+
       // Skip other shortcuts when in input
       if (isInput) return;
 
-      // N: new transaction
+      // N: new transaction (inline if account selected, modal otherwise)
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
-        useAppStore.getState().requestNewTransaction();
+        const store = useAppStore.getState();
+        if (store.activeTabId) {
+          store.requestNewTransaction();
+        } else {
+          store.openTxnModal();
+        }
         return;
       }
 

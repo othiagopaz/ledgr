@@ -1,162 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { fetchAccountNames, fetchPayees, fetchSuggestions } from "../api/client";
 import { useQuery } from "@tanstack/react-query";
-import type { Transaction, TransactionInput } from "../types";
+import type { TransactionInput } from "../types";
+import type { Transaction } from "../types";
 import { useAppStore } from "../stores/appStore";
 import { getDatePlaceholder, formatDateFull } from "../utils/format";
+import { today, parseSmartDate } from "../utils/dateUtils";
+import InlineAutocomplete from "./InlineAutocomplete";
 
 interface InlineEditorProps {
   currentAccount: string;
   transaction?: Transaction;
   onSave: (input: TransactionInput) => Promise<void>;
   onCancel: () => void;
-}
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function parseSmartDate(input: string): string {
-  const lower = input.trim().toLowerCase();
-  if (lower === "t" || lower === "today") return today();
-  if (lower === "y" || lower === "yesterday") {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
-  }
-  // Try DD/MM/YYYY or MM/DD/YYYY patterns
-  const fullMatch = lower.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-  if (fullMatch) {
-    // Guess: if first number > 12, it's DD/MM/YYYY
-    const a = parseInt(fullMatch[1]);
-    const b = parseInt(fullMatch[2]);
-    const year = fullMatch[3];
-    if (a > 12) {
-      // DD/MM/YYYY
-      return `${year}-${String(b).padStart(2, "0")}-${String(a).padStart(2, "0")}`;
-    }
-    // Default to MM/DD/YYYY for ambiguous cases, unless locale suggests otherwise
-    const locale = useAppStore.getState().locale;
-    const currency = useAppStore.getState().operatingCurrency;
-    const isDayFirst = locale?.startsWith("pt") || locale?.startsWith("de") || locale?.startsWith("es") || locale?.startsWith("fr") || currency === "BRL" || currency === "EUR";
-    if (isDayFirst) {
-      return `${year}-${String(b).padStart(2, "0")}-${String(a).padStart(2, "0")}`;
-    }
-    return `${year}-${String(a).padStart(2, "0")}-${String(b).padStart(2, "0")}`;
-  }
-  // Try partial date like "03/15" or "15/03"
-  const slashMatch = lower.match(/^(\d{1,2})[/.-](\d{1,2})$/);
-  if (slashMatch) {
-    const a = parseInt(slashMatch[1]);
-    const b = parseInt(slashMatch[2]);
-    const year = new Date().getFullYear();
-
-    const locale = useAppStore.getState().locale;
-    const currency = useAppStore.getState().operatingCurrency;
-    const isDayFirst = locale?.startsWith("pt") || locale?.startsWith("de") || locale?.startsWith("es") || locale?.startsWith("fr") || currency === "BRL" || currency === "EUR";
-
-    if (isDayFirst) {
-      return `${year}-${String(b).padStart(2, "0")}-${String(a).padStart(2, "0")}`;
-    }
-    return `${year}-${String(a).padStart(2, "0")}-${String(b).padStart(2, "0")}`;
-  }
-  // If it looks like a valid ISO date already, return as-is
-  if (/^\d{4}-\d{2}-\d{2}$/.test(input.trim())) return input.trim();
-  return input;
-}
-
-function InlineAutocomplete({
-  value,
-  onChange,
-  onSelect,
-  options,
-  placeholder,
-  inputRef,
-  onKeyDown,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSelect?: (v: string) => void;
-  options: string[];
-  placeholder?: string;
-  inputRef?: React.RefObject<HTMLInputElement | null>;
-  onKeyDown?: (e: React.KeyboardEvent) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(-1);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  const filtered = value
-    ? options
-        .filter((o) => o.toLowerCase().includes(value.toLowerCase()))
-        .slice(0, 15)
-    : [];
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node))
-        setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  return (
-    <div className="autocomplete-wrapper" ref={wrapperRef}>
-      <input
-        ref={inputRef}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
-          setActiveIdx(-1);
-        }}
-        onFocus={() => value && setOpen(true)}
-        onKeyDown={(e) => {
-          if (open && filtered.length > 0) {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setActiveIdx((i) => Math.min(i + 1, filtered.length - 1));
-              return;
-            }
-            if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setActiveIdx((i) => Math.max(i - 1, 0));
-              return;
-            }
-            if (e.key === "Enter" && activeIdx >= 0) {
-              e.preventDefault();
-              e.stopPropagation();
-              const selected = filtered[activeIdx];
-              onChange(selected);
-              onSelect?.(selected);
-              setOpen(false);
-              return;
-            }
-          }
-          onKeyDown?.(e);
-        }}
-      />
-      {open && filtered.length > 0 && (
-        <div className="autocomplete-list">
-          {filtered.map((item, i) => (
-            <div
-              key={item}
-              className={`item${i === activeIdx ? " active" : ""}`}
-              onMouseDown={() => {
-                onChange(item);
-                onSelect?.(item);
-                setOpen(false);
-              }}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function InlineEditor({

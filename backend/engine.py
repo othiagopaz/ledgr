@@ -114,6 +114,32 @@ class LedgrEngine:
     # Mutation
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _build_bc_postings(postings: list[dict]) -> list:
+        """Convert posting dicts to beancount Posting objects."""
+        bc_postings = []
+        for p in postings:
+            units = None
+            cost = None
+            price = None
+            if p.get("amount") is not None and p.get("currency"):
+                units = amt_mod.Amount(Decimal(str(p["amount"])), p["currency"])
+            if p.get("cost") is not None and p.get("cost_currency"):
+                cost = data.CostSpec(
+                    Decimal(str(p["cost"])),
+                    None,
+                    p["cost_currency"],
+                    None,
+                    None,
+                    False,
+                )
+            if p.get("price") is not None and p.get("price_currency"):
+                price = amt_mod.Amount(Decimal(str(p["price"])), p["price_currency"])
+            bc_postings.append(
+                data.Posting(p["account"], units, cost, price, None, None)
+            )
+        return bc_postings
+
     def add_transaction(
         self,
         date: str,
@@ -121,18 +147,11 @@ class LedgrEngine:
         payee: str | None,
         narration: str,
         postings: list[dict],
+        tags: list[str] | None = None,
+        links: list[str] | None = None,
     ) -> dict:
         txn_date = _parse_date(date)
-
-        bc_postings = []
-        for p in postings:
-            if p.get("amount") is not None and p.get("currency"):
-                units = amt_mod.Amount(Decimal(str(p["amount"])), p["currency"])
-            else:
-                units = None
-            bc_postings.append(
-                data.Posting(p["account"], units, None, None, None, None)
-            )
+        bc_postings = self._build_bc_postings(postings)
 
         meta = data.new_metadata(self.filepath, 0)
         txn = data.Transaction(
@@ -141,8 +160,8 @@ class LedgrEngine:
             flag or "*",
             payee or "",
             narration or "",
-            frozenset(),
-            frozenset(),
+            frozenset(tags or []),
+            frozenset(links or []),
             bc_postings,
         )
 
@@ -180,6 +199,8 @@ class LedgrEngine:
         payee: str | None,
         narration: str,
         postings: list[dict],
+        tags: list[str] | None = None,
+        links: list[str] | None = None,
     ) -> dict:
         """Edit a transaction located at *lineno* in the beancount file."""
         with open(self.filepath, "r") as f:
@@ -204,27 +225,7 @@ class LedgrEngine:
 
         # Build the replacement transaction
         txn_date = _parse_date(date)
-        bc_postings = []
-        for p in postings:
-            units = None
-            cost = None
-            price = None
-            if p.get("amount") is not None and p.get("currency"):
-                units = amt_mod.Amount(Decimal(str(p["amount"])), p["currency"])
-            if p.get("cost") is not None and p.get("cost_currency"):
-                cost = data.CostSpec(
-                    Decimal(str(p["cost"])),
-                    None,
-                    p["cost_currency"],
-                    None,
-                    None,
-                    False,
-                )
-            if p.get("price") is not None and p.get("price_currency"):
-                price = amt_mod.Amount(Decimal(str(p["price"])), p["price_currency"])
-            bc_postings.append(
-                data.Posting(p["account"], units, cost, price, None, None)
-            )
+        bc_postings = self._build_bc_postings(postings)
 
         meta = data.new_metadata(self.filepath, lineno)
         txn = data.Transaction(
@@ -233,8 +234,8 @@ class LedgrEngine:
             flag or "*",
             payee or "",
             narration or "",
-            frozenset(),
-            frozenset(),
+            frozenset(tags or []),
+            frozenset(links or []),
             bc_postings,
         )
 

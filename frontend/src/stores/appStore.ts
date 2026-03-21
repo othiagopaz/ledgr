@@ -1,8 +1,9 @@
 import { create } from 'zustand';
+import type { Transaction } from '../types';
 
 interface Tab {
   id: string;
-  type: 'register' | 'report';
+  type: 'register' | 'report' | 'accounts' | 'dashboard';
   account?: string;
   reportType?: string;
   label: string;
@@ -19,6 +20,12 @@ interface AppState {
   // Signal: request opening a new transaction row (from Cmd+N, command palette)
   newTxnRequestId: number;
   requestNewTransaction: () => void;
+
+  // Transaction modal
+  txnModalOpen: boolean;
+  txnModalTransaction: Transaction | null;
+  openTxnModal: (txn?: Transaction) => void;
+  closeTxnModal: () => void;
 
   // UI
   theme: 'dark' | 'light';
@@ -78,8 +85,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   requestNewTransaction: () =>
     set((s) => ({ newTxnRequestId: s.newTxnRequestId + 1 })),
 
+  // Transaction modal
+  txnModalOpen: false,
+  txnModalTransaction: null,
+  openTxnModal: (txn) => set({ txnModalOpen: true, txnModalTransaction: txn || null }),
+  closeTxnModal: () => set({ txnModalOpen: false, txnModalTransaction: null }),
+
   // UI
-  theme: 'dark',
+  theme: 'light',
   toggleTheme: () =>
     set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
 

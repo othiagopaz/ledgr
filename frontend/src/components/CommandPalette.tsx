@@ -61,7 +61,7 @@ export default function CommandPalette() {
     label: "New Transaction",
     group: "Actions",
     action: () => {
-      useAppStore.getState().requestNewTransaction();
+      useAppStore.getState().openTxnModal();
       setCommandPaletteOpen(false);
     },
   });

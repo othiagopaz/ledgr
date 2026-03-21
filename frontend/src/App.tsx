@@ -1,8 +1,12 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchAccounts, fetchTransactions, fetchOptions } from "./api/client";
-import AccountTree from "./components/AccountTree";
+import Sidebar from "./components/Sidebar";
+import Dashboard from "./components/Dashboard";
+import AccountsView from "./components/AccountsView";
 import AccountRegister from "./components/AccountRegister";
+import AllTransactionsView from "./components/AllTransactionsView";
+import TransactionModal from "./components/TransactionModal";
 import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
 import CommandPalette from "./components/CommandPalette";
@@ -16,6 +20,7 @@ export default function App() {
   const setOperatingCurrency = useAppStore((s) => s.setOperatingCurrency);
   const setLocale = useAppStore((s) => s.setLocale);
   const commandPaletteOpen = useAppStore((s) => s.commandPaletteOpen);
+  const txnModalOpen = useAppStore((s) => s.txnModalOpen);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const selectedAccount = activeTab?.type === "register" ? activeTab.account : null;
@@ -69,7 +74,7 @@ export default function App() {
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
   }
 
-  function handleSelect(accountName: string) {
+  function handleSelectAccount(accountName: string) {
     const shortName =
       accountName.split(":").length > 2
         ? accountName.split(":").slice(1).join(":")
@@ -82,8 +87,37 @@ export default function App() {
     });
   }
 
-  const accounts = accountsQuery.data?.accounts || [];
   const errors = accountsQuery.data?.errors || [];
+
+  // Determine what to render in main content
+  function renderMainContent() {
+    if (!activeTab) {
+      return <Dashboard onSelectAccount={handleSelectAccount} />;
+    }
+
+    switch (activeTab.type) {
+      case "dashboard":
+        return <Dashboard onSelectAccount={handleSelectAccount} />;
+
+      case "accounts":
+        return <AccountsView onSelectAccount={handleSelectAccount} />;
+
+      case "register":
+        if (selectedAccount && txnsQuery.data) {
+          return (
+            <AccountRegister
+              account={selectedAccount}
+              transactions={txnsQuery.data.transactions}
+              onMutated={handleMutated}
+            />
+          );
+        }
+        return <div className="welcome">Loading transactions...</div>;
+
+      default:
+        return <AllTransactionsView onMutated={handleMutated} />;
+    }
+  }
 
   return (
     <div className="app">
@@ -102,30 +136,12 @@ export default function App() {
       )}
 
       <div className="app-body">
-        <div className="sidebar">
-          {accountsQuery.data && (
-            <AccountTree
-              accounts={accounts}
-              selectedAccount={selectedAccount || null}
-              onSelect={handleSelect}
-            />
-          )}
-        </div>
+        <Sidebar errorCount={errors.length} />
 
         <div className="main-content">
           <TabBar />
           <div className="register-content">
-            {selectedAccount && txnsQuery.data ? (
-              <AccountRegister
-                account={selectedAccount}
-                transactions={txnsQuery.data.transactions}
-                onMutated={handleMutated}
-              />
-            ) : (
-              <div className="welcome">
-                Select an account to view transactions
-              </div>
-            )}
+            {renderMainContent()}
           </div>
         </div>
       </div>
@@ -136,6 +152,7 @@ export default function App() {
       />
 
       {commandPaletteOpen && <CommandPalette />}
+      {txnModalOpen && <TransactionModal onMutated={handleMutated} />}
     </div>
   );
 }

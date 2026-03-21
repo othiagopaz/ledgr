@@ -61,6 +61,8 @@ export interface TransactionInput {
   flag: string;
   payee: string;
   narration: string;
+  tags?: string[];
+  links?: string[];
   postings: PostingInput[];
 }
 

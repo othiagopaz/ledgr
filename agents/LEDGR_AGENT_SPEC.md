@@ -2,6 +2,13 @@
 
 > This document is for a Claude Code agent to execute. Every section is a concrete task with file paths, interfaces, and acceptance criteria. No ambiguity allowed.
 
+## Design Principles
+
+- **NEVER use emojis** in UI, code, or components. Use text labels, monospace glyphs, or nothing.
+- **Dense, not pretty.** This is an accounting system like GnuCash or SAP. Prioritize information density, keyboard navigation, and professional look over decorative UI.
+- **Keyboard-first.** Every view must be navigable with keyboard. Arrow keys to move, Enter to act, Escape to go back.
+- **Monospace for numbers.** All amounts, dates, and numeric data use `var(--font-mono)`.
+
 ---
 
 ## Context

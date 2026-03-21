@@ -126,10 +126,17 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
     }
   }
 
+  const openTxnModal = useAppStore((s) => s.openTxnModal);
+
   const enterEditMode = useCallback((index: number) => {
+    // For split transactions (>2 postings), open modal instead of inline editor
+    if (index < rows.length && rows[index].txn.postings.length > 2) {
+      openTxnModal(rows[index].txn);
+      return;
+    }
     setSelectedRowIndex(index);
     setEditingRowIndex(index);
-  }, []);
+  }, [rows, openTxnModal]);
 
   const exitEditMode = useCallback(() => {
     setEditingRowIndex(null);
@@ -215,7 +222,7 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
                   key={`edit-${i}`}
                   currentAccount={account}
                   transaction={row.txn}
-                  onSave={(input) =>
+                  onSave={(input: TransactionInput) =>
                     handleEditSave(row.txn.lineno!, input)
                   }
                   onCancel={exitEditMode}

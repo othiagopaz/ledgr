@@ -19,6 +19,8 @@ class TransactionIn(BaseModel):
     flag: str = "*"
     payee: str | None = None
     narration: str = ""
+    tags: list[str] = []
+    links: list[str] = []
     postings: list[PostingIn]
 
 
@@ -35,6 +37,8 @@ def add_transaction(request: Request, body: TransactionIn):
         payee=body.payee,
         narration=body.narration,
         postings=[p.model_dump() for p in body.postings],
+        tags=body.tags,
+        links=body.links,
     )
     return result
 
@@ -49,6 +53,8 @@ def edit_transaction(request: Request, body: EditTransactionIn):
         payee=body.payee,
         narration=body.narration,
         postings=[p.model_dump() for p in body.postings],
+        tags=body.tags,
+        links=body.links,
     )
     return result
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { AccountNode, Balance } from "../types";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount } from "../utils/format";
@@ -16,9 +16,8 @@ function isZeroBalance(balances: Balance[]): boolean {
 function BalanceDisplay({ balances }: { balances: Balance[] }) {
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
 
-  if (balances.length === 0) return <span className="balance amount">—</span>;
+  if (balances.length === 0) return <span className="acct-bal">—</span>;
 
-  // Group by currency, summing positions (for cost-basis positions of same commodity)
   const byCurrency = new Map<string, number>();
   for (const b of balances) {
     byCurrency.set(b.currency, (byCurrency.get(b.currency) || 0) + parseFloat(b.number));
@@ -26,24 +25,22 @@ function BalanceDisplay({ balances }: { balances: Balance[] }) {
 
   const entries = Array.from(byCurrency.entries());
 
-  // Single currency — show inline
   if (entries.length === 1) {
     const [currency, number] = entries[0];
     const formatted = formatAmount(number, operatingCurrency);
     return (
-      <span className="balance amount">
+      <span className={`acct-bal ${number < 0 ? "negative" : ""}`}>
         {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
       </span>
     );
   }
 
-  // Multiple currencies — stack vertically
   return (
-    <span className="balance amount multi-balance">
+    <span className="acct-bal acct-bal-multi">
       {entries.map(([currency, number]) => {
         const formatted = formatAmount(number, operatingCurrency);
         return (
-          <span key={currency} className="balance-line">
+          <span key={currency} className="acct-bal-line">
             {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
           </span>
         );
@@ -52,104 +49,160 @@ function BalanceDisplay({ balances }: { balances: Balance[] }) {
   );
 }
 
-function AccountGroup({
-  node,
-  selectedAccount,
-  onSelect,
-  depth,
-}: {
+// Flatten the tree into a navigable list with depth info
+interface FlatRow {
   node: AccountNode;
-  selectedAccount: string | null;
-  onSelect: (account: string) => void;
   depth: number;
-}) {
-  const [collapsed, setCollapsed] = useState(depth > 1);
-  const zero = isZeroBalance(node.balance);
+  hasChildren: boolean;
+  isExpanded: boolean;
+  path: string; // unique key
+}
 
-  if (depth === 0) {
-    // Top-level group
-    return (
-      <div className="account-group">
-        <div
-          className="account-group-header"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          <span className="toggle">{collapsed ? "▸" : "▾"}</span>
-          <span>{node.name}</span>
-          <BalanceDisplay balances={node.balance} />
-        </div>
-        {!collapsed &&
-          node.children.map((child) => (
-            <AccountGroup
-              key={child.name}
-              node={child}
-              selectedAccount={selectedAccount}
-              onSelect={onSelect}
-              depth={depth + 1}
-            />
-          ))}
-      </div>
-    );
+function flattenTree(
+  nodes: AccountNode[],
+  expandedSet: Set<string>,
+  depth: number = 0,
+): FlatRow[] {
+  const result: FlatRow[] = [];
+  for (const node of nodes) {
+    const hasChildren = node.children.length > 0;
+    const isExpanded = expandedSet.has(node.name);
+    result.push({ node, depth, hasChildren, isExpanded, path: node.name });
+    if (hasChildren && isExpanded) {
+      result.push(...flattenTree(node.children, expandedSet, depth + 1));
+    }
   }
-
-  if (node.is_leaf) {
-    const shortName = node.name.split(":").pop() || node.name;
-    return (
-      <div
-        className={`account-item${selectedAccount === node.name ? " selected" : ""}${zero ? " zero" : ""}`}
-        onClick={() => onSelect(node.name)}
-      >
-        <span className="indent" style={{ width: (depth - 1) * 12 }} />
-        <span className="name">{shortName}</span>
-        <BalanceDisplay balances={node.balance} />
-      </div>
-    );
-  }
-
-  // Intermediate node with children
-  const shortName = node.name.split(":").pop() || node.name;
-  return (
-    <>
-      <div
-        className={`account-item${selectedAccount === node.name ? " selected" : ""}${zero ? " zero" : ""}`}
-        onClick={() => {
-          setCollapsed(!collapsed);
-          onSelect(node.name);
-        }}
-      >
-        <span className="indent" style={{ width: (depth - 1) * 12 }} />
-        <span style={{ width: 12, fontSize: 10, color: "var(--text-muted)" }}>
-          {collapsed ? "▸" : "▾"}
-        </span>
-        <span className="name">{shortName}</span>
-        <BalanceDisplay balances={node.balance} />
-      </div>
-      {!collapsed &&
-        node.children.map((child) => (
-          <AccountGroup
-            key={child.name}
-            node={child}
-            selectedAccount={selectedAccount}
-            onSelect={onSelect}
-            depth={depth + 1}
-          />
-        ))}
-    </>
-  );
+  return result;
 }
 
 export default function AccountTree({ accounts, selectedAccount, onSelect }: Props) {
+  const [expandedSet, setExpandedSet] = useState<Set<string>>(() => {
+    // Expand top-level by default
+    return new Set(accounts.map((a) => a.name));
+  });
+  const [focusIndex, setFocusIndex] = useState<number>(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const flatRows = flattenTree(accounts, expandedSet);
+
+  const toggleExpand = useCallback((path: string) => {
+    setExpandedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        setFocusIndex((i) => Math.min(i + 1, flatRows.length - 1));
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        setFocusIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "ArrowRight" || e.key === "l") {
+        e.preventDefault();
+        const row = flatRows[focusIndex];
+        if (row && row.hasChildren && !row.isExpanded) {
+          toggleExpand(row.path);
+        }
+      } else if (e.key === "ArrowLeft" || e.key === "h") {
+        e.preventDefault();
+        const row = flatRows[focusIndex];
+        if (row && row.hasChildren && row.isExpanded) {
+          toggleExpand(row.path);
+        } else if (row && row.depth > 0) {
+          // Move to parent
+          const parentName = row.node.name.split(":").slice(0, -1).join(":");
+          const parentIdx = flatRows.findIndex((r) => r.path === parentName);
+          if (parentIdx >= 0) setFocusIndex(parentIdx);
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const row = flatRows[focusIndex];
+        if (row) onSelect(row.node.name);
+      } else if (e.key === " ") {
+        e.preventDefault();
+        const row = flatRows[focusIndex];
+        if (row && row.hasChildren) toggleExpand(row.path);
+      }
+    }
+
+    el.addEventListener("keydown", handleKeyDown);
+    return () => el.removeEventListener("keydown", handleKeyDown);
+  }, [flatRows, focusIndex, toggleExpand, onSelect]);
+
+  // Scroll focused row into view
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const row = el.querySelector(`[data-idx="${focusIndex}"]`);
+    if (row) {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }, [focusIndex]);
+
+  // Auto-focus on mount
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
+
   return (
-    <div>
-      {accounts.map((acct) => (
-        <AccountGroup
-          key={acct.name}
-          node={acct}
-          selectedAccount={selectedAccount}
-          onSelect={onSelect}
-          depth={0}
-        />
-      ))}
+    <div
+      className="acct-tree"
+      ref={containerRef}
+      tabIndex={0}
+    >
+      <div className="acct-tree-header">
+        <span className="acct-tree-col-name">Account</span>
+        <span className="acct-tree-col-bal">Balance</span>
+      </div>
+      {flatRows.map((row, i) => {
+        const isFocused = i === focusIndex;
+        const isSelected = row.node.name === selectedAccount;
+        const zero = isZeroBalance(row.node.balance);
+        const shortName = row.depth === 0
+          ? row.node.name
+          : (row.node.name.split(":").pop() || row.node.name);
+
+        return (
+          <div
+            key={row.path}
+            data-idx={i}
+            className={
+              `acct-row` +
+              `${row.depth === 0 ? " acct-row-top" : ""}` +
+              `${isFocused ? " acct-row-focused" : ""}` +
+              `${isSelected ? " acct-row-selected" : ""}` +
+              `${zero && row.depth > 0 ? " acct-row-zero" : ""}`
+            }
+            onClick={() => {
+              setFocusIndex(i);
+              if (row.hasChildren) toggleExpand(row.path);
+              onSelect(row.node.name);
+            }}
+          >
+            <span className="acct-indent" style={{ width: row.depth * 16 }} />
+            <span className="acct-toggle">
+              {row.hasChildren ? (row.isExpanded ? "\u25BE" : "\u25B8") : ""}
+            </span>
+            <span className="acct-name">{shortName}</span>
+            <BalanceDisplay balances={row.node.balance} />
+          </div>
+        );
+      })}
     </div>
   );
 }
