@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { addTransaction, fetchAccountNames, fetchPayees } from "../api/client";
-import type { PostingInput } from "../types";
+import { addTransaction, editTransaction, fetchAccountNames, fetchPayees } from "../api/client";
+import type { PostingInput, Transaction } from "../types";
 
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
+  editingTxn?: Transaction | null;
 }
 
 function today(): string {
@@ -89,15 +90,26 @@ function Autocomplete({
   );
 }
 
-export default function TransactionForm({ onClose, onSuccess }: Props) {
-  const [date, setDate] = useState(today());
-  const [flag, setFlag] = useState("*");
-  const [payee, setPayee] = useState("");
-  const [narration, setNarration] = useState("");
-  const [postings, setPostings] = useState<PostingInput[]>([
-    { account: "", amount: null, currency: "USD" },
-    { account: "", amount: null, currency: "USD" },
-  ]);
+export default function TransactionForm({ onClose, onSuccess, editingTxn }: Props) {
+  const isEditing = !!editingTxn;
+
+  const [date, setDate] = useState(editingTxn?.date || today());
+  const [flag, setFlag] = useState(editingTxn?.flag || "*");
+  const [payee, setPayee] = useState(editingTxn?.payee || "");
+  const [narration, setNarration] = useState(editingTxn?.narration || "");
+  const [postings, setPostings] = useState<PostingInput[]>(() => {
+    if (editingTxn) {
+      return editingTxn.postings.map((p) => ({
+        account: p.account,
+        amount: p.amount ? parseFloat(p.amount) : null,
+        currency: p.currency || "USD",
+      }));
+    }
+    return [
+      { account: "", amount: null, currency: "USD" },
+      { account: "", amount: null, currency: "USD" },
+    ];
+  });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [accountNames, setAccountNames] = useState<string[]>([]);
@@ -134,13 +146,13 @@ export default function TransactionForm({ onClose, onSuccess }: Props) {
     setError(null);
     setSubmitting(true);
     try {
-      const result = await addTransaction({
-        date,
-        flag,
-        payee,
-        narration,
-        postings,
-      });
+      const input = { date, flag, payee, narration, postings };
+      let result;
+      if (isEditing && editingTxn?.lineno != null) {
+        result = await editTransaction({ ...input, lineno: editingTxn.lineno });
+      } else {
+        result = await addTransaction(input);
+      }
       if (result.success) {
         onSuccess();
       } else {
@@ -157,7 +169,7 @@ export default function TransactionForm({ onClose, onSuccess }: Props) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <span>New Transaction</span>
+          <span>{isEditing ? "Edit Transaction" : "New Transaction"}</span>
           <button onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body">
@@ -238,7 +250,7 @@ export default function TransactionForm({ onClose, onSuccess }: Props) {
               Cancel
             </button>
             <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? "Saving..." : "Save"}
+              {submitting ? "Saving..." : isEditing ? "Update" : "Save"}
             </button>
           </div>
         </div>

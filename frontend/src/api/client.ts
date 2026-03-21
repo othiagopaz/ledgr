@@ -3,6 +3,9 @@ import type {
   TransactionsResponse,
   MutationResponse,
   TransactionInput,
+  EditTransactionInput,
+  ErrorsResponse,
+  OptionsResponse,
 } from "../types";
 
 const BASE = "";
@@ -42,10 +45,40 @@ export async function addTransaction(
   return res.json();
 }
 
+export async function editTransaction(
+  input: EditTransactionInput
+): Promise<MutationResponse> {
+  const res = await fetch(BASE + "/api/transactions", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+export async function deleteTransaction(
+  lineno: number
+): Promise<MutationResponse> {
+  const res = await fetch(BASE + `/api/transactions/${lineno}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
 export async function fetchAccountNames(): Promise<{ accounts: string[] }> {
   return get("/api/account-names");
 }
 
 export async function fetchPayees(): Promise<{ payees: string[] }> {
   return get("/api/payees");
+}
+
+export async function fetchErrors(): Promise<ErrorsResponse> {
+  return get("/api/errors");
+}
+
+export async function fetchOptions(): Promise<OptionsResponse> {
+  return get("/api/options");
 }

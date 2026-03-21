@@ -22,3 +22,15 @@ def get_account_names(request: Request):
 def get_payees(request: Request):
     engine = request.app.state.engine
     return {"payees": engine.get_payees()}
+
+
+@router.get("/api/errors")
+def get_errors(request: Request):
+    engine = request.app.state.engine
+    return {"errors": engine.get_errors(), "count": len(engine.errors)}
+
+
+@router.get("/api/options")
+def get_options(request: Request):
+    engine = request.app.state.engine
+    return engine.get_options()

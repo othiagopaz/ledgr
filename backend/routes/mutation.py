@@ -8,6 +8,10 @@ class PostingIn(BaseModel):
     account: str
     amount: float | None = None
     currency: str | None = None
+    cost: float | None = None
+    cost_currency: str | None = None
+    price: float | None = None
+    price_currency: str | None = None
 
 
 class TransactionIn(BaseModel):
@@ -16,6 +20,10 @@ class TransactionIn(BaseModel):
     payee: str | None = None
     narration: str = ""
     postings: list[PostingIn]
+
+
+class EditTransactionIn(TransactionIn):
+    lineno: int
 
 
 @router.post("/api/transactions")
@@ -28,4 +36,25 @@ def add_transaction(request: Request, body: TransactionIn):
         narration=body.narration,
         postings=[p.model_dump() for p in body.postings],
     )
+    return result
+
+
+@router.put("/api/transactions")
+def edit_transaction(request: Request, body: EditTransactionIn):
+    engine = request.app.state.engine
+    result = engine.edit_transaction(
+        lineno=body.lineno,
+        date=body.date,
+        flag=body.flag,
+        payee=body.payee,
+        narration=body.narration,
+        postings=[p.model_dump() for p in body.postings],
+    )
+    return result
+
+
+@router.delete("/api/transactions/{lineno}")
+def delete_transaction(request: Request, lineno: int):
+    engine = request.app.state.engine
+    result = engine.delete_transaction(lineno)
     return result

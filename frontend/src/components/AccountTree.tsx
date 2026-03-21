@@ -7,23 +7,51 @@ interface Props {
   onSelect: (account: string) => void;
 }
 
-function formatBalance(balances: Balance[]): string {
-  const usd = balances.find((b) => b.currency === "USD");
-  if (usd) {
-    const n = parseFloat(usd.number);
-    return n.toLocaleString("en-US", {
+function isZeroBalance(balances: Balance[]): boolean {
+  return balances.every((b) => parseFloat(b.number) === 0);
+}
+
+function BalanceDisplay({ balances }: { balances: Balance[] }) {
+  if (balances.length === 0) return <span className="balance amount">—</span>;
+
+  // Group by currency, summing positions (for cost-basis positions of same commodity)
+  const byCurrency = new Map<string, number>();
+  for (const b of balances) {
+    byCurrency.set(b.currency, (byCurrency.get(b.currency) || 0) + parseFloat(b.number));
+  }
+
+  const entries = Array.from(byCurrency.entries());
+
+  // Single currency — show inline
+  if (entries.length === 1) {
+    const [currency, number] = entries[0];
+    const formatted = number.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+    return (
+      <span className="balance amount">
+        {currency === "USD" ? formatted : `${formatted} ${currency}`}
+      </span>
+    );
   }
-  if (balances.length === 0) return "—";
-  const first = balances[0];
-  const n = parseFloat(first.number);
-  return `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${first.currency}`;
-}
 
-function isZeroBalance(balances: Balance[]): boolean {
-  return balances.every((b) => parseFloat(b.number) === 0);
+  // Multiple currencies — stack vertically
+  return (
+    <span className="balance amount multi-balance">
+      {entries.map(([currency, number]) => {
+        const formatted = number.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        return (
+          <span key={currency} className="balance-line">
+            {currency === "USD" ? formatted : `${formatted} ${currency}`}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 function AccountGroup({
@@ -50,9 +78,7 @@ function AccountGroup({
         >
           <span className="toggle">{collapsed ? "▸" : "▾"}</span>
           <span>{node.name}</span>
-          <span className="balance amount">
-            {formatBalance(node.balance)}
-          </span>
+          <BalanceDisplay balances={node.balance} />
         </div>
         {!collapsed &&
           node.children.map((child) => (
@@ -77,7 +103,7 @@ function AccountGroup({
       >
         <span className="indent" style={{ width: (depth - 1) * 12 }} />
         <span className="name">{shortName}</span>
-        <span className="balance amount">{formatBalance(node.balance)}</span>
+        <BalanceDisplay balances={node.balance} />
       </div>
     );
   }
@@ -98,7 +124,7 @@ function AccountGroup({
           {collapsed ? "▸" : "▾"}
         </span>
         <span className="name">{shortName}</span>
-        <span className="balance amount">{formatBalance(node.balance)}</span>
+        <BalanceDisplay balances={node.balance} />
       </div>
       {!collapsed &&
         node.children.map((child) => (

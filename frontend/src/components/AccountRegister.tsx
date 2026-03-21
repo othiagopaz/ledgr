@@ -1,8 +1,12 @@
+import { useState } from "react";
 import type { Transaction } from "../types";
+import { deleteTransaction } from "../api/client";
 
 interface Props {
   account: string;
   transactions: Transaction[];
+  onEdit: (txn: Transaction) => void;
+  onMutated: () => void;
 }
 
 function formatAmount(amount: string | null): { text: string; cls: string } {
@@ -31,7 +35,28 @@ function getAccountPosting(txn: Transaction, account: string) {
   return txn.postings.find((p) => p.account === account);
 }
 
-export default function AccountRegister({ account, transactions }: Props) {
+function formatCostBasis(posting: ReturnType<typeof getAccountPosting>): string | null {
+  if (!posting) return null;
+  if (posting.cost && posting.cost_currency) {
+    const cost = parseFloat(posting.cost).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return `{${cost} ${posting.cost_currency}}`;
+  }
+  if (posting.price && posting.price_currency) {
+    const price = parseFloat(posting.price).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    });
+    return `@ ${price} ${posting.price_currency}`;
+  }
+  return null;
+}
+
+export default function AccountRegister({ account, transactions, onEdit, onMutated }: Props) {
+  const [deletingLineno, setDeletingLineno] = useState<number | null>(null);
+
   const shortName = account.split(":").length > 2
     ? account.split(":").slice(1).join(":")
     : account;
@@ -46,11 +71,24 @@ export default function AccountRegister({ account, transactions }: Props) {
     const posting = getAccountPosting(txn, account);
     const amount = posting?.amount ? parseFloat(posting.amount) : 0;
     runningBalance += amount;
-    return { txn, amount, balance: runningBalance };
+    return { txn, posting, amount, balance: runningBalance };
   });
 
   // Display newest first
   rows.reverse();
+
+  async function handleDelete(lineno: number) {
+    if (deletingLineno !== null) return;
+    setDeletingLineno(lineno);
+    try {
+      const result = await deleteTransaction(lineno);
+      if (result.success) {
+        onMutated();
+      }
+    } finally {
+      setDeletingLineno(null);
+    }
+  }
 
   return (
     <div className="register">
@@ -65,6 +103,7 @@ export default function AccountRegister({ account, transactions }: Props) {
             <th className="num" style={{ width: 90 }}>Debit</th>
             <th className="num" style={{ width: 90 }}>Credit</th>
             <th className="num" style={{ width: 100 }}>Balance</th>
+            <th style={{ width: 50 }}></th>
           </tr>
         </thead>
         <tbody>
@@ -79,14 +118,36 @@ export default function AccountRegister({ account, transactions }: Props) {
             const description = [row.txn.payee, row.txn.narration]
               .filter(Boolean)
               .join(" — ");
+            const costBasis = formatCostBasis(row.posting);
+            const hasTags = row.txn.tags.length > 0;
+            const hasLinks = row.txn.links.length > 0;
 
             return (
-              <tr key={i} className={isPending ? "pending" : ""}>
+              <tr
+                key={i}
+                className={`${isPending ? "pending" : ""} register-row`}
+                onClick={() => onEdit(row.txn)}
+              >
                 <td className={`flag ${isPending ? "flag-pending" : "flag-confirmed"}`}>
                   {row.txn.flag}
                 </td>
                 <td>{row.txn.date.slice(5)}</td>
-                <td>{description || "—"}</td>
+                <td>
+                  <span>{description || "—"}</span>
+                  {costBasis && (
+                    <span className="cost-basis">{costBasis}</span>
+                  )}
+                  {(hasTags || hasLinks) && (
+                    <span className="txn-meta">
+                      {row.txn.tags.map((t) => (
+                        <span key={t} className="tag">#{t}</span>
+                      ))}
+                      {row.txn.links.map((l) => (
+                        <span key={l} className="link">^{l}</span>
+                      ))}
+                    </span>
+                  )}
+                </td>
                 <td className="transfer">
                   {getTransferAccount(row.txn, account)}
                 </td>
@@ -98,6 +159,22 @@ export default function AccountRegister({ account, transactions }: Props) {
                 </td>
                 <td className={`num amount ${row.balance >= 0 ? "positive" : "negative"}`}>
                   {bal}
+                </td>
+                <td className="actions" onClick={(e) => e.stopPropagation()}>
+                  {row.txn.lineno != null && (
+                    <button
+                      className="delete-btn"
+                      title="Delete transaction"
+                      disabled={deletingLineno === row.txn.lineno}
+                      onClick={() => {
+                        if (confirm("Delete this transaction?")) {
+                          handleDelete(row.txn.lineno!);
+                        }
+                      }}
+                    >
+                      &times;
+                    </button>
+                  )}
                 </td>
               </tr>
             );
