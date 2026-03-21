@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type { Transaction, TransactionInput } from "../types";
 import { addTransaction, editTransaction, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
-import { formatAmount, formatDateShort, getLocale } from "../utils/format";
+import { formatAmount, formatDateFull, getLocale } from "../utils/format";
 import InlineEditor from "./InlineEditor";
 
 interface Props {
@@ -54,6 +54,14 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
   const registerRef = useRef<HTMLDivElement>(null);
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const newTxnRequestId = useAppStore((s) => s.newTxnRequestId);
+  const txnModalOpen = useAppStore((s) => s.txnModalOpen);
+
+  // Refocus register when modal closes
+  useEffect(() => {
+    if (!txnModalOpen) {
+      requestAnimationFrame(() => registerRef.current?.focus());
+    }
+  }, [txnModalOpen]);
 
   const shortName = account.split(":").length > 2
     ? account.split(":").slice(1).join(":")
@@ -72,8 +80,7 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
     return { txn, posting, amount, balance: runningBalance };
   });
 
-  // Display newest first
-  rows.reverse();
+  // Display oldest first, newest at bottom (above the new-row editor)
 
   // "new row" is conceptually the last navigable row
   const NEW_ROW_INDEX = rows.length;
@@ -180,6 +187,26 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
     } else if (e.key === "Enter" && selectedRowIndex !== null) {
       e.preventDefault();
       enterEditMode(selectedRowIndex);
+    } else if ((e.key === "r" || e.key === "R") && selectedRowIndex !== null && selectedRowIndex < rows.length) {
+      e.preventDefault();
+      const row = rows[selectedRowIndex];
+      if (row.txn.lineno != null) {
+        const newFlag = row.txn.flag === "*" ? "!" : "*";
+        handleEditSave(row.txn.lineno, {
+          date: row.txn.date,
+          flag: newFlag,
+          payee: row.txn.payee,
+          narration: row.txn.narration,
+          postings: row.txn.postings.map((p) => ({
+            account: p.account,
+            amount: p.amount ? parseFloat(p.amount) : undefined,
+            currency: p.currency,
+          })),
+        });
+      }
+    } else if (e.key === "e" && selectedRowIndex !== null && selectedRowIndex < rows.length) {
+      e.preventDefault();
+      openTxnModal(rows[selectedRowIndex].txn);
     } else if (e.key === "Delete" && selectedRowIndex !== null && selectedRowIndex < rows.length) {
       const row = rows[selectedRowIndex];
       if (row.txn.lineno != null && confirm("Delete this transaction?")) {
@@ -248,7 +275,7 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
                 className={`register-row${isPending ? " pending" : ""}${isSelected ? " row-selected" : ""}`}
                 onClick={() => enterEditMode(i)}
               >
-                <td>{formatDateShort(row.txn.date, operatingCurrency)}</td>
+                <td>{formatDateFull(row.txn.date, operatingCurrency)}</td>
                 <td>
                   <span>{description || "—"}</span>
                   {costBasis && (
@@ -314,7 +341,7 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
               onClick={() => enterEditMode(NEW_ROW_INDEX)}
             >
               <td style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
-                {new Date().toLocaleDateString()}
+                {formatDateFull(new Date().toISOString().slice(0, 10), operatingCurrency)}
               </td>
               <td style={{ color: "var(--text-muted)", fontStyle: "italic" }}>New transaction…</td>
               <td></td>

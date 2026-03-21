@@ -9,12 +9,26 @@ interface StatusBarProps {
 
 export default function StatusBar({ account, transactions }: StatusBarProps) {
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
+  const { tabs, activeTabId } = useAppStore();
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const viewType = activeTab?.type || "dashboard";
 
-  if (!account || transactions.length === 0) {
+  // Build context-aware keyboard hints
+  const hints: string[] = ["⌘K search"];
+
+  if (viewType === "register") {
+    hints.push("N new", "Enter edit", "E advanced", "R reconcile", "Del delete");
+  } else if (viewType === "accounts") {
+    hints.push("↑↓ navigate", "← → expand", "Enter open");
+  } else {
+    hints.push("N new");
+  }
+
+  if (viewType !== "register" || !account || transactions.length === 0) {
     return (
       <div className="status-bar">
-        <span>Select an account to view stats</span>
-        <span className="kbd-hints">⌘K search · N new</span>
+        <span></span>
+        <span className="kbd-hints">{hints.join(" · ")}</span>
       </div>
     );
   }
@@ -57,7 +71,7 @@ export default function StatusBar({ account, transactions }: StatusBarProps) {
         <span>|</span>
         <span>{transactions.length} txns</span>
       </div>
-      <span className="kbd-hints">⌘K search · N new</span>
+      <span className="kbd-hints">{hints.join(" · ")}</span>
     </div>
   );
 }
