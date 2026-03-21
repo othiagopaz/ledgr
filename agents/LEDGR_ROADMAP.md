@@ -6,21 +6,37 @@
 
 ## Current State (What Ledgr Already Has)
 
+### Core Data
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Account tree with balances | ✅ Done | Hierarchical, collapsible, multi-currency |
-| Transaction register | ✅ Done | GnuCash-style with keyboard navigation |
-| Inline transaction editor | ✅ Done | Bottom-of-table, green highlight, Tab flow |
-| Autocomplete (accounts, payees) | ✅ Done | Basic matching, no ranking |
-| Smart suggestions | ✅ Done | "Most likely account + amount for payee" |
-| Locale-aware formatting | ✅ Done | Derived from `operating_currency` or `custom "ledgr-locale"` |
-| Multi-tab interface | ✅ Done | Browser-style tabs, Cmd+W to close |
-| Dark / Light theme | ✅ Done | Toggle via Cmd+K command palette |
-| Keyboard navigation | ✅ Done | Arrow keys, Enter to edit, Escape to exit, N for new |
-| Reconciliation column | ✅ Done | y/n with keyboard toggle (Space) |
-| Command palette | ✅ Done | Cmd+K, search accounts/actions |
-| Status bar | ✅ Done | Transaction count, error count, keyboard hints |
-| Income Statement report | ⚠️ Partial | Multicolumn exists but needs interval support |
+| Account tree with balances | Done | Hierarchical, collapsible, full keyboard nav (arrows, h/j/k/l, Space, Enter) |
+| Transaction register | Done | GnuCash-style with inline editing at bottom of table |
+| Inline transaction editor | Done | Green highlight, Tab flow, debit/credit sign resolution |
+| Transaction modal (advanced) | Done | Multi-posting, cost/price, tags/links support (Cmd+Shift+N) |
+| All transactions view | Done | Global transaction list across all accounts |
+| Autocomplete (accounts, payees) | Done | Basic matching, no ranking |
+| Smart suggestions | Done | "Most likely account + amount for payee" |
+| Reconciliation column | Done | y/n with keyboard toggle (Space), Tab-accessible |
+
+### UI / Navigation
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Sidebar navigation | Done | Slim nav: Dashboard, Accounts, Recent, Errors badge |
+| Dashboard homepage | Done | Summary cards (Assets/Liabilities/Net Worth/Income/Expenses), recent txns, 3-statement placeholder |
+| Accounts view | Done | Full-panel account tree (moved from sidebar) |
+| Multi-tab interface | Done | Browser-style tabs, Cmd+W to close |
+| Dark / Light theme | Done | Toggle via Cmd+K command palette |
+| Keyboard navigation | Done | Arrow keys, Enter to edit, Escape to exit, N for new, vim-style h/j/k/l in account tree |
+| Command palette | Done | Cmd+K, search accounts/actions/theme |
+| Status bar | Done | Transaction count, error count, keyboard hints |
+
+### Locale / Formatting
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Locale-aware formatting | Done | Derived from `operating_currency` or `custom "ledgr-locale"` directive |
+| Date formatting | Done | Locale-aware display and input parsing (DD/MM/YYYY for pt-BR, etc.) |
+| Currency formatting | Done | Locale-aware decimal/thousands separators |
+| Zero hardcoded locales | Done | All formatting uses `getLocale()` from format.ts |
 
 ---
 
