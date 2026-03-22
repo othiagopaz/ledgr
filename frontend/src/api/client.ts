@@ -93,3 +93,65 @@ export interface Suggestion {
 export async function fetchSuggestions(payee: string): Promise<Suggestion> {
   return get(`/api/suggestions?payee=${encodeURIComponent(payee)}`);
 }
+
+// Reports
+
+import type {
+  IncomeExpensePoint,
+  AccountBalancePoint,
+  NetWorthPoint,
+  IncomeStatementResponse,
+  BalanceSheetResponse,
+  CashFlowResponse,
+} from "../types";
+
+export async function fetchIncomeExpenseSeries(
+  interval = "monthly"
+): Promise<{ series: IncomeExpensePoint[] }> {
+  return get(`/api/reports/income-expense?interval=${interval}`);
+}
+
+export async function fetchAccountBalanceSeries(
+  account: string,
+  interval = "monthly"
+): Promise<{ series: AccountBalancePoint[] }> {
+  const params = new URLSearchParams({ account, interval });
+  return get(`/api/reports/account-balance?${params}`);
+}
+
+export async function fetchNetWorthSeries(
+  interval = "monthly"
+): Promise<{ series: NetWorthPoint[] }> {
+  return get(`/api/reports/net-worth?interval=${interval}`);
+}
+
+export async function fetchIncomeStatement(
+  fromDate?: string,
+  toDate?: string,
+  interval = "monthly"
+): Promise<IncomeStatementResponse> {
+  const params = new URLSearchParams({ interval });
+  if (fromDate) params.set("from_date", fromDate);
+  if (toDate) params.set("to_date", toDate);
+  return get(`/api/reports/income-statement?${params}`);
+}
+
+export async function fetchBalanceSheet(
+  asOfDate?: string
+): Promise<BalanceSheetResponse> {
+  const params = new URLSearchParams();
+  if (asOfDate) params.set("as_of_date", asOfDate);
+  const qs = params.toString();
+  return get(`/api/reports/balance-sheet${qs ? "?" + qs : ""}`);
+}
+
+export async function fetchCashFlow(
+  fromDate?: string,
+  toDate?: string,
+  interval = "monthly"
+): Promise<CashFlowResponse> {
+  const params = new URLSearchParams({ interval });
+  if (fromDate) params.set("from_date", fromDate);
+  if (toDate) params.set("to_date", toDate);
+  return get(`/api/reports/cashflow?${params}`);
+}

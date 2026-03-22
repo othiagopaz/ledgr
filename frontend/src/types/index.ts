@@ -93,3 +93,78 @@ export interface OptionsResponse {
   filename: string;
   locale: string | null;
 }
+
+// Report types
+
+export interface IncomeExpensePoint {
+  period: string;
+  income: number;
+  expenses: number;
+}
+
+export interface AccountBalancePoint {
+  period: string;
+  balance: number;
+}
+
+export interface NetWorthPoint {
+  period: string;
+  assets: number;
+  liabilities: number;
+  net_worth: number;
+}
+
+export interface AccountReportNode {
+  name: string;
+  totals: Record<string, number>;
+  total: number;
+  children: AccountReportNode[];
+}
+
+export interface BalanceSheetNode {
+  name: string;
+  balance: number;
+  children: BalanceSheetNode[];
+}
+
+export interface IncomeStatementResponse {
+  income: AccountReportNode[];
+  expenses: AccountReportNode[];
+  periods: string[];
+  net_income: Record<string, number>;
+}
+
+export interface BalanceSheetResponse {
+  assets: BalanceSheetNode[];
+  liabilities: BalanceSheetNode[];
+  equity: BalanceSheetNode[];
+  totals: {
+    assets: number;
+    liabilities: number;
+    equity: number;
+  };
+}
+
+export interface CashFlowItem {
+  name: string;
+  full_name: string;
+  totals: Record<string, number>;
+  total: number;
+}
+
+export interface CashFlowSection {
+  totals: Record<string, number>;
+  total: number;
+  items: CashFlowItem[];
+}
+
+export interface CashFlowResponse {
+  periods: string[];
+  operating: CashFlowSection;
+  investing: CashFlowSection;
+  financing: CashFlowSection;
+  transfers: CashFlowSection;
+  net_cashflow: Record<string, number>;
+  opening_balance: Record<string, number>;
+  closing_balance: Record<string, number>;
+}

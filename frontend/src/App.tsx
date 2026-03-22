@@ -6,6 +6,7 @@ import Dashboard from "./components/Dashboard";
 import AccountsView from "./components/AccountsView";
 import AccountRegister from "./components/AccountRegister";
 import AllTransactionsView from "./components/AllTransactionsView";
+import ReportsView from "./components/reports/ReportsView";
 import TransactionModal from "./components/TransactionModal";
 import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
@@ -89,15 +90,19 @@ export default function App() {
 
   const errors = accountsQuery.data?.errors || [];
 
+  function handleOpenReports() {
+    openTab({ id: "reports", type: "report", label: "Reports" });
+  }
+
   // Determine what to render in main content
   function renderMainContent() {
     if (!activeTab) {
-      return <Dashboard onSelectAccount={handleSelectAccount} />;
+      return <Dashboard onSelectAccount={handleSelectAccount} onOpenReports={handleOpenReports} />;
     }
 
     switch (activeTab.type) {
       case "dashboard":
-        return <Dashboard onSelectAccount={handleSelectAccount} />;
+        return <Dashboard onSelectAccount={handleSelectAccount} onOpenReports={handleOpenReports} />;
 
       case "accounts":
         return <AccountsView onSelectAccount={handleSelectAccount} />;
@@ -113,6 +118,9 @@ export default function App() {
           );
         }
         return <div className="welcome">Loading transactions...</div>;
+
+      case "report":
+        return <ReportsView />;
 
       default:
         return <AllTransactionsView onMutated={handleMutated} />;

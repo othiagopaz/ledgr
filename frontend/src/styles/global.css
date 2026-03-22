@@ -1477,3 +1477,284 @@ body {
 .accounts-view-tree {
   padding: 8px 0;
 }
+
+/* ============================================================
+   Reports & Charts
+   ============================================================ */
+
+.reports-view {
+  padding: 16px 24px;
+  overflow-y: auto;
+  height: 100%;
+}
+.reports-nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 8px;
+}
+.reports-nav-btn {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.reports-nav-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.reports-nav-btn.active {
+  background: var(--bg-row-selected);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.reports-content {
+  max-width: 960px;
+}
+
+/* Report sections */
+.report-section {
+  margin-bottom: 32px;
+}
+.report-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* Chart containers */
+.report-chart {
+  margin-bottom: 12px;
+}
+.report-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.report-loading,
+.report-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Interval selector */
+.interval-selector {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 2px;
+}
+.interval-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.interval-btn:hover {
+  color: var(--text-primary);
+}
+.interval-btn.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* Account select */
+.report-select {
+  padding: 5px 10px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  min-width: 220px;
+}
+.report-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Date input */
+.report-date-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.report-date-input {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+.report-date-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Summary row below charts */
+.report-summary-row {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+}
+.report-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.report-summary-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+}
+.report-summary-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Report tables (Income Statement / Balance Sheet) */
+.report-statement {
+  width: 100%;
+}
+.report-table-wrapper {
+  overflow-x: auto;
+}
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.report-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.report-table-account {
+  min-width: 200px;
+}
+.report-table-num {
+  text-align: right;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  min-width: 90px;
+}
+.report-table th.report-table-num {
+  text-align: right;
+}
+.report-table-total {
+  font-weight: 600;
+  border-left: 1px solid var(--border);
+}
+
+/* Section headers in tables */
+.report-table-section-header td {
+  padding: 12px 12px 6px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Tree rows */
+.report-tree-row td {
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.report-tree-parent {
+  cursor: pointer;
+}
+.report-tree-parent:hover td {
+  background: var(--bg-row-hover);
+}
+.report-tree-toggle {
+  display: inline-block;
+  width: 16px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Subtotals and grand totals */
+.report-table-subtotal td {
+  padding: 6px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+.report-table-grand-total td {
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  border-top: 2px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+/* Dashboard link button */
+.dashboard-link-btn {
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+.dashboard-link-btn:hover {
+  text-decoration: underline;
+}
+
+/* Cash Flow Statement extras */
+.cashflow-subtotal-clickable {
+  cursor: pointer;
+}
+.cashflow-subtotal-clickable:hover td {
+  background: var(--bg-row-hover);
+}
+.cashflow-balance-row td {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+}
+.cashflow-closing td {
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border);
+}

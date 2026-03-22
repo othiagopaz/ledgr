@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from engine import LedgrEngine
-from routes import accounts, transactions, mutation
+from routes import accounts, transactions, mutation, reports
 
 BEANCOUNT_FILE = os.environ.get("BEANCOUNT_FILE", os.path.join(os.path.dirname(__file__), "..", "data", "example.beancount"))
 
@@ -35,6 +35,7 @@ app.add_middleware(
 app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(mutation.router)
+app.include_router(reports.router)
 
 # Serve frontend static files in production
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

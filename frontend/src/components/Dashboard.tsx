@@ -3,6 +3,8 @@ import { fetchAccounts, fetchTransactions, fetchOptions } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, formatDateShort } from "../utils/format";
 import type { AccountNode, Transaction } from "../types";
+import IncomeExpenseChart from "./reports/IncomeExpenseChart";
+import NetWorthChart from "./reports/NetWorthChart";
 
 function sumTopLevelBalance(accounts: AccountNode[], typeName: string): number {
   const node = accounts.find((a) => a.name === typeName);
@@ -100,9 +102,10 @@ function RecentTransactions({
 
 interface DashboardProps {
   onSelectAccount: (account: string) => void;
+  onOpenReports?: () => void;
 }
 
-export default function Dashboard({ onSelectAccount }: DashboardProps) {
+export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardProps) {
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
 
   const accountsQuery = useQuery({
@@ -166,23 +169,24 @@ export default function Dashboard({ onSelectAccount }: DashboardProps) {
         />
       </div>
 
-      {/* 3-Statement placeholder */}
+      {/* Mini charts */}
       <div className="dashboard-section">
         <div className="dashboard-section-header">
-          <h3>Financial Statements</h3>
-          <span className="dashboard-coming-soon">Coming soon</span>
+          <h3>Income vs Expenses</h3>
+          {onOpenReports && (
+            <button className="dashboard-link-btn" onClick={onOpenReports}>
+              View full reports →
+            </button>
+          )}
         </div>
-        <div className="dashboard-placeholder">
-          <div className="dashboard-placeholder-item">
-            <span>P&L — Monthly income vs expenses breakdown</span>
-          </div>
-          <div className="dashboard-placeholder-item">
-            <span>Cashflow — Net cash movement with off-balance items</span>
-          </div>
-          <div className="dashboard-placeholder-item">
-            <span>Balance Sheet — Assets, liabilities and equity snapshot</span>
-          </div>
+        <IncomeExpenseChart mini />
+      </div>
+
+      <div className="dashboard-section">
+        <div className="dashboard-section-header">
+          <h3>Net Worth</h3>
         </div>
+        <NetWorthChart mini />
       </div>
 
       {/* Recent transactions */}
