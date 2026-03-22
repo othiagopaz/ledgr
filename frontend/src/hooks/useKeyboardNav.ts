@@ -14,8 +14,14 @@ export function useKeyboardNav() {
         return;
       }
 
-      // Cmd+Shift+N: open transaction modal (always works)
+      // Cmd+Shift+N or Alt+N / Ctrl+N: open transaction modal (always works)
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        useAppStore.getState().openTxnModal();
+        return;
+      }
+      // Alt/Option+N — use e.code because macOS Option produces composed characters
+      if (e.altKey && e.code === "KeyN") {
         e.preventDefault();
         useAppStore.getState().openTxnModal();
         return;

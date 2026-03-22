@@ -17,11 +17,11 @@ export default function StatusBar({ account, transactions }: StatusBarProps) {
   const hints: string[] = ["⌘K search"];
 
   if (viewType === "register") {
-    hints.push("N new", "Enter edit", "E advanced", "R reconcile", "Del delete");
+    hints.push("N new", "⌥N modal", "Enter edit", "E advanced", "R reconcile", "Del delete");
   } else if (viewType === "accounts") {
     hints.push("↑↓ navigate", "← → expand", "Enter open");
   } else {
-    hints.push("N new");
+    hints.push("N new", "⌥N modal");
   }
 
   if (viewType !== "register" || !account || transactions.length === 0) {

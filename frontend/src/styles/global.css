@@ -963,6 +963,38 @@ body {
   background: var(--bg-editor) !important;
 }
 
+/* Split transaction expand/collapse */
+.split-toggle {
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-secondary);
+}
+.split-toggle:hover {
+  color: var(--text-primary);
+}
+.split-arrow {
+  display: inline-block;
+  width: 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.register-split-row td {
+  padding: 2px 12px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-row-even);
+}
+[data-theme="dark"] .register-split-row td {
+  background: #12141c;
+}
+.register-split-account {
+  color: var(--accent);
+  padding-left: 24px !important;
+}
+.register-split-current {
+  font-weight: 600;
+}
+
 /* Command palette */
 .command-palette-overlay {
   position: fixed;

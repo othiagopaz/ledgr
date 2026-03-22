@@ -11,6 +11,7 @@ import InlineAutocomplete from "./InlineAutocomplete";
 interface InlineEditorProps {
   currentAccount: string;
   transaction?: Transaction;
+  suggestedDate?: string;
   onSave: (input: TransactionInput) => Promise<void>;
   onCancel: () => void;
 }
@@ -18,6 +19,7 @@ interface InlineEditorProps {
 export default function InlineEditor({
   currentAccount,
   transaction,
+  suggestedDate,
   onSave,
   onCancel,
 }: InlineEditorProps) {
@@ -39,6 +41,9 @@ export default function InlineEditor({
   const [date, setDate] = useState(() => {
     if (transaction?.date) {
       return formatDateFull(transaction.date, operatingCurrency);
+    }
+    if (suggestedDate) {
+      return formatDateFull(suggestedDate, operatingCurrency);
     }
     return formatDateFull(today(), operatingCurrency);
   });

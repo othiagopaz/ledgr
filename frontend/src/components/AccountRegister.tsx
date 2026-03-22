@@ -51,6 +51,10 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   // Increment this to force remount of the new-row InlineEditor after save
   const [newRowKey, setNewRowKey] = useState(0);
+  // Remember the last date used when creating a new transaction
+  const [lastUsedDate, setLastUsedDate] = useState<string | null>(null);
+  // Track which split transactions are expanded
+  const [expandedSplits, setExpandedSplits] = useState<Set<number>>(new Set());
   const registerRef = useRef<HTMLDivElement>(null);
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const newTxnRequestId = useAppStore((s) => s.newTxnRequestId);
@@ -114,6 +118,8 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
   async function handleNewSave(input: TransactionInput) {
     const result = await addTransaction(input);
     if (result.success) {
+      // Remember the date for the next new transaction
+      setLastUsedDate(input.date);
       setEditingRowIndex(null);
       // Increment key to force remount → clears all fields
       setNewRowKey((k) => k + 1);
@@ -242,6 +248,8 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
           {rows.map((row, i) => {
             const isEditing = editingRowIndex === i;
             const isSelected = selectedRowIndex === i && editingRowIndex === null;
+            const isSplit = row.txn.postings.length > 2;
+            const isExpanded = expandedSplits.has(i);
 
             if (isEditing) {
               return (
@@ -269,10 +277,10 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
             const hasLinks = row.txn.links.length > 0;
             const reconciled = row.txn.flag === "*" ? "y" : "n";
 
-            return (
+            const mainRow = (
               <tr
                 key={i}
-                className={`register-row${isPending ? " pending" : ""}${isSelected ? " row-selected" : ""}`}
+                className={`register-row${isPending ? " pending" : ""}${isSelected ? " row-selected" : ""}${isSplit ? " register-row-split" : ""}`}
                 onClick={() => enterEditMode(i)}
               >
                 <td>{formatDateFull(row.txn.date, operatingCurrency)}</td>
@@ -293,7 +301,25 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
                   )}
                 </td>
                 <td className="transfer">
-                  {getTransferAccount(row.txn, account)}
+                  {isSplit ? (
+                    <span
+                      className="split-toggle"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedSplits((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(i)) next.delete(i);
+                          else next.add(i);
+                          return next;
+                        });
+                      }}
+                    >
+                      <span className="split-arrow">{isExpanded ? "▾" : "▸"}</span>
+                      — Split —
+                    </span>
+                  ) : (
+                    getTransferAccount(row.txn, account)
+                  )}
                 </td>
                 <td className={`reconciled ${reconciled === "y" ? "reconciled-yes" : "reconciled-no"}`}>
                   {reconciled}
@@ -325,6 +351,39 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
                 </td>
               </tr>
             );
+
+            if (!isSplit || !isExpanded) return mainRow;
+
+            // Render expanded split detail rows
+            const splitRows = row.txn.postings.map((p, pi) => {
+              const amt = p.amount ? parseFloat(p.amount) : 0;
+              const shortAcct = p.account.split(":").length > 2
+                ? p.account.split(":").slice(1).join(":")
+                : p.account;
+              const isCurrentAcct = p.account === account;
+              return (
+                <tr key={`${i}-split-${pi}`} className="register-split-row">
+                  <td></td>
+                  <td
+                    className={`register-split-account${isCurrentAcct ? " register-split-current" : ""}`}
+                    colSpan={2}
+                  >
+                    {shortAcct}
+                  </td>
+                  <td></td>
+                  <td className={`num amount ${amt > 0 ? "positive" : ""}`}>
+                    {amt > 0 ? formatAmount(amt, operatingCurrency) : ""}
+                  </td>
+                  <td className={`num amount ${amt < 0 ? "negative" : ""}`}>
+                    {amt < 0 ? formatAmount(Math.abs(amt), operatingCurrency) : ""}
+                  </td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              );
+            });
+
+            return [mainRow, ...splitRows];
           })}
 
           {/* New transaction row — always at BOTTOM, like GnuCash */}
@@ -332,6 +391,7 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
             <InlineEditor
               key={`new-${newRowKey}`}
               currentAccount={account}
+              suggestedDate={lastUsedDate || undefined}
               onSave={handleNewSave}
               onCancel={exitEditMode}
             />
