@@ -11,15 +11,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from engine import LedgrEngine
-from routes import accounts, transactions, mutation, reports
+from ledger import init_ledger
+from routers import accounts, transactions, reports, cashflow
 
-BEANCOUNT_FILE = os.environ.get("BEANCOUNT_FILE", os.path.join(os.path.dirname(__file__), "..", "data", "example.beancount"))
+BEANCOUNT_FILE = os.environ.get(
+    "BEANCOUNT_FILE",
+    os.path.join(os.path.dirname(__file__), "..", "data", "example.beancount"),
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.engine = LedgrEngine(BEANCOUNT_FILE)
+    init_ledger(os.path.abspath(BEANCOUNT_FILE))
     yield
 
 
@@ -34,8 +37,8 @@ app.add_middleware(
 
 app.include_router(accounts.router)
 app.include_router(transactions.router)
-app.include_router(mutation.router)
 app.include_router(reports.router)
+app.include_router(cashflow.router)
 
 # Serve frontend static files in production
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

@@ -1,0 +1,247 @@
+"""
+HTTP-level tests for all routers using FastAPI TestClient.
+
+Tests verify:
+- Correct HTTP status codes
+- JSON response shape matches frontend types
+- Every endpoint uses ``Depends(get_ledger)`` correctly
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from fava.core import FavaLedger
+
+import ledger as ledger_mod
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture()
+def client(tmp_path: Path) -> TestClient:
+    """Create a TestClient with a FavaLedger pointed at a temp fixture copy."""
+    src = FIXTURES_DIR / "minimal.beancount"
+    dst = tmp_path / "test.beancount"
+    shutil.copy(src, dst)
+
+    # Initialize the ledger singleton
+    ledger_mod.init_ledger(str(dst))
+
+    # Import app AFTER setting up the ledger
+    from main import app
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+# ------------------------------------------------------------------
+# Accounts
+# ------------------------------------------------------------------
+
+
+class TestAccountsRouter:
+    def test_get_accounts(self, client: TestClient) -> None:
+        r = client.get("/api/accounts")
+        assert r.status_code == 200
+        body = r.json()
+        assert "accounts" in body
+        assert "errors" in body
+        assert isinstance(body["accounts"], list)
+        assert len(body["accounts"]) > 0
+        # Verify AccountNode shape
+        node = body["accounts"][0]
+        assert "name" in node
+        assert "type" in node
+        assert "balance" in node
+        assert "children" in node
+        assert "is_leaf" in node
+
+    def test_get_account_names(self, client: TestClient) -> None:
+        r = client.get("/api/account-names")
+        assert r.status_code == 200
+        body = r.json()
+        assert "accounts" in body
+        assert "Assets:Checking" in body["accounts"]
+
+    def test_get_payees(self, client: TestClient) -> None:
+        r = client.get("/api/payees")
+        assert r.status_code == 200
+        body = r.json()
+        assert "payees" in body
+        assert "Employer" in body["payees"]
+
+    def test_get_errors(self, client: TestClient) -> None:
+        r = client.get("/api/errors")
+        assert r.status_code == 200
+        body = r.json()
+        assert "errors" in body
+        assert "count" in body
+
+    def test_get_options(self, client: TestClient) -> None:
+        r = client.get("/api/options")
+        assert r.status_code == 200
+        body = r.json()
+        assert "operating_currency" in body
+        assert "title" in body
+        assert "BRL" in body["operating_currency"]
+
+    def test_get_suggestions(self, client: TestClient) -> None:
+        r = client.get("/api/suggestions", params={"payee": "Employer"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["payee"] == "Employer"
+        assert body["account"] is not None
+
+    def test_get_suggestions_unknown_payee(self, client: TestClient) -> None:
+        r = client.get("/api/suggestions", params={"payee": "UNKNOWN"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["account"] is None
+
+
+# ------------------------------------------------------------------
+# Transactions
+# ------------------------------------------------------------------
+
+
+class TestTransactionsRouter:
+    def test_get_transactions(self, client: TestClient) -> None:
+        r = client.get("/api/transactions")
+        assert r.status_code == 200
+        body = r.json()
+        assert "transactions" in body
+        assert "count" in body
+        assert body["count"] > 0
+        # Verify Transaction shape
+        txn = body["transactions"][0]
+        assert "date" in txn
+        assert "flag" in txn
+        assert "payee" in txn
+        assert "narration" in txn
+        assert "postings" in txn
+        assert "lineno" in txn
+
+    def test_get_transactions_by_account(self, client: TestClient) -> None:
+        r = client.get(
+            "/api/transactions", params={"account": "Assets:Checking"}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["count"] > 0
+
+    def test_get_transactions_by_date_range(self, client: TestClient) -> None:
+        r = client.get(
+            "/api/transactions",
+            params={"from_date": "2024-02-01", "to_date": "2024-02-28"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        for txn in body["transactions"]:
+            assert txn["date"] >= "2024-02-01"
+            assert txn["date"] <= "2024-02-28"
+
+    def test_add_transaction(self, client: TestClient) -> None:
+        r = client.post(
+            "/api/transactions",
+            json={
+                "date": "2024-04-01",
+                "payee": "Test",
+                "narration": "Test Add",
+                "postings": [
+                    {"account": "Expenses:Food", "amount": 50, "currency": "BRL"},
+                    {"account": "Assets:Checking", "amount": -50, "currency": "BRL"},
+                ],
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["success"] is True
+        assert body["transaction"]["narration"] == "Test Add"
+
+    def test_delete_transaction(self, client: TestClient) -> None:
+        # First get a transaction's lineno
+        r = client.get("/api/transactions")
+        txns = r.json()["transactions"]
+        lineno = txns[-1]["lineno"]
+        assert lineno is not None
+
+        # Delete it
+        r = client.delete(f"/api/transactions/{lineno}")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["success"] is True
+
+
+# ------------------------------------------------------------------
+# Reports
+# ------------------------------------------------------------------
+
+
+class TestReportsRouter:
+    def test_income_expense_series(self, client: TestClient) -> None:
+        r = client.get("/api/reports/income-expense")
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+        assert len(body["series"]) > 0
+        point = body["series"][0]
+        assert "period" in point
+        assert "income" in point
+        assert "expenses" in point
+
+    def test_account_balance_series(self, client: TestClient) -> None:
+        r = client.get(
+            "/api/reports/account-balance",
+            params={"account": "Assets:Checking"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+
+    def test_net_worth_series(self, client: TestClient) -> None:
+        r = client.get("/api/reports/net-worth")
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+
+    def test_income_statement(self, client: TestClient) -> None:
+        r = client.get("/api/reports/income-statement")
+        assert r.status_code == 200
+        body = r.json()
+        assert "income" in body
+        assert "expenses" in body
+        assert "periods" in body
+        assert "net_income" in body
+
+    def test_balance_sheet(self, client: TestClient) -> None:
+        r = client.get("/api/reports/balance-sheet")
+        assert r.status_code == 200
+        body = r.json()
+        assert "assets" in body
+        assert "liabilities" in body
+        assert "equity" in body
+        assert "totals" in body
+
+    def test_balance_sheet_invariant_via_http(self, client: TestClient) -> None:
+        """Accounting equation must hold in HTTP response too."""
+        r = client.get("/api/reports/balance-sheet")
+        t = r.json()["totals"]
+        total = t["assets"] + t["liabilities"] + t["equity"]
+        assert abs(total) < 0.01, (
+            f"Invariant violated via HTTP: A={t['assets']} L={t['liabilities']} E={t['equity']}"
+        )
+
+    def test_cashflow(self, client: TestClient) -> None:
+        r = client.get("/api/reports/cashflow")
+        assert r.status_code == 200
+        body = r.json()
+        assert "periods" in body
+        assert "operating" in body
+        assert "investing" in body
+        assert "financing" in body
+        assert "transfers" in body
+        assert "net_cashflow" in body

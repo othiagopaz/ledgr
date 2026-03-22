@@ -1,0 +1,46 @@
+option "title" "Test Ledger"
+option "operating_currency" "BRL"
+
+2024-01-01 open Assets:Checking        BRL
+2024-01-01 open Assets:Savings         BRL
+2024-01-01 open Income:Salary          BRL
+2024-01-01 open Expenses:Food          BRL
+2024-01-01 open Expenses:Rent          BRL
+2024-01-01 open Liabilities:CreditCard BRL
+2024-01-01 open Equity:OpeningBalances BRL
+
+2024-01-01 * "Opening Balance"
+  Assets:Checking         5000.00 BRL
+  Equity:OpeningBalances
+
+2024-01-15 * "Employer" "January Salary"
+  Assets:Checking         8000.00 BRL
+  Income:Salary
+
+2024-01-20 * "Supermarket" "Groceries"
+  Expenses:Food            350.00 BRL
+  Assets:Checking
+
+2024-02-01 * "Landlord" "February Rent"
+  Expenses:Rent           2500.00 BRL
+  Assets:Checking
+
+2024-02-15 * "Employer" "February Salary"
+  Assets:Checking         8000.00 BRL
+  Income:Salary
+
+2024-02-20 * "Restaurant" "Dinner"
+  Expenses:Food            120.00 BRL
+  Liabilities:CreditCard
+
+2024-02-25 * "CC Payment"
+  Liabilities:CreditCard   120.00 BRL
+  Assets:Checking
+
+2024-03-15 * "Employer" "March Salary"
+  Assets:Checking         8000.00 BRL
+  Income:Salary
+
+2024-03-18 * "Transfer to Savings"
+  Assets:Savings          3000.00 BRL
+  Assets:Checking

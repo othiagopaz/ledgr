@@ -1,0 +1,73 @@
+option "title" "Cash Flow Test Ledger"
+option "operating_currency" "BRL"
+
+2024-01-01 open Assets:Checking           BRL
+2024-01-01 open Assets:Savings            BRL
+2024-01-01 open Assets:Investments:Stocks BRL
+2024-01-01 open Assets:Broker:XP          BRL
+2024-01-01 open Income:Salary             BRL
+2024-01-01 open Expenses:Food             BRL
+2024-01-01 open Expenses:Rent             BRL
+2024-01-01 open Liabilities:CreditCard    BRL
+2024-01-01 open Liabilities:Loans:Mortgage BRL
+2024-01-01 open Equity:OpeningBalances    BRL
+
+; --- OPERATING ---
+
+; Salary deposit: Income → Assets (operating)
+2024-01-15 * "Employer" "Salary"
+  Assets:Checking         10000.00 BRL
+  Income:Salary
+
+; Grocery: Assets → Expenses (operating)
+2024-01-20 * "Supermarket" "Groceries"
+  Expenses:Food             500.00 BRL
+  Assets:Checking
+
+; Rent: Assets → Expenses (operating)
+2024-01-25 * "Landlord" "Rent"
+  Expenses:Rent            3000.00 BRL
+  Assets:Checking
+
+; CC payment: Assets → Liabilities:CreditCard (operating, NOT financing)
+2024-02-05 * "CC Bill"
+  Liabilities:CreditCard    200.00 BRL
+  Assets:Checking
+
+; --- FINANCING ---
+
+; Loan payment: Assets → Liabilities:Loans (financing)
+2024-02-10 * "Bank" "Mortgage Payment"
+  Liabilities:Loans:Mortgage 1500.00 BRL
+  Assets:Checking
+
+; --- INVESTING ---
+
+; Stock purchase: Assets:Checking → Assets:Investments (investing)
+2024-02-15 * "Broker" "Buy PETR4"
+  Assets:Investments:Stocks  2000.00 BRL
+  Assets:Checking
+
+; Broker transfer: Assets:Checking → Assets:Broker (investing)
+2024-02-20 * "Transfer to Broker"
+  Assets:Broker:XP           1000.00 BRL
+  Assets:Checking
+
+; --- TRANSFER ---
+
+; Bank-to-bank: Assets → Assets (transfer, no investment account)
+2024-03-01 * "Bank Transfer"
+  Assets:Savings             5000.00 BRL
+  Assets:Checking
+
+; --- CC PURCHASE (should NOT appear in cashflow — no asset movement) ---
+
+2024-03-10 * "Store" "Online Purchase"
+  Expenses:Food              150.00 BRL
+  Liabilities:CreditCard
+
+; --- EQUITY (opening balance → transfer) ---
+
+2024-01-01 * "Opening Balance"
+  Assets:Checking          20000.00 BRL
+  Equity:OpeningBalances
