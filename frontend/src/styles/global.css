@@ -758,12 +758,18 @@ body {
   top: 100%;
   left: 0;
   right: 0;
-  max-height: 180px;
+  max-height: 200px;
   overflow-y: auto;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   z-index: 200;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.autocomplete-list-up {
+  top: auto;
+  bottom: 100%;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
 }
 
 .autocomplete-list .item {
