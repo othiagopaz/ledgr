@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 export default function InlineAutocomplete({
   value,
@@ -21,6 +21,7 @@ export default function InlineAutocomplete({
 }) {
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [dropUp, setDropUp] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const filtered = value
@@ -28,6 +29,14 @@ export default function InlineAutocomplete({
         .filter((o) => o.toLowerCase().includes(value.toLowerCase()))
         .slice(0, 15)
     : [];
+
+  const checkPosition = useCallback(() => {
+    if (!wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    // Flip upward if less than 200px below the input
+    setDropUp(spaceBelow < 200);
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -37,6 +46,11 @@ export default function InlineAutocomplete({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Re-check position when dropdown opens
+  useEffect(() => {
+    if (open) checkPosition();
+  }, [open, checkPosition]);
 
   return (
     <div className="autocomplete-wrapper" ref={wrapperRef}>
@@ -50,7 +64,9 @@ export default function InlineAutocomplete({
           setOpen(true);
           setActiveIdx(-1);
         }}
-        onFocus={() => value && setOpen(true)}
+        onFocus={() => {
+          if (value) setOpen(true);
+        }}
         onKeyDown={(e) => {
           if (open && filtered.length > 0) {
             if (e.key === "ArrowDown") {
@@ -77,7 +93,7 @@ export default function InlineAutocomplete({
         }}
       />
       {open && filtered.length > 0 && (
-        <div className="autocomplete-list">
+        <div className={`autocomplete-list${dropUp ? " autocomplete-list-up" : ""}`}>
           {filtered.map((item, i) => (
             <div
               key={item}
