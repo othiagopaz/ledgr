@@ -4,7 +4,17 @@ import { fetchCashFlow } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { formatAmount } from "../../utils/format";
 import { IntervalSelector } from "./IncomeExpenseChart";
-import type { CashFlowSection } from "../../types";
+import type { CashFlowSection, OtherCurrencyAmount } from "../../types";
+
+function formatOtherCurrencies(items?: OtherCurrencyAmount[]): string {
+  if (!items || items.length === 0) return "";
+  return items
+    .map(({ amount, currency }) => {
+      const num = parseFloat(amount);
+      return `${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+    })
+    .join("\n");
+}
 
 export default function CashFlowStatement() {
   const [interval, setInterval] = useState("monthly");
@@ -20,9 +30,19 @@ export default function CashFlowStatement() {
   if (isLoading) return <div className="report-loading">Loading...</div>;
   if (!data) return <div className="report-empty">No data</div>;
 
-  const { periods, operating, investing, financing, transfers, net_cashflow, opening_balance, closing_balance } = data;
+  const {
+    periods, operating, investing, financing, transfers,
+    net_cashflow, opening_balance, closing_balance,
+    other_net_cashflow, other_opening_balance, other_closing_balance,
+  } = data;
 
   const hasTransfers = transfers.total !== 0;
+
+  const showOther =
+    (other_net_cashflow && other_net_cashflow.length > 0) ||
+    [operating, investing, financing, transfers].some(
+      (s) => s.other_items && s.other_items.length > 0
+    );
 
   const toggleExpandAll = () => {
     setExpandAll((prev) => !prev);
@@ -46,6 +66,9 @@ export default function CashFlowStatement() {
                 <th key={p} className="report-table-num">{p}</th>
               ))}
               <th className="report-table-num report-table-total">Total</th>
+              {showOther && (
+                <th className="report-table-num report-table-other">Other</th>
+              )}
             </tr>
           </thead>
           <tbody key={expandKey}>
@@ -56,6 +79,7 @@ export default function CashFlowStatement() {
               periods={periods}
               currency={currency}
               defaultExpanded={expandAll}
+              showOther={showOther}
             />
 
             {/* Investing */}
@@ -66,6 +90,7 @@ export default function CashFlowStatement() {
                 periods={periods}
                 currency={currency}
                 defaultExpanded={expandAll}
+                showOther={showOther}
               />
             )}
 
@@ -77,6 +102,7 @@ export default function CashFlowStatement() {
                 periods={periods}
                 currency={currency}
                 defaultExpanded={expandAll}
+                showOther={showOther}
               />
             )}
 
@@ -88,6 +114,7 @@ export default function CashFlowStatement() {
                 periods={periods}
                 currency={currency}
                 defaultExpanded={expandAll}
+                showOther={showOther}
               />
             )}
 
@@ -108,11 +135,16 @@ export default function CashFlowStatement() {
                   currency
                 )}
               </td>
+              {showOther && (
+                <td className="report-table-num report-table-other other-currencies">
+                  {formatOtherCurrencies(other_net_cashflow)}
+                </td>
+              )}
             </tr>
 
             {/* Opening/Closing balances */}
             <tr className="cashflow-balance-row">
-              <td colSpan={periods.length + 2} style={{ height: 8 }} />
+              <td colSpan={periods.length + 2 + (showOther ? 1 : 0)} style={{ height: 8 }} />
             </tr>
             <tr className="cashflow-balance-row">
               <td>Opening Cash Balance</td>
@@ -124,6 +156,11 @@ export default function CashFlowStatement() {
               <td className="report-table-num report-table-total">
                 {formatAmount(opening_balance[periods[0]] || 0, currency)}
               </td>
+              {showOther && (
+                <td className="report-table-num report-table-other other-currencies">
+                  {formatOtherCurrencies(other_opening_balance)}
+                </td>
+              )}
             </tr>
             <tr className="cashflow-balance-row cashflow-closing">
               <td>Closing Cash Balance</td>
@@ -138,6 +175,11 @@ export default function CashFlowStatement() {
                   currency
                 )}
               </td>
+              {showOther && (
+                <td className="report-table-num report-table-other other-currencies">
+                  {formatOtherCurrencies(other_closing_balance)}
+                </td>
+              )}
             </tr>
           </tbody>
         </table>
@@ -152,12 +194,14 @@ function CashFlowSectionRows({
   periods,
   currency,
   defaultExpanded,
+  showOther,
 }: {
   label: string;
   section: CashFlowSection;
   periods: string[];
   currency: string;
   defaultExpanded: boolean;
+  showOther: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -165,7 +209,7 @@ function CashFlowSectionRows({
     <>
       {/* Section header */}
       <tr className="report-table-section-header">
-        <td colSpan={periods.length + 2}>{label}</td>
+        <td colSpan={periods.length + 2 + (showOther ? 1 : 0)}>{label}</td>
       </tr>
 
       {/* Line items */}
@@ -185,6 +229,7 @@ function CashFlowSectionRows({
             <td className="report-table-num report-table-total">
               {item.total ? formatAmount(item.total, currency) : "—"}
             </td>
+            {showOther && <td className="report-table-num report-table-other" />}
           </tr>
         ))}
 
@@ -211,6 +256,7 @@ function CashFlowSectionRows({
         <td className={`report-table-num report-table-total ${section.total >= 0 ? "positive" : "negative"}`}>
           {formatAmount(section.total, currency)}
         </td>
+        {showOther && <td className="report-table-num report-table-other" />}
       </tr>
     </>
   );

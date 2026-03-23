@@ -161,15 +161,21 @@ only here.
 ### Classification rules (order is CRITICAL):
 
 ```
-1. FINANCING   → counterpart is Liabilities:Loans (or any sub-account)
-2. INVESTING   → self or counterpart is Assets:Investments (or sub-account)
-3. OPERATING   → counterpart is Income:*, Expenses:*, or Liabilities:* (CC etc.)
-4. TRANSFER    → asset ↔ asset without the above characteristics
+1. FINANCING   → counterpart is Liabilities:Loans (checked FIRST)
+2. INVESTING   → transaction involves Assets:Investments or Assets:Broker
+                  AND there is asset-to-asset movement (checked BEFORE operating)
+3. OPERATING   → counterpart is Income:*, Expenses:*, or Liabilities:*
+4. TRANSFER    → default (asset ↔ asset without the above)
 ```
 
-**Order matters**: `Liabilities:Loans` MUST be checked BEFORE the generic
-`Liabilities:` prefix. Otherwise, loan payments are misclassified as
-"operating" instead of "financing". This was a real bug — do not regress.
+**Order matters**:
+- `Liabilities:Loans` MUST be checked BEFORE the generic `Liabilities:` prefix.
+  Otherwise, loan payments are misclassified as "operating" instead of
+  "financing". This was a real bug — do not regress.
+- `INVESTING` MUST be checked BEFORE `OPERATING`. Otherwise, investment
+  transactions with incidental expenses (commissions, fees) get misclassified
+  as operating. Dividends still classify as operating because they involve
+  only Income → Asset (no asset-to-asset movement).
 
 ### How the Cash Flow is computed:
 

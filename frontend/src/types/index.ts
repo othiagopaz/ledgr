@@ -172,6 +172,7 @@ export interface CashFlowSection {
   totals: Record<string, number>;
   total: number;
   items: CashFlowItem[];
+  other_items?: CashFlowItem[];
 }
 
 export interface CashFlowResponse {
@@ -183,4 +184,8 @@ export interface CashFlowResponse {
   net_cashflow: Record<string, number>;
   opening_balance: Record<string, number>;
   closing_balance: Record<string, number>;
+  operating_currency: string;
+  other_net_cashflow?: OtherCurrencyAmount[];
+  other_opening_balance?: OtherCurrencyAmount[];
+  other_closing_balance?: OtherCurrencyAmount[];
 }
