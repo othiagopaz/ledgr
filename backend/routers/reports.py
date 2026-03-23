@@ -40,6 +40,7 @@ def get_income_expense(
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Monthly/quarterly/yearly income vs expense totals."""
+    oc = ledger.options["operating_currency"][0]
     txns = [e for e in ledger.all_entries if isinstance(e, data.Transaction)]
     buckets: dict[str, dict[str, Decimal]] = {}
 
@@ -48,7 +49,7 @@ def get_income_expense(
         if period not in buckets:
             buckets[period] = {"income": Decimal(0), "expenses": Decimal(0)}
         for p in txn.postings:
-            if p.units is None:
+            if p.units is None or p.units.currency != oc:
                 continue
             acct_type = p.account.split(":")[0]
             if acct_type == "Income":
@@ -102,6 +103,7 @@ def get_net_worth(
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Assets + Liabilities at each period end."""
+    oc = ledger.options["operating_currency"][0]
     txns = sorted(
         [e for e in ledger.all_entries if isinstance(e, data.Transaction)],
         key=lambda t: t.date,
@@ -113,7 +115,7 @@ def get_net_worth(
 
     for txn in txns:
         for p in txn.postings:
-            if p.units is None:
+            if p.units is None or p.units.currency != oc:
                 continue
             acct_type = p.account.split(":")[0]
             if acct_type == "Assets":

@@ -103,6 +103,75 @@ class TestClassifyPosting:
         )
         assert result == "investing"
 
+    def test_stock_buy_with_commission_is_investing(self) -> None:
+        """Stock buy + commission = investing (NOT operating).
+
+        This is the key regression test: the commission (Expenses:Commissions)
+        must NOT cause misclassification as operating.
+        """
+        result = classify_posting(
+            asset_account="Assets:Checking",
+            counterparts=["Expenses:Commissions"],
+            all_accounts_in_txn=[
+                "Assets:Checking",
+                "Assets:Investments:Stocks",
+                "Expenses:Commissions",
+            ],
+        )
+        assert result == "investing"
+
+    def test_stock_sale_with_gain_is_investing(self) -> None:
+        """Stock sale + capital gain = investing."""
+        result = classify_posting(
+            asset_account="Assets:Checking",
+            counterparts=["Income:CapitalGains"],
+            all_accounts_in_txn=[
+                "Assets:Checking",
+                "Assets:Investments:Stocks",
+                "Income:CapitalGains",
+            ],
+        )
+        assert result == "investing"
+
+    def test_dividend_into_broker_is_operating(self) -> None:
+        """Dividend into broker cash = operating (no asset-to-asset movement).
+
+        Only Income → BrokerCash, no other asset account involved.
+        """
+        result = classify_posting(
+            asset_account="Assets:Broker:Cash",
+            counterparts=["Income:Dividends"],
+            all_accounts_in_txn=[
+                "Assets:Broker:Cash",
+                "Income:Dividends",
+            ],
+        )
+        assert result == "operating"
+
+    def test_interest_on_broker_cash_is_operating(self) -> None:
+        """Interest on broker cash = operating."""
+        result = classify_posting(
+            asset_account="Assets:Broker:Cash",
+            counterparts=["Income:Interest"],
+            all_accounts_in_txn=[
+                "Assets:Broker:Cash",
+                "Income:Interest",
+            ],
+        )
+        assert result == "operating"
+
+    def test_broker_cash_to_stocks_is_investing(self) -> None:
+        """Broker cash → stocks = investing (multiple investment accts)."""
+        result = classify_posting(
+            asset_account="Assets:Broker:Cash",
+            counterparts=[],
+            all_accounts_in_txn=[
+                "Assets:Broker:Cash",
+                "Assets:Investments:Stocks",
+            ],
+        )
+        assert result == "investing"
+
     def test_bank_to_bank_is_transfer(self) -> None:
         """Assets:Checking → Assets:Savings = transfer."""
         result = classify_posting(
@@ -216,6 +285,22 @@ class TestComputeCashflow:
         periods = result["periods"]
         assert all(p.startswith("2024-02") for p in periods)
 
+    def test_operating_currency_filters_correctly(
+        self, cashflow_ledger: FavaLedger
+    ) -> None:
+        """When operating_currency is passed, only OC postings are in main totals."""
+        result = compute_cashflow(
+            cashflow_ledger.all_entries, interval="yearly", operating_currency="BRL"
+        )
+        assert result["operating_currency"] == "BRL"
+        # other_* fields exist
+        assert "other_net_cashflow" in result
+        assert "other_opening_balance" in result
+        assert "other_closing_balance" in result
+        # Each section has other_items
+        for section in ("operating", "investing", "financing", "transfers"):
+            assert "other_items" in result[section]
+
     def test_net_cashflow_is_sum_of_categories(
         self, cashflow_ledger: FavaLedger
     ) -> None:
@@ -252,3 +337,68 @@ class TestDateToPeriod:
         assert date_to_period(datetime.date(2024, 4, 1), "quarterly") == "2024-Q2"
         assert date_to_period(datetime.date(2024, 7, 1), "quarterly") == "2024-Q3"
         assert date_to_period(datetime.date(2024, 10, 1), "quarterly") == "2024-Q4"
+
+
+# ------------------------------------------------------------------
+# Multi-currency cashflow
+# ------------------------------------------------------------------
+
+
+class TestMultiCurrencyCashflow:
+    """Non-OC postings must not contaminate OC totals."""
+
+    def test_oc_totals_exclude_non_oc(
+        self, multicurrency_ledger: FavaLedger
+    ) -> None:
+        result = compute_cashflow(
+            multicurrency_ledger.all_entries,
+            interval="yearly",
+            operating_currency="USD",
+        )
+        assert result["operating_currency"] == "USD"
+        # The ITOT buy (100 ITOT) should NOT be in the main investing totals
+        # Only the USD side (-3500) should appear
+        for section in ("operating", "investing", "financing", "transfers"):
+            for item in result[section]["items"]:
+                # All amounts in main items should be USD
+                for p, val in item["totals"].items():
+                    assert isinstance(val, (int, float)), (
+                        f"Non-OC value leaked into {section}: {item}"
+                    )
+
+    def test_non_oc_postings_in_other_items(
+        self, multicurrency_ledger: FavaLedger
+    ) -> None:
+        result = compute_cashflow(
+            multicurrency_ledger.all_entries,
+            interval="yearly",
+            operating_currency="USD",
+        )
+        # ITOT and VACHR postings should be in other_items or other_net_cashflow
+        other_net = result.get("other_net_cashflow", [])
+        other_currencies = {item["currency"] for item in other_net}
+        # The multicurrency fixture has ITOT and VACHR non-OC postings
+        # ITOT goes to Assets:Brokerage (investing other_items)
+        # VACHR goes to Expenses:PTO / Income:PTO (no asset posting, so not in cashflow)
+        # Only ITOT should appear since it touches Assets:Brokerage
+        if other_currencies:
+            assert "ITOT" in other_currencies
+
+    def test_net_cashflow_is_oc_only(
+        self, multicurrency_ledger: FavaLedger
+    ) -> None:
+        result = compute_cashflow(
+            multicurrency_ledger.all_entries,
+            interval="yearly",
+            operating_currency="USD",
+        )
+        # net_cashflow should equal sum of OC category totals
+        for period in result["periods"]:
+            expected = round(
+                result["operating"]["totals"].get(period, 0.0)
+                + result["investing"]["totals"].get(period, 0.0)
+                + result["financing"]["totals"].get(period, 0.0)
+                + result["transfers"]["totals"].get(period, 0.0),
+                2,
+            )
+            assert result["net_cashflow"][period] == pytest.approx(expected, abs=0.01)

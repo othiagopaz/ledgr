@@ -245,3 +245,11 @@ class TestReportsRouter:
         assert "financing" in body
         assert "transfers" in body
         assert "net_cashflow" in body
+        assert "operating_currency" in body
+        # Each section has other_items
+        for section in ("operating", "investing", "financing", "transfers"):
+            assert "other_items" in body[section]
+        # Other currency fields
+        assert "other_net_cashflow" in body
+        assert "other_opening_balance" in body
+        assert "other_closing_balance" in body

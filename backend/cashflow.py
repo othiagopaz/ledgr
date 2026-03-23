@@ -21,7 +21,8 @@ from typing import Any
 
 from beancount.core import data
 
-from serializers import decimal_to_report_number
+from ledgr_options import DEFAULT_INVESTMENT_PREFIXES
+from serializers import decimal_to_report_number, format_other_balances
 
 
 # ------------------------------------------------------------------
@@ -45,35 +46,64 @@ def date_to_period(d: datetime.date, interval: str) -> str:
 #
 # The check order must be:
 #   1. Liabilities:Loans   → financing
-#   2. Income / Expenses / Liabilities (generic)  → operating
-#   3. Assets:Investments / Assets:Broker  → investing
+#   2. Assets:Investments / Assets:Broker with asset movement → investing
+#   3. Income / Expenses / Liabilities (generic)  → operating
 #   4. default  → transfer
 #
 # Liabilities:Loans MUST be checked BEFORE the generic Liabilities: prefix.
 # This was a real bug — do not regress.
+#
+# INVESTING MUST be checked BEFORE OPERATING. Otherwise, investment
+# transactions with incidental expenses (commissions, fees) get
+# misclassified as operating. Dividends still classify as operating
+# because they involve only Income → Asset (no asset-to-asset movement).
 # ------------------------------------------------------------------
 
 def classify_posting(
     asset_account: str,
     counterparts: list[str],
     all_accounts_in_txn: list[str] | None = None,
+    investment_prefixes: tuple[str, ...] = DEFAULT_INVESTMENT_PREFIXES,
 ) -> str:
-    """Classify a cash flow item into operating/investing/financing/transfer.
+    """Classify a cash flow posting per IAS 7 categories.
 
-    Personal-finance heuristic:
+    Order (CRITICAL — do not rearrange):
+      1. FINANCING: counterpart is Liabilities:Loans (must be first)
+      2. INVESTING: transaction involves investment accounts with asset movement
+      3. OPERATING: counterpart is Income/Expenses/Liabilities
+      4. TRANSFER: default (asset ↔ asset)
 
-    - Counterpart is ``Liabilities:Loans:*`` → **financing**
-    - Counterpart is ``Income:*``, ``Expenses:*``, or ``Liabilities:*`` → **operating**
-    - Self or counterpart is ``Assets:Investments:*`` or ``Assets:Broker:*`` → **investing**
-    - Counterpart is another asset (bank-to-bank) → **transfer**
-    - Counterpart is ``Equity:*`` → **transfer** (opening balances)
+    Investing is checked BEFORE operating. This ensures investment transactions
+    with incidental expenses (commissions, fees) are correctly classified as
+    investing, not operating. Dividends still classify as operating because
+    they involve only Income → Asset (no asset-to-asset movement).
     """
     # ── Step 1: FINANCING (Liabilities:Loans BEFORE generic Liabilities) ──
     for cp in counterparts:
         if cp.startswith("Liabilities:Loans"):
             return "financing"
 
-    # ── Step 2: OPERATING ──
+    # ── Step 2: INVESTING ──
+    # Check if any investment account participates in an asset-to-asset movement.
+    # This catches: stock buys (even with commissions), stock sales (with gains),
+    # cash transfers to/from broker.
+    # This does NOT catch: dividends (Income → BrokerCash, no other asset involved).
+    if all_accounts_in_txn:
+        investment_accts = [
+            a for a in all_accounts_in_txn
+            if any(a.startswith(pfx) for pfx in investment_prefixes)
+        ]
+        if investment_accts:
+            non_inv_assets = [
+                a for a in all_accounts_in_txn
+                if a.startswith("Assets:") and a not in investment_accts
+            ]
+            # Investing if: cash flows to/from investments (non-inv asset present)
+            # OR: multiple investment accounts interact (broker cash → stocks)
+            if non_inv_assets or len(set(investment_accts)) > 1:
+                return "investing"
+
+    # ── Step 3: OPERATING ──
     for cp in counterparts:
         if (
             cp.startswith("Income:")
@@ -81,20 +111,6 @@ def classify_posting(
             or cp.startswith("Liabilities:")
         ):
             return "operating"
-
-    # ── Step 3: INVESTING (asset-to-asset, one side is investment) ──
-    if all_accounts_in_txn:
-        is_self_investment = (
-            asset_account.startswith("Assets:Investments")
-            or asset_account.startswith("Assets:Broker")
-        )
-        has_investment_counterpart = any(
-            (a.startswith("Assets:Investments") or a.startswith("Assets:Broker"))
-            and a != asset_account
-            for a in all_accounts_in_txn
-        )
-        if is_self_investment or has_investment_counterpart:
-            return "investing"
 
     # ── Step 4: TRANSFER (default) ──
     return "transfer"
@@ -109,14 +125,21 @@ def compute_cashflow(
     from_date: str | None = None,
     to_date: str | None = None,
     interval: str = "monthly",
+    operating_currency: str | None = None,
+    investment_prefixes: tuple[str, ...] = DEFAULT_INVESTMENT_PREFIXES,
 ) -> dict[str, Any]:
     """Compute the Cash Flow Statement for a period.
 
     Only transactions that touch an ``Assets:`` account are included.
     Each asset posting is classified by its counterpart accounts.
 
+    When ``operating_currency`` is provided, only postings in that currency
+    are included in the main totals.  Non-OC postings are collected into
+    ``other_items`` / ``other_*`` fields.
+
     Returns the shape expected by ``CashFlowResponse`` on the frontend.
     """
+    oc = operating_currency
     txns = [e for e in entries if isinstance(e, data.Transaction)]
 
     if from_date:
@@ -126,8 +149,9 @@ def compute_cashflow(
         d = datetime.date.fromisoformat(to_date)
         txns = [t for t in txns if t.date <= d]
 
-    # Collect all cashflow items
+    # Collect all cashflow items (OC and other separately)
     items: list[dict[str, Any]] = []
+    other_items: list[dict[str, Any]] = []
     periods_set: set[str] = set()
 
     for txn in txns:
@@ -148,7 +172,7 @@ def compute_cashflow(
 
         all_accts = [p.account for p in txn.postings]
         for posting in asset_postings:
-            category = classify_posting(posting.account, counterparts, all_accts)
+            category = classify_posting(posting.account, counterparts, all_accts, investment_prefixes)
 
             if counterparts:
                 cp_display = (
@@ -160,17 +184,23 @@ def compute_cashflow(
                     other_assets[0] if len(other_assets) == 1 else "Split"
                 )
 
-            items.append({
+            item = {
                 "period": period,
                 "account": posting.account,
                 "counterpart": cp_display,
                 "amount": posting.units.number,
+                "currency": posting.units.currency,
                 "category": category,
-            })
+            }
+
+            if oc and posting.units.currency != oc:
+                other_items.append(item)
+            else:
+                items.append(item)
 
     periods = sorted(periods_set)
 
-    # Aggregate by category and period
+    # Aggregate by category and period (OC only)
     def aggregate(cat: str) -> dict[str, float]:
         totals: dict[str, Decimal] = {}
         for item in items:
@@ -185,7 +215,7 @@ def compute_cashflow(
     financing = aggregate("financing")
     transfers = aggregate("transfer")
 
-    # Net cash flow per period
+    # Net cash flow per period (OC only)
     net_cashflow: dict[str, float] = {}
     for period in periods:
         net_cashflow[period] = round(
@@ -201,9 +231,9 @@ def compute_cashflow(
         [e for e in entries if isinstance(e, data.Transaction)],
         key=lambda t: t.date,
     )
-    balances = _compute_period_asset_balances(all_txns, periods, interval)
+    balances = _compute_period_asset_balances(all_txns, periods, interval, oc)
 
-    # Breakdown: group items by counterpart within each category
+    # Breakdown: group items by counterpart within each category (OC only)
     def build_breakdown(cat: str) -> list[dict[str, Any]]:
         by_counterpart: dict[str, dict[str, Decimal]] = {}
         for item in items:
@@ -234,49 +264,113 @@ def compute_cashflow(
                 })
         return result
 
-    return {
+    # Build other-currency breakdown per category
+    def build_other_breakdown(cat: str) -> list[dict[str, Any]]:
+        # counterpart → period → currency → Decimal
+        by_cp: dict[str, dict[str, dict[str, Decimal]]] = {}
+        for item in other_items:
+            if item["category"] != cat:
+                continue
+            cp = item["counterpart"]
+            p = item["period"]
+            c = item["currency"]
+            by_cp.setdefault(cp, {}).setdefault(p, {})
+            by_cp[cp][p][c] = by_cp[cp][p].get(c, Decimal(0)) + item["amount"]
+
+        result: list[dict[str, Any]] = []
+        for cp in sorted(by_cp):
+            totals_map: dict[str, list[dict[str, Any]]] = {}
+            for p, currs in by_cp[cp].items():
+                formatted = format_other_balances(currs)
+                if formatted:
+                    totals_map[p] = formatted
+            if totals_map:
+                short = cp.split(":")[-1] if ":" in cp else cp
+                result.append({
+                    "name": short,
+                    "full_name": cp,
+                    "totals": totals_map,
+                })
+        return result
+
+    # Aggregate other-currency net cashflow
+    other_net_agg: dict[str, Decimal] = {}
+    for item in other_items:
+        c = item["currency"]
+        other_net_agg[c] = other_net_agg.get(c, Decimal(0)) + item["amount"]
+
+    result: dict[str, Any] = {
         "periods": periods,
         "operating": {
             "totals": operating,
             "total": round(sum(operating.values()), 2),
             "items": build_breakdown("operating"),
+            "other_items": build_other_breakdown("operating"),
         },
         "investing": {
             "totals": investing,
             "total": round(sum(investing.values()), 2),
             "items": build_breakdown("investing"),
+            "other_items": build_other_breakdown("investing"),
         },
         "financing": {
             "totals": financing,
             "total": round(sum(financing.values()), 2),
             "items": build_breakdown("financing"),
+            "other_items": build_other_breakdown("financing"),
         },
         "transfers": {
             "totals": transfers,
             "total": round(sum(transfers.values()), 2),
             "items": build_breakdown("transfer"),
+            "other_items": build_other_breakdown("transfer"),
         },
         "net_cashflow": net_cashflow,
         "opening_balance": balances["opening"],
         "closing_balance": balances["closing"],
     }
 
+    if oc:
+        result["operating_currency"] = oc
+        result["other_net_cashflow"] = format_other_balances(other_net_agg)
+        result["other_opening_balance"] = balances.get("other_opening", [])
+        result["other_closing_balance"] = balances.get("other_closing", [])
+
+    return result
+
 
 def _compute_period_asset_balances(
     all_txns: list,
     periods: list[str],
     interval: str,
-) -> dict[str, dict[str, float]]:
-    """Compute opening and closing asset balances for each period."""
+    operating_currency: str | None = None,
+) -> dict[str, Any]:
+    """Compute opening and closing asset balances for each period.
+
+    When ``operating_currency`` is provided, returns OC balances in
+    ``opening``/``closing`` and non-OC balances in ``other_opening``/
+    ``other_closing``.
+    """
+    oc = operating_currency
     cumulative = Decimal(0)
+    # currency → cumulative Decimal
+    other_cumulative: dict[str, Decimal] = {}
     period_end_balance: dict[str, float] = {}
+    # period → currency → Decimal
+    period_end_other: dict[str, dict[str, Decimal]] = {}
 
     for txn in all_txns:
         for p in txn.postings:
             if p.account.startswith("Assets:") and p.units is not None:
-                cumulative += p.units.number
+                if oc and p.units.currency != oc:
+                    c = p.units.currency
+                    other_cumulative[c] = other_cumulative.get(c, Decimal(0)) + p.units.number
+                else:
+                    cumulative += p.units.number
         period = date_to_period(txn.date, interval)
         period_end_balance[period] = decimal_to_report_number(cumulative)
+        if oc:
+            period_end_other[period] = dict(other_cumulative)
 
     all_periods_sorted = sorted(period_end_balance.keys())
     opening: dict[str, float] = {}
@@ -294,4 +388,25 @@ def _compute_period_asset_balances(
         else:
             opening[period] = 0.0
 
-    return {"opening": opening, "closing": closing}
+    result: dict[str, Any] = {"opening": opening, "closing": closing}
+
+    if oc:
+        # Other-currency opening/closing
+        first_period = periods[0] if periods else None
+        last_period = periods[-1] if periods else None
+
+        other_opening_bal: dict[str, Decimal] = {}
+        other_closing_bal: dict[str, Decimal] = {}
+
+        if first_period and first_period in all_periods_sorted:
+            idx = all_periods_sorted.index(first_period)
+            if idx > 0:
+                other_opening_bal = period_end_other.get(all_periods_sorted[idx - 1], {})
+
+        if last_period:
+            other_closing_bal = period_end_other.get(last_period, {})
+
+        result["other_opening"] = format_other_balances(other_opening_bal)
+        result["other_closing"] = format_other_balances(other_closing_bal)
+
+    return result
