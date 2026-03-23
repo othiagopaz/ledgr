@@ -114,16 +114,24 @@ export interface NetWorthPoint {
   net_worth: number;
 }
 
+export interface OtherCurrencyAmount {
+  amount: string;
+  currency: string;
+}
+
 export interface AccountReportNode {
   name: string;
   totals: Record<string, number>;
   total: number;
+  other_totals?: Record<string, OtherCurrencyAmount[]>;
+  other_total?: OtherCurrencyAmount[];
   children: AccountReportNode[];
 }
 
 export interface BalanceSheetNode {
   name: string;
   balance: number;
+  other_balance?: OtherCurrencyAmount[];
   children: BalanceSheetNode[];
 }
 
@@ -132,6 +140,8 @@ export interface IncomeStatementResponse {
   expenses: AccountReportNode[];
   periods: string[];
   net_income: Record<string, number>;
+  operating_currency: string;
+  other_net_income?: OtherCurrencyAmount[];
 }
 
 export interface BalanceSheetResponse {
@@ -142,6 +152,12 @@ export interface BalanceSheetResponse {
     assets: number;
     liabilities: number;
     equity: number;
+  };
+  operating_currency: string;
+  other_totals?: {
+    assets: OtherCurrencyAmount[];
+    liabilities: OtherCurrencyAmount[];
+    equity: OtherCurrencyAmount[];
   };
 }
 

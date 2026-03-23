@@ -1713,6 +1713,15 @@ body {
   font-weight: 600;
   border-left: 1px solid var(--border);
 }
+.report-table-other {
+  border-left: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 120px;
+}
+.other-currencies {
+  white-space: pre-line;
+}
 
 /* Section headers in tables */
 .report-table-section-header td {

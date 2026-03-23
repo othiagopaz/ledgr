@@ -18,9 +18,12 @@ from fava.core import FavaLedger
 
 from cashflow import compute_cashflow, date_to_period
 from serializers import (
+    attach_other_currencies_to_balance_tree,
+    attach_other_currencies_to_report_tree,
     build_balance_tree,
     build_report_tree,
     decimal_to_report_number,
+    format_other_balances,
 )
 
 
@@ -40,6 +43,7 @@ class TestBalanceSheet:
             closed = [e for e in closed if e.date <= cutoff]
 
         real_root = realization.realize(closed)
+        oc = ledger.options["operating_currency"][0]
 
         def section_total(root_type: str) -> float:
             node = realization.get(real_root, root_type)
@@ -48,23 +52,50 @@ class TestBalanceSheet:
             bal = realization.compute_balance(node)
             total = Decimal(0)
             for pos in bal:
-                total += pos.units.number
+                if pos.units.currency == oc:
+                    total += pos.units.number
             return decimal_to_report_number(total)
+
+        def section_other_total(root_type: str) -> list[dict]:
+            node = realization.get(real_root, root_type)
+            if node is None:
+                return []
+            bal = realization.compute_balance(node)
+            by_curr: dict[str, Decimal] = {}
+            for pos in bal:
+                if pos.units.currency != oc:
+                    c = pos.units.currency
+                    by_curr[c] = by_curr.get(c, Decimal(0)) + pos.units.number
+            return format_other_balances(by_curr)
 
         def build_section(root_type: str) -> list[dict]:
             node = realization.get(real_root, root_type)
             if node is None:
                 return []
             account_balance: dict[str, Decimal] = {}
+            account_balance_other: dict[str, dict[str, Decimal]] = {}
             for child in realization.iter_children(node):
                 if child.account:
-                    bal = realization.compute_balance(child)
+                    # Own postings only — build_balance_tree rolls up children
+                    bal = child.balance
                     for pos in bal:
-                        account_balance[child.account] = (
-                            account_balance.get(child.account, Decimal(0))
-                            + pos.units.number
-                        )
-            return build_balance_tree(set(account_balance.keys()), account_balance)
+                        curr = pos.units.currency
+                        if curr == oc:
+                            account_balance[child.account] = (
+                                account_balance.get(child.account, Decimal(0))
+                                + pos.units.number
+                            )
+                        else:
+                            if child.account not in account_balance_other:
+                                account_balance_other[child.account] = {}
+                            account_balance_other[child.account][curr] = (
+                                account_balance_other[child.account].get(curr, Decimal(0))
+                                + pos.units.number
+                            )
+            all_accts = set(account_balance.keys()) | set(account_balance_other.keys())
+            tree = build_balance_tree(all_accts, account_balance)
+            attach_other_currencies_to_balance_tree(tree, account_balance_other)
+            return tree
 
         return {
             "assets": build_section("Assets"),
@@ -74,6 +105,12 @@ class TestBalanceSheet:
                 "assets": section_total("Assets"),
                 "liabilities": section_total("Liabilities"),
                 "equity": section_total("Equity"),
+            },
+            "operating_currency": oc,
+            "other_totals": {
+                "assets": section_other_total("Assets"),
+                "liabilities": section_other_total("Liabilities"),
+                "equity": section_other_total("Equity"),
             },
         }
 
@@ -159,8 +196,10 @@ class TestIncomeStatement:
             ledger.all_entries, begin, end, ledger.options
         )
 
+        oc = ledger.options["operating_currency"][0]
         txns = [e for e in clamped if isinstance(e, data.Transaction)]
         account_period: dict[str, dict[str, Decimal]] = {}
+        account_period_other: dict[str, dict[str, dict[str, Decimal]]] = {}
         periods_set: set[str] = set()
 
         for txn in txns:
@@ -172,20 +211,41 @@ class TestIncomeStatement:
                 acct_type = p.account.split(":")[0]
                 if acct_type not in ("Income", "Expenses"):
                     continue
-                if p.account not in account_period:
-                    account_period[p.account] = {}
-                account_period[p.account][period] = (
-                    account_period[p.account].get(period, Decimal(0))
-                    + p.units.number
-                )
+                curr = p.units.currency
+                if curr == oc:
+                    if p.account not in account_period:
+                        account_period[p.account] = {}
+                    account_period[p.account][period] = (
+                        account_period[p.account].get(period, Decimal(0))
+                        + p.units.number
+                    )
+                else:
+                    if p.account not in account_period_other:
+                        account_period_other[p.account] = {}
+                    if period not in account_period_other[p.account]:
+                        account_period_other[p.account][period] = {}
+                    account_period_other[p.account][period][curr] = (
+                        account_period_other[p.account][period].get(curr, Decimal(0))
+                        + p.units.number
+                    )
 
         periods = sorted(periods_set)
+        all_accts = set(account_period.keys()) | set(account_period_other.keys())
 
         def _build_tree(root_type: str, negate: bool = False) -> list[dict]:
-            accts = {a for a in account_period if a.startswith(root_type + ":")}
-            if root_type in account_period:
+            accts = {a for a in all_accts if a.startswith(root_type + ":")}
+            if root_type in all_accts:
                 accts.add(root_type)
             return build_report_tree(accts, account_period, periods, negate)
+
+        income_tree = _build_tree("Income", negate=True)
+        expenses_tree = _build_tree("Expenses")
+        attach_other_currencies_to_report_tree(
+            income_tree, account_period_other, periods, negate=True,
+        )
+        attach_other_currencies_to_report_tree(
+            expenses_tree, account_period_other, periods, negate=False,
+        )
 
         net_income: dict[str, float] = {}
         for period in periods:
@@ -199,11 +259,20 @@ class TestIncomeStatement:
             )
             net_income[period] = round(inc - exp, 2)
 
+        other_net_agg: dict[str, Decimal] = {}
+        for acct, periods_data in account_period_other.items():
+            sign = -1 if acct.startswith("Income") else 1
+            for _period, curr_data in periods_data.items():
+                for curr, val in curr_data.items():
+                    other_net_agg[curr] = other_net_agg.get(curr, Decimal(0)) + val * sign
+
         return {
-            "income": _build_tree("Income", negate=True),
-            "expenses": _build_tree("Expenses"),
+            "income": income_tree,
+            "expenses": expenses_tree,
             "periods": periods,
             "net_income": net_income,
+            "operating_currency": oc,
+            "other_net_income": format_other_balances(other_net_agg),
         }
 
     def test_has_expected_sections(self, ledger: FavaLedger) -> None:
@@ -235,6 +304,74 @@ class TestIncomeStatement:
             assert "totals" in node
             assert "total" in node
             assert "children" in node
+
+
+# ------------------------------------------------------------------
+# Multi-currency separation
+# ------------------------------------------------------------------
+
+
+class TestMultiCurrencyBalanceSheet:
+    def test_oc_equation_holds(self, multicurrency_ledger: FavaLedger) -> None:
+        """A + L + E = 0 for operating currency only."""
+        result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
+        t = result["totals"]
+        total = t["assets"] + t["liabilities"] + t["equity"]
+        assert total == pytest.approx(0.0, abs=0.01), (
+            f"OC equation violated: A={t['assets']} L={t['liabilities']} E={t['equity']} = {total}"
+        )
+
+    def test_has_operating_currency(self, multicurrency_ledger: FavaLedger) -> None:
+        result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
+        assert result["operating_currency"] == "USD"
+
+    def test_other_totals_present(self, multicurrency_ledger: FavaLedger) -> None:
+        result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
+        assert "other_totals" in result
+        # The fixture has ITOT in Assets:Brokerage
+        asset_others = result["other_totals"]["assets"]
+        currencies = [item["currency"] for item in asset_others]
+        assert "ITOT" in currencies
+
+    def test_oc_totals_exclude_non_oc(self, multicurrency_ledger: FavaLedger) -> None:
+        """OC totals must not include ITOT or VACHR amounts."""
+        result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
+        # Assets total should only contain USD balances
+        # Checking: 10000 + 5000 - 200 - 3500 + 5000 = 16300 USD
+        # (100 ITOT in Brokerage excluded from OC total)
+        assert result["totals"]["assets"] == pytest.approx(16300.0, abs=0.01)
+
+
+class TestMultiCurrencyIncomeStatement:
+    def test_has_operating_currency(self, multicurrency_ledger: FavaLedger) -> None:
+        result = TestIncomeStatement._compute_income_statement(multicurrency_ledger)
+        assert result["operating_currency"] == "USD"
+
+    def test_net_income_excludes_non_oc(self, multicurrency_ledger: FavaLedger) -> None:
+        """Net income should only include USD amounts."""
+        result = TestIncomeStatement._compute_income_statement(multicurrency_ledger)
+        total_net = sum(result["net_income"].values())
+        # USD income: 5000 + 5000 = 10000, USD expenses: 200 + 150 = 350
+        # Net = 10000 - 350 = 9650
+        assert total_net == pytest.approx(9650.0, abs=0.01)
+
+    def test_other_net_income_present(self, multicurrency_ledger: FavaLedger) -> None:
+        result = TestIncomeStatement._compute_income_statement(multicurrency_ledger)
+        assert "other_net_income" in result
+        currencies = [item["currency"] for item in result["other_net_income"]]
+        assert "VACHR" in currencies
+
+    def test_tree_nodes_have_other_fields(self, multicurrency_ledger: FavaLedger) -> None:
+        result = TestIncomeStatement._compute_income_statement(multicurrency_ledger)
+        # Walk income tree to find nodes with other_total
+        def has_other(nodes: list[dict]) -> bool:
+            for n in nodes:
+                if n.get("other_total"):
+                    return True
+                if has_other(n.get("children", [])):
+                    return True
+            return False
+        assert has_other(result["income"]), "Income tree should have other_total for VACHR"
 
 
 # ------------------------------------------------------------------

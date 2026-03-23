@@ -166,6 +166,109 @@ def decimal_to_report_number(value: Decimal) -> float:
     return round(float(value), 2)
 
 
+def format_other_balances(balances: dict[str, Decimal]) -> list[dict[str, Any]]:
+    """Format non-operating-currency balances for the 'Other' column.
+
+    Returns list of ``{"amount": "55500.00", "currency": "IRAUSD"}`` dicts.
+    Excludes zero balances.  Sorted by currency name.
+    """
+    result = []
+    for curr in sorted(balances):
+        val = balances[curr]
+        if val != 0:
+            result.append({"amount": str(val), "currency": curr})
+    return result
+
+
+def attach_other_currencies_to_report_tree(
+    tree: list[dict[str, Any]],
+    account_period_other: dict[str, dict[str, dict[str, Decimal]]],
+    periods: list[str],
+    negate: bool = False,
+) -> None:
+    """Walk a report tree and attach ``other_totals`` / ``other_total``.
+
+    ``account_period_other`` is keyed as
+    ``account → period → currency → Decimal``.
+    """
+    sign = -1 if negate else 1
+
+    def _walk(node: dict[str, Any]) -> None:
+        name = node["name"]
+        # Collect this node's own other-currency data
+        own_other = account_period_other.get(name, {})
+        # Recurse into children first so we can aggregate upward
+        for child in node.get("children", []):
+            _walk(child)
+
+        other_totals: dict[str, list[dict[str, Any]]] = {}
+        other_total_agg: dict[str, Decimal] = {}
+
+        # Own data
+        for period in periods:
+            period_data = own_other.get(period, {})
+            for curr, val in period_data.items():
+                other_total_agg[curr] = other_total_agg.get(curr, Decimal(0)) + val * sign
+                # Build per-period aggregation too
+                if period not in other_totals:
+                    other_totals[period] = {}
+                other_totals[period][curr] = other_totals[period].get(curr, Decimal(0)) + val * sign
+
+        # Add children's other data
+        for child in node.get("children", []):
+            for period, items in (child.get("other_totals") or {}).items():
+                if period not in other_totals:
+                    other_totals[period] = {}
+                for item in items:
+                    c = item["currency"]
+                    v = Decimal(item["amount"])
+                    other_totals[period][c] = other_totals[period].get(c, Decimal(0)) + v
+            for item in (child.get("other_total") or []):
+                c = item["currency"]
+                v = Decimal(item["amount"])
+                other_total_agg[c] = other_total_agg.get(c, Decimal(0)) + v
+
+        # Convert aggregated dicts to sorted lists
+        node["other_totals"] = {
+            p: format_other_balances(currs)
+            for p, currs in other_totals.items()
+        }
+        node["other_total"] = format_other_balances(other_total_agg)
+
+    for node in tree:
+        _walk(node)
+
+
+def attach_other_currencies_to_balance_tree(
+    tree: list[dict[str, Any]],
+    account_balance_other: dict[str, dict[str, Decimal]],
+    negate: bool = False,
+) -> None:
+    """Walk a balance tree and attach ``other_balance`` to each node."""
+    sign = -1 if negate else 1
+
+    def _walk(node: dict[str, Any]) -> None:
+        name = node["name"]
+        for child in node.get("children", []):
+            _walk(child)
+
+        agg: dict[str, Decimal] = {}
+        # Own data
+        for curr, val in account_balance_other.get(name, {}).items():
+            agg[curr] = agg.get(curr, Decimal(0)) + val * sign
+        # Children data
+        for child in node.get("children", []):
+            for item in (child.get("other_balance") or []):
+                c = item["currency"]
+                v = Decimal(item["amount"])
+                agg[c] = agg.get(c, Decimal(0)) + v
+
+        node["other_balance"] = format_other_balances(agg)
+
+    for node in tree:
+        _walk(node)
+
+
 def build_report_tree(
     accounts: set[str],
     account_period: dict[str, dict[str, Decimal]],

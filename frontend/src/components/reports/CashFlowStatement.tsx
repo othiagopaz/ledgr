@@ -8,6 +8,8 @@ import type { CashFlowSection } from "../../types";
 
 export default function CashFlowStatement() {
   const [interval, setInterval] = useState("monthly");
+  const [expandAll, setExpandAll] = useState(false);
+  const [expandKey, setExpandKey] = useState(0);
   const currency = useAppStore((s) => s.operatingCurrency);
 
   const { data, isLoading } = useQuery({
@@ -22,10 +24,18 @@ export default function CashFlowStatement() {
 
   const hasTransfers = transfers.total !== 0;
 
+  const toggleExpandAll = () => {
+    setExpandAll((prev) => !prev);
+    setExpandKey((k) => k + 1);
+  };
+
   return (
     <div className="report-statement">
       <div className="report-chart-controls">
         <IntervalSelector value={interval} onChange={setInterval} />
+        <button className="interval-btn" onClick={toggleExpandAll}>
+          {expandAll ? "Collapse All" : "Expand All"}
+        </button>
       </div>
       <div className="report-table-wrapper">
         <table className="report-table">
@@ -38,13 +48,14 @@ export default function CashFlowStatement() {
               <th className="report-table-num report-table-total">Total</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody key={expandKey}>
             {/* Operating */}
             <CashFlowSectionRows
               label="Operating"
               section={operating}
               periods={periods}
               currency={currency}
+              defaultExpanded={expandAll}
             />
 
             {/* Investing */}
@@ -54,6 +65,7 @@ export default function CashFlowStatement() {
                 section={investing}
                 periods={periods}
                 currency={currency}
+                defaultExpanded={expandAll}
               />
             )}
 
@@ -64,6 +76,7 @@ export default function CashFlowStatement() {
                 section={financing}
                 periods={periods}
                 currency={currency}
+                defaultExpanded={expandAll}
               />
             )}
 
@@ -74,6 +87,7 @@ export default function CashFlowStatement() {
                 section={transfers}
                 periods={periods}
                 currency={currency}
+                defaultExpanded={expandAll}
               />
             )}
 
@@ -137,13 +151,15 @@ function CashFlowSectionRows({
   section,
   periods,
   currency,
+  defaultExpanded,
 }: {
   label: string;
   section: CashFlowSection;
   periods: string[];
   currency: string;
+  defaultExpanded: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   return (
     <>

@@ -11,3 +11,5 @@ frontend/dist/
 .DS_Store
 backend/__pycache__/*
 data/financeiro.beancount
+PLAN-multicurrency-statements.md
+.gitignore

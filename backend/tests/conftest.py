@@ -31,6 +31,15 @@ def minimal_file(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
+def multicurrency_file(tmp_path: Path) -> Path:
+    """Copy the multicurrency fixture into a temp directory."""
+    src = FIXTURES_DIR / "multicurrency.beancount"
+    dst = tmp_path / "multicurrency.beancount"
+    shutil.copy(src, dst)
+    return dst
+
+
+@pytest.fixture()
 def cashflow_file(tmp_path: Path) -> Path:
     """Copy the cashflow fixture into a temp directory."""
     src = FIXTURES_DIR / "cashflow.beancount"
@@ -43,6 +52,14 @@ def cashflow_file(tmp_path: Path) -> Path:
 def ledger(minimal_file: Path) -> FavaLedger:
     """A FavaLedger instance loaded from the minimal fixture."""
     fava = FavaLedger(str(minimal_file))
+    fava.load_file()
+    return fava
+
+
+@pytest.fixture()
+def multicurrency_ledger(multicurrency_file: Path) -> FavaLedger:
+    """A FavaLedger instance loaded from the multicurrency fixture."""
+    fava = FavaLedger(str(multicurrency_file))
     fava.load_file()
     return fava
 

@@ -1,0 +1,44 @@
+option "title" "Multi-Currency Test Ledger"
+option "operating_currency" "USD"
+
+2024-01-01 open Assets:Checking        USD
+2024-01-01 open Assets:Brokerage       ITOT
+2024-01-01 open Income:Salary          USD
+2024-01-01 open Income:Dividends       USD
+2024-01-01 open Income:PTO             VACHR
+2024-01-01 open Expenses:Food          USD
+2024-01-01 open Expenses:PTO           VACHR
+2024-01-01 open Liabilities:CreditCard USD
+2024-01-01 open Equity:OpeningBalances
+
+2024-01-01 * "Opening Balance"
+  Assets:Checking         10000.00 USD
+  Equity:OpeningBalances
+
+2024-01-15 * "Employer" "January Salary"
+  Assets:Checking          5000.00 USD
+  Income:Salary
+
+2024-01-15 * "Employer" "PTO Accrual"
+  Expenses:PTO               -10 VACHR
+  Income:PTO
+
+2024-01-20 * "Supermarket" "Groceries"
+  Expenses:Food             200.00 USD
+  Assets:Checking
+
+2024-02-01 * "Buy shares"
+  Assets:Brokerage           100 ITOT
+  Assets:Checking         -3500.00 USD
+
+2024-02-15 * "Employer" "February Salary"
+  Assets:Checking          5000.00 USD
+  Income:Salary
+
+2024-02-15 * "Employer" "PTO Accrual"
+  Expenses:PTO               -10 VACHR
+  Income:PTO
+
+2024-02-20 * "Restaurant" "Dinner"
+  Expenses:Food             150.00 USD
+  Liabilities:CreditCard
