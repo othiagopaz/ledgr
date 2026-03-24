@@ -16,7 +16,6 @@ Rules (AGENTS.md §6):
 
 from __future__ import annotations
 
-import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -201,7 +200,7 @@ def attach_other_currencies_to_report_tree(
         for child in node.get("children", []):
             _walk(child)
 
-        other_totals: dict[str, list[dict[str, Any]]] = {}
+        other_totals: dict[str, dict[str, Any]] = {}
         other_total_agg: dict[str, Decimal] = {}
 
         # Own data
