@@ -183,6 +183,9 @@ def compute_cashflow(
                 cp_display = (
                     other_assets[0] if len(other_assets) == 1 else "Split"
                 )
+                
+            if posting.units is None:
+                raise ValueError(f"Posting {posting.account} has no units")
 
             item = {
                 "period": period,
