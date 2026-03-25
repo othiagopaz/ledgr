@@ -14,6 +14,7 @@ import { fetchNetWorthSeries } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { formatAmount } from "../../utils/format";
 import { IntervalSelector } from "./IncomeExpenseChart";
+import type { ViewMode } from "../../types";
 
 interface Props {
   mini?: boolean;
@@ -22,25 +23,57 @@ interface Props {
 export default function NetWorthChart({ mini }: Props) {
   const [interval, setInterval] = useState("monthly");
   const currency = useAppStore((s) => s.operatingCurrency);
+  const viewMode = useAppStore((s) => s.viewMode);
+
+  const backendMode: string = viewMode === "combined" ? "comparative" : "actual";
 
   const { data, isLoading } = useQuery({
-    queryKey: ["net-worth", interval],
-    queryFn: () => fetchNetWorthSeries(interval),
+    queryKey: ["net-worth", interval, viewMode],
+    queryFn: () => fetchNetWorthSeries(interval, backendMode as ViewMode),
   });
 
   const series = data?.series || [];
+  const planned = data?.planned_series || [];
+  const showPlanned = viewMode === "combined" && planned.length > 0;
 
   if (isLoading) return <div className="report-loading">Loading...</div>;
-  if (series.length === 0) return <div className="report-empty">No data</div>;
+  if (series.length === 0 && planned.length === 0)
+    return <div className="report-empty">No data</div>;
 
-  const displayData = mini ? series.slice(-6) : series;
+  // Merge all periods from both series so future-only planned periods appear
+  const allPeriods = Array.from(
+    new Set([...series.map((p) => p.period), ...planned.map((p) => p.period)])
+  ).sort();
+
+  // Net worth is cumulative, so carry forward the last known actual value
+  // into future periods that only have planned data
+  let lastActual = { assets: 0, liabilities: 0, net_worth: 0 };
+  const allData = allPeriods.map((period) => {
+    const actual = series.find((p) => p.period === period);
+    const plan = planned.find((p) => p.period === period);
+    if (actual) {
+      lastActual = { assets: actual.assets, liabilities: actual.liabilities, net_worth: actual.net_worth };
+    }
+    const base = actual || lastActual;
+    return {
+      period,
+      assets: base.assets,
+      liabilities: base.liabilities,
+      net_worth: base.net_worth,
+      ...(showPlanned
+        ? { combined_net_worth: base.net_worth + (plan?.net_worth || 0) }
+        : {}),
+    };
+  });
+
+  const displayData = mini ? allData.slice(-6) : allData;
 
   const formatTick = (value: number) => {
     if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(0)}k`;
     return value.toFixed(0);
   };
 
-  const latest = series[series.length - 1];
+  const latest = displayData[displayData.length - 1];
 
   return (
     <div className="report-chart">
@@ -65,18 +98,16 @@ export default function NetWorthChart({ mini }: Props) {
             tickLine={false}
             width={50}
           />
-          {!mini && (
-            <Tooltip
-              formatter={(value) => formatAmount(Number(value), currency)}
-              contentStyle={{
-                background: "var(--bg-secondary)",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                fontSize: 12,
-              }}
-              labelStyle={{ color: "var(--text-primary)", fontWeight: 600 }}
-            />
-          )}
+          <Tooltip
+            formatter={(value) => formatAmount(Number(value), currency)}
+            contentStyle={{
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              fontSize: 12,
+            }}
+            labelStyle={{ color: "var(--text-primary)", fontWeight: 600 }}
+          />
           {!mini && <Legend wrapperStyle={{ fontSize: 11 }} />}
           <Area
             type="monotone"
@@ -87,6 +118,18 @@ export default function NetWorthChart({ mini }: Props) {
             fillOpacity={0.15}
             strokeWidth={2}
           />
+          {showPlanned && (
+            <Area
+              type="monotone"
+              dataKey="combined_net_worth"
+              name="Net Worth (with Planned)"
+              stroke="var(--accent)"
+              fill="var(--accent)"
+              fillOpacity={0.05}
+              strokeWidth={2}
+              strokeDasharray="5 5"
+            />
+          )}
           <Area
             type="monotone"
             dataKey="net_worth"

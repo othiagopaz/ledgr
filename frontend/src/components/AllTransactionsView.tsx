@@ -15,9 +15,11 @@ export default function AllTransactionsView({
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const [deletingLineno, setDeletingLineno] = useState<number | null>(null);
 
+  const viewMode = useAppStore((s) => s.viewMode);
+
   const txnsQuery = useQuery({
-    queryKey: ["transactions"],
-    queryFn: () => fetchTransactions(),
+    queryKey: ["transactions", viewMode],
+    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode),
   });
 
   const transactions = txnsQuery.data?.transactions || [];

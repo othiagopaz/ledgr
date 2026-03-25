@@ -14,7 +14,7 @@ from beancount.core import data, realization
 from fastapi import APIRouter, Depends, Query
 from fava.core import FavaLedger
 
-from ledger import get_ledger
+from ledger import get_filtered_entries, get_ledger
 from serializers import ACCOUNT_TYPE_ORDER, serialize_account_node, serialize_error
 
 router = APIRouter()
@@ -22,10 +22,12 @@ router = APIRouter()
 
 @router.get("/api/accounts")
 def get_accounts(
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Account tree with balances."""
-    real_root = realization.realize(ledger.all_entries)
+    entries = get_filtered_entries(ledger, view_mode)
+    real_root = realization.realize(entries)
     top_level = [serialize_account_node(c) for c in real_root.values()]
     top_level.sort(key=lambda n: ACCOUNT_TYPE_ORDER.get(n["name"], 99))
 
