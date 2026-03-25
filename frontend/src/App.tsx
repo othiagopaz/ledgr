@@ -8,6 +8,7 @@ import AccountRegister from "./components/AccountRegister";
 import AllTransactionsView from "./components/AllTransactionsView";
 import ReportsView from "./components/reports/ReportsView";
 import TransactionModal from "./components/TransactionModal";
+import PlannedToggle from "./components/PlannedToggle";
 import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
 import CommandPalette from "./components/CommandPalette";
@@ -22,6 +23,7 @@ export default function App() {
   const setLocale = useAppStore((s) => s.setLocale);
   const commandPaletteOpen = useAppStore((s) => s.commandPaletteOpen);
   const txnModalOpen = useAppStore((s) => s.txnModalOpen);
+  const viewMode = useAppStore((s) => s.viewMode);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const selectedAccount = activeTab?.type === "register" ? activeTab.account : null;
@@ -60,13 +62,13 @@ export default function App() {
   }, []);
 
   const accountsQuery = useQuery({
-    queryKey: ["accounts"],
-    queryFn: fetchAccounts,
+    queryKey: ["accounts", viewMode],
+    queryFn: () => fetchAccounts(viewMode),
   });
 
   const txnsQuery = useQuery({
-    queryKey: ["transactions", selectedAccount],
-    queryFn: () => fetchTransactions(selectedAccount || undefined),
+    queryKey: ["transactions", selectedAccount, viewMode],
+    queryFn: () => fetchTransactions(selectedAccount || undefined, undefined, undefined, viewMode),
     enabled: !!selectedAccount,
   });
 
@@ -131,6 +133,7 @@ export default function App() {
     <div className="app">
       <div className="app-header">
         <h1>Ledgr</h1>
+        <PlannedToggle />
       </div>
 
       {errors.length > 0 && (

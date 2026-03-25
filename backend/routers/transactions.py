@@ -18,7 +18,7 @@ from fava.core import FavaLedger
 from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
-from ledger import get_ledger
+from ledger import get_filtered_entries, get_ledger
 from serializers import serialize_transaction
 
 router = APIRouter()
@@ -102,10 +102,12 @@ def get_transactions(
     account: str | None = Query(None),
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """List transactions, optionally filtered by account and date range."""
-    txns = [e for e in ledger.all_entries if isinstance(e, data.Transaction)]
+    entries = get_filtered_entries(ledger, view_mode)
+    txns = [e for e in entries if isinstance(e, data.Transaction)]
 
     if account:
         txns = [

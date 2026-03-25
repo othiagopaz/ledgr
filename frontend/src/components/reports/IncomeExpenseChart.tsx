@@ -9,10 +9,12 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   Legend,
+  ReferenceLine,
 } from "recharts";
 import { fetchIncomeExpenseSeries } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { formatAmount } from "../../utils/format";
+import type { ViewMode } from "../../types";
 
 interface Props {
   mini?: boolean;
@@ -21,18 +23,46 @@ interface Props {
 export default function IncomeExpenseChart({ mini }: Props) {
   const [interval, setInterval] = useState("monthly");
   const currency = useAppStore((s) => s.operatingCurrency);
+  const viewMode = useAppStore((s) => s.viewMode);
+
+  // When combined, fetch comparative to get actual + planned separately
+  const backendMode: string = viewMode === "combined" ? "comparative" : "actual";
 
   const { data, isLoading } = useQuery({
-    queryKey: ["income-expense", interval],
-    queryFn: () => fetchIncomeExpenseSeries(interval),
+    queryKey: ["income-expense", interval, viewMode],
+    queryFn: () => fetchIncomeExpenseSeries(interval, backendMode as ViewMode),
   });
 
   const series = data?.series || [];
+  const planned = data?.planned_series || [];
+  const showPlanned = viewMode === "combined" && planned.length > 0;
 
   if (isLoading) return <div className="report-loading">Loading...</div>;
-  if (series.length === 0) return <div className="report-empty">No data</div>;
+  if (series.length === 0 && planned.length === 0)
+    return <div className="report-empty">No data</div>;
 
-  const displayData = mini ? series.slice(-6) : series;
+  // Merge all periods from both series so future-only planned periods appear
+  const allPeriods = Array.from(
+    new Set([...series.map((p) => p.period), ...planned.map((p) => p.period)])
+  ).sort();
+
+  const allData = allPeriods.map((period) => {
+    const actual = series.find((p) => p.period === period);
+    const plan = planned.find((p) => p.period === period);
+    return {
+      period,
+      income: actual?.income || 0,
+      expenses: -(actual?.expenses || 0),
+      ...(showPlanned
+        ? {
+            planned_income: plan?.income || 0,
+            planned_expenses: -(plan?.expenses || 0),
+          }
+        : {}),
+    };
+  });
+
+  const displayData = mini ? allData.slice(-6) : allData;
 
   const formatTick = (value: number) => {
     if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(0)}k`;
@@ -47,7 +77,11 @@ export default function IncomeExpenseChart({ mini }: Props) {
         </div>
       )}
       <ResponsiveContainer width="100%" height={mini ? 200 : 320}>
-        <BarChart data={displayData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <BarChart
+          data={displayData}
+          margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+          stackOffset="sign"
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
           <XAxis
             dataKey="period"
@@ -62,21 +96,55 @@ export default function IncomeExpenseChart({ mini }: Props) {
             tickLine={false}
             width={50}
           />
-          {!mini && (
-            <Tooltip
-              formatter={(value) => formatAmount(Number(value), currency)}
-              contentStyle={{
-                background: "var(--bg-secondary)",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                fontSize: 12,
-              }}
-              labelStyle={{ color: "var(--text-primary)", fontWeight: 600 }}
-            />
-          )}
+          <ReferenceLine y={0} stroke="var(--border)" />
+          <Tooltip
+            formatter={(value: number, name: string) => {
+              const absVal = Math.abs(value);
+              return [formatAmount(absVal, currency), name];
+            }}
+            contentStyle={{
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              fontSize: 12,
+            }}
+            labelStyle={{ color: "var(--text-primary)", fontWeight: 600 }}
+          />
           {!mini && <Legend wrapperStyle={{ fontSize: 11 }} />}
-          <Bar dataKey="income" name="Income" fill="var(--amount-positive)" radius={[3, 3, 0, 0]} />
-          <Bar dataKey="expenses" name="Expenses" fill="var(--amount-negative)" radius={[3, 3, 0, 0]} />
+          <Bar
+            dataKey="income"
+            name="Income"
+            fill="var(--amount-positive)"
+            stackId="a"
+            radius={[3, 3, 0, 0]}
+          />
+          <Bar
+            dataKey="expenses"
+            name="Expenses"
+            fill="var(--amount-negative)"
+            stackId="a"
+            radius={[0, 0, 3, 3]}
+          />
+          {showPlanned && (
+            <>
+              <Bar
+                dataKey="planned_income"
+                name="Planned Income"
+                fill="var(--amount-positive)"
+                opacity={0.35}
+                stackId="a"
+                radius={[3, 3, 0, 0]}
+              />
+              <Bar
+                dataKey="planned_expenses"
+                name="Planned Expenses"
+                fill="var(--amount-negative)"
+                opacity={0.35}
+                stackId="a"
+                radius={[0, 0, 3, 3]}
+              />
+            </>
+          )}
         </BarChart>
       </ResponsiveContainer>
     </div>
