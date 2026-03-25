@@ -10,9 +10,11 @@ interface AccountsViewProps {
 export default function AccountsView({ onSelectAccount }: AccountsViewProps) {
   const { tabs, activeTabId } = useAppStore();
 
+  const viewMode = useAppStore((s) => s.viewMode);
+
   const accountsQuery = useQuery({
-    queryKey: ["accounts"],
-    queryFn: fetchAccounts,
+    queryKey: ["accounts", viewMode],
+    queryFn: () => fetchAccounts(viewMode),
   });
 
   const accounts = accountsQuery.data?.accounts || [];

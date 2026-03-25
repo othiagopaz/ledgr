@@ -1805,3 +1805,61 @@ body {
   color: var(--text-primary);
   border-bottom: 2px solid var(--border);
 }
+
+/* ------------------------------------------------------------------
+   Planned Toggle
+   ------------------------------------------------------------------ */
+
+.planned-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.planned-toggle:hover {
+  background: var(--bg-row-hover);
+  color: var(--text-primary);
+}
+
+.planned-toggle-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.planned-toggle-off {
+  border-color: var(--flag-confirmed);
+  color: var(--flag-confirmed);
+}
+
+.planned-toggle-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Planned value sub-line in comparative mode */
+
+.planned-value {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.dashboard-card-planned {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 2px;
+  opacity: 0.7;
+}

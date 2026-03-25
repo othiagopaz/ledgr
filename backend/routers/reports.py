@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Query
 from fava.core import FavaLedger
 
 from cashflow import date_to_period
-from ledger import get_ledger
+from ledger import get_filtered_entries, get_ledger
 from serializers import (
     attach_other_currencies_to_balance_tree,
     attach_other_currencies_to_report_tree,
@@ -30,18 +30,12 @@ router = APIRouter()
 
 
 # ------------------------------------------------------------------
-# Time series
+# Helpers — extracted computation logic for comparative mode
 # ------------------------------------------------------------------
 
 
-@router.get("/api/reports/income-expense")
-def get_income_expense(
-    interval: str = Query("monthly"),
-    ledger: FavaLedger = Depends(get_ledger),
-) -> dict[str, Any]:
-    """Monthly/quarterly/yearly income vs expense totals."""
-    oc = ledger.options["operating_currency"][0]
-    txns = [e for e in ledger.all_entries if isinstance(e, data.Transaction)]
+def _compute_income_expense(entries: list, interval: str, oc: str) -> list[dict]:
+    txns = [e for e in entries if isinstance(e, data.Transaction)]
     buckets: dict[str, dict[str, Decimal]] = {}
 
     for txn in txns:
@@ -57,7 +51,7 @@ def get_income_expense(
             elif acct_type == "Expenses":
                 buckets[period]["expenses"] += p.units.number
 
-    series = [
+    return [
         {
             "period": period,
             "income": decimal_to_report_number(buckets[period]["income"]),
@@ -65,18 +59,11 @@ def get_income_expense(
         }
         for period in sorted(buckets)
     ]
-    return {"series": series}
 
 
-@router.get("/api/reports/account-balance")
-def get_account_balance(
-    account: str = Query(...),
-    interval: str = Query("monthly"),
-    ledger: FavaLedger = Depends(get_ledger),
-) -> dict[str, Any]:
-    """Running balance of a specific account over time."""
+def _compute_account_balance(entries: list, account: str, interval: str) -> list[dict]:
     txns = sorted(
-        [e for e in ledger.all_entries if isinstance(e, data.Transaction)],
+        [e for e in entries if isinstance(e, data.Transaction)],
         key=lambda t: t.date,
     )
 
@@ -90,22 +77,15 @@ def get_account_balance(
         period = date_to_period(txn.date, interval)
         period_balance[period] = running
 
-    series = [
+    return [
         {"period": p, "balance": decimal_to_report_number(b)}
         for p, b in sorted(period_balance.items())
     ]
-    return {"series": series}
 
 
-@router.get("/api/reports/net-worth")
-def get_net_worth(
-    interval: str = Query("monthly"),
-    ledger: FavaLedger = Depends(get_ledger),
-) -> dict[str, Any]:
-    """Assets + Liabilities at each period end."""
-    oc = ledger.options["operating_currency"][0]
+def _compute_net_worth(entries: list, interval: str, oc: str) -> list[dict]:
     txns = sorted(
-        [e for e in ledger.all_entries if isinstance(e, data.Transaction)],
+        [e for e in entries if isinstance(e, data.Transaction)],
         key=lambda t: t.date,
     )
 
@@ -129,7 +109,7 @@ def get_net_worth(
             "net_worth": assets + liabilities,
         }
 
-    series = [
+    return [
         {
             "period": period,
             "assets": decimal_to_report_number(s["assets"]),
@@ -138,46 +118,13 @@ def get_net_worth(
         }
         for period, s in sorted(snapshots.items())
     ]
-    return {"series": series}
 
 
-# ------------------------------------------------------------------
-# Income Statement — uses clamp_opt (AGENTS.md §8)
-# ------------------------------------------------------------------
-
-
-@router.get("/api/reports/income-statement")
-def get_income_statement(
-    from_date: str | None = Query(None),
-    to_date: str | None = Query(None),
-    interval: str = Query("monthly"),
-    ledger: FavaLedger = Depends(get_ledger),
-) -> dict[str, Any]:
-    """Income statement with tree structure and period columns."""
-    begin = datetime.date.fromisoformat(from_date) if from_date else None
-    end = datetime.date.fromisoformat(to_date) if to_date else None
-
-    txn_dates = [
-        e.date for e in ledger.all_entries if isinstance(e, data.Transaction)
-    ]
-    if not txn_dates:
-        return {"income": [], "expenses": [], "periods": [], "net_income": {}}
-
-    if begin is None:
-        begin = min(txn_dates)
-    if end is None:
-        end = max(txn_dates) + datetime.timedelta(days=1)
-    else:
-        end = end + datetime.timedelta(days=1)  # clamp_opt end is exclusive
-
-    clamped, _ = summarize.clamp_opt(ledger.all_entries, begin, end, ledger.options)
-
-    oc = ledger.options["operating_currency"][0]
+def _compute_income_statement(entries: list, begin, end, options, interval: str, oc: str) -> dict[str, Any]:
+    clamped, _ = summarize.clamp_opt(entries, begin, end, options)
 
     txns = [e for e in clamped if isinstance(e, data.Transaction)]
-    # Operating-currency data (feeds into build_report_tree)
     account_period: dict[str, dict[str, Decimal]] = {}
-    # Non-operating-currency data: account → period → currency → Decimal
     account_period_other: dict[str, dict[str, dict[str, Decimal]]] = {}
     periods_set: set[str] = set()
 
@@ -210,7 +157,6 @@ def get_income_statement(
 
     periods = sorted(periods_set)
 
-    # Ensure accounts with only non-OC postings still appear in the tree
     all_accts = set(account_period.keys()) | set(account_period_other.keys())
 
     def _build_tree(root_type: str, negate: bool = False) -> list[dict]:
@@ -222,7 +168,6 @@ def get_income_statement(
     income_tree = _build_tree("Income", negate=True)
     expenses_tree = _build_tree("Expenses", negate=False)
 
-    # Attach non-OC data to tree nodes
     attach_other_currencies_to_report_tree(
         income_tree, account_period_other, periods, negate=True,
     )
@@ -230,7 +175,6 @@ def get_income_statement(
         expenses_tree, account_period_other, periods, negate=False,
     )
 
-    # Net income — operating currency only
     net_income: dict[str, float] = {}
     for period in periods:
         inc = sum(
@@ -245,7 +189,6 @@ def get_income_statement(
         )
         net_income[period] = round(inc - exp, 2)
 
-    # Net income — other currencies
     other_net_agg: dict[str, Decimal] = {}
     for acct, periods_data in account_period_other.items():
         sign = -1 if acct.startswith("Income") else 1
@@ -264,29 +207,14 @@ def get_income_statement(
     }
 
 
-# ------------------------------------------------------------------
-# Balance Sheet — uses cap_opt (AGENTS.md §8)
-# ------------------------------------------------------------------
-
-
-@router.get("/api/reports/balance-sheet")
-def get_balance_sheet(
-    as_of_date: str | None = Query(None),
-    ledger: FavaLedger = Depends(get_ledger),
-) -> dict[str, Any]:
-    """Balance sheet at a point in time.
-
-    ``cap_opt`` closes Income/Expenses → Equity, guaranteeing the
-    accounting equation: ``Assets + Liabilities + Equity == 0``.
-    """
-    closed = summarize.cap_opt(ledger.all_entries, ledger.options)
+def _compute_balance_sheet(entries: list, options, as_of_date: str | None, oc: str) -> dict[str, Any]:
+    closed = summarize.cap_opt(entries, options)
 
     if as_of_date:
         cutoff = datetime.date.fromisoformat(as_of_date)
         closed = [e for e in closed if e.date <= cutoff]
 
     real_root = realization.realize(closed)
-    oc = ledger.options["operating_currency"][0]
 
     def _build_section(root_type: str, negate: bool = False) -> tuple[list[dict], dict[str, dict[str, Decimal]]]:
         node = realization.get(real_root, root_type)
@@ -296,12 +224,6 @@ def get_balance_sheet(
         account_balance_other: dict[str, dict[str, Decimal]] = {}
         for child in realization.iter_children(node):
             if child.account:
-                # Use child.balance (own postings only), NOT
-                # realization.compute_balance(child) which returns the
-                # cumulative subtree balance.  build_balance_tree() already
-                # rolls children up into parents — using compute_balance()
-                # here would double-count.  (Same pattern as Fava's
-                # TreeNode.balance vs TreeNode.balance_children.)
                 bal = child.balance
                 for pos in bal:
                     curr = pos.units.currency
@@ -365,3 +287,126 @@ def get_balance_sheet(
             "equity": _section_other_total("Equity"),
         },
     }
+
+
+# ------------------------------------------------------------------
+# Time series
+# ------------------------------------------------------------------
+
+
+@router.get("/api/reports/income-expense")
+def get_income_expense(
+    interval: str = Query("monthly"),
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined|comparative)$"),
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Monthly/quarterly/yearly income vs expense totals."""
+    oc = ledger.options["operating_currency"][0]
+    if view_mode == "comparative":
+        return {
+            "series": _compute_income_expense(
+                get_filtered_entries(ledger, "actual"), interval, oc
+            ),
+            "planned_series": _compute_income_expense(
+                get_filtered_entries(ledger, "planned"), interval, oc
+            ),
+        }
+    entries = get_filtered_entries(ledger, view_mode)
+    return {"series": _compute_income_expense(entries, interval, oc)}
+
+
+@router.get("/api/reports/account-balance")
+def get_account_balance(
+    account: str = Query(...),
+    interval: str = Query("monthly"),
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined|comparative)$"),
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Running balance of a specific account over time."""
+    if view_mode == "comparative":
+        return {
+            "series": _compute_account_balance(
+                get_filtered_entries(ledger, "actual"), account, interval
+            ),
+            "planned_series": _compute_account_balance(
+                get_filtered_entries(ledger, "planned"), account, interval
+            ),
+        }
+    entries = get_filtered_entries(ledger, view_mode)
+    return {"series": _compute_account_balance(entries, account, interval)}
+
+
+@router.get("/api/reports/net-worth")
+def get_net_worth(
+    interval: str = Query("monthly"),
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined|comparative)$"),
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Assets + Liabilities at each period end."""
+    oc = ledger.options["operating_currency"][0]
+    if view_mode == "comparative":
+        return {
+            "series": _compute_net_worth(
+                get_filtered_entries(ledger, "actual"), interval, oc
+            ),
+            "planned_series": _compute_net_worth(
+                get_filtered_entries(ledger, "planned"), interval, oc
+            ),
+        }
+    entries = get_filtered_entries(ledger, view_mode)
+    return {"series": _compute_net_worth(entries, interval, oc)}
+
+
+# ------------------------------------------------------------------
+# Income Statement — uses clamp_opt (AGENTS.md §8)
+# ------------------------------------------------------------------
+
+
+@router.get("/api/reports/income-statement")
+def get_income_statement(
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    interval: str = Query("monthly"),
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Income statement with tree structure and period columns."""
+    oc = ledger.options["operating_currency"][0]
+
+    # Determine date range from all entries (regardless of view_mode)
+    txn_dates = [
+        e.date for e in ledger.all_entries if isinstance(e, data.Transaction)
+    ]
+    if not txn_dates:
+        return {"income": [], "expenses": [], "periods": [], "net_income": {}}
+
+    begin = datetime.date.fromisoformat(from_date) if from_date else min(txn_dates)
+    end = datetime.date.fromisoformat(to_date) if to_date else None
+    if end is None:
+        end = max(txn_dates) + datetime.timedelta(days=1)
+    else:
+        end = end + datetime.timedelta(days=1)  # clamp_opt end is exclusive
+
+    entries = get_filtered_entries(ledger, view_mode)
+    return _compute_income_statement(entries, begin, end, ledger.options, interval, oc)
+
+
+# ------------------------------------------------------------------
+# Balance Sheet — uses cap_opt (AGENTS.md §8)
+# ------------------------------------------------------------------
+
+
+@router.get("/api/reports/balance-sheet")
+def get_balance_sheet(
+    as_of_date: str | None = Query(None),
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Balance sheet at a point in time.
+
+    ``cap_opt`` closes Income/Expenses → Equity, guaranteeing the
+    accounting equation: ``Assets + Liabilities + Equity == 0``.
+    """
+    oc = ledger.options["operating_currency"][0]
+    entries = get_filtered_entries(ledger, view_mode)
+    return _compute_balance_sheet(entries, ledger.options, as_of_date, oc)

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAccounts, fetchTransactions, fetchOptions } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, formatDateShort } from "../utils/format";
-import type { AccountNode, Transaction } from "../types";
+import type { AccountNode, Transaction, ViewMode } from "../types";
 import IncomeExpenseChart from "./reports/IncomeExpenseChart";
 import NetWorthChart from "./reports/NetWorthChart";
 
@@ -22,9 +22,11 @@ interface SummaryCardProps {
   positive?: boolean;
   negative?: boolean;
   muted?: boolean;
+  plannedDelta?: number | null;
+  currency?: string;
 }
 
-function SummaryCard({ label, value, positive, negative, muted }: SummaryCardProps) {
+function SummaryCard({ label, value, positive, negative, muted, plannedDelta, currency }: SummaryCardProps) {
   let colorClass = "";
   if (positive) colorClass = "positive";
   else if (negative) colorClass = "negative";
@@ -34,6 +36,11 @@ function SummaryCard({ label, value, positive, negative, muted }: SummaryCardPro
     <div className="dashboard-card">
       <div className="dashboard-card-label">{label}</div>
       <div className={`dashboard-card-value ${colorClass}`}>{value}</div>
+      {plannedDelta != null && plannedDelta !== 0 && currency && (
+        <div className="dashboard-card-planned">
+          {formatAmount(Math.abs(plannedDelta), currency)} planned
+        </div>
+      )}
     </div>
   );
 }
@@ -47,7 +54,6 @@ function RecentTransactions({
   currency: string;
   onSelect: (account: string) => void;
 }) {
-  // Show last 10 transactions, newest first
   const recent = [...transactions]
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 10);
@@ -69,7 +75,6 @@ function RecentTransactions({
       <tbody>
         {recent.map((txn, i) => {
           const description = [txn.payee, txn.narration].filter(Boolean).join(" — ");
-          // Find the "most interesting" posting (not Income/Equity)
           const mainPosting = txn.postings.find(
             (p) => !p.account.startsWith("Income:") && !p.account.startsWith("Equity:")
           ) || txn.postings[0];
@@ -107,10 +112,19 @@ interface DashboardProps {
 
 export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardProps) {
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
+  const viewMode = useAppStore((s) => s.viewMode);
 
+  // Always fetch combined for the main indicators
   const accountsQuery = useQuery({
-    queryKey: ["accounts"],
-    queryFn: fetchAccounts,
+    queryKey: ["accounts", viewMode],
+    queryFn: () => fetchAccounts(viewMode),
+  });
+
+  // Fetch planned-only data to compute the planned portion subtitle
+  const plannedAccountsQuery = useQuery({
+    queryKey: ["accounts", "planned-for-delta"],
+    queryFn: () => fetchAccounts("planned" as ViewMode),
+    enabled: viewMode === "combined",
   });
 
   const optionsQuery = useQuery({
@@ -119,8 +133,8 @@ export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardP
   });
 
   const txnsQuery = useQuery({
-    queryKey: ["transactions"],
-    queryFn: () => fetchTransactions(),
+    queryKey: ["transactions", viewMode],
+    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode),
   });
 
   const accounts = accountsQuery.data?.accounts || [];
@@ -134,6 +148,17 @@ export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardP
   const expenses = sumTopLevelBalance(accounts, "Expenses");
   const netWorth = assets + liabilities;
 
+  // Planned portion for subtitle (only when combined)
+  const plannedAccounts = plannedAccountsQuery.data?.accounts || [];
+  const showPlanned = viewMode === "combined";
+  const plannedAssets = showPlanned ? sumTopLevelBalance(plannedAccounts, "Assets") : null;
+  const plannedLiabilities = showPlanned ? sumTopLevelBalance(plannedAccounts, "Liabilities") : null;
+  const plannedIncome = showPlanned ? sumTopLevelBalance(plannedAccounts, "Income") : null;
+  const plannedExpenses = showPlanned ? sumTopLevelBalance(plannedAccounts, "Expenses") : null;
+  const plannedNetWorth = showPlanned && plannedAssets != null && plannedLiabilities != null
+    ? plannedAssets + plannedLiabilities
+    : null;
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
@@ -145,27 +170,37 @@ export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardP
           label="Assets"
           value={formatAmount(assets, operatingCurrency)}
           positive={assets > 0}
+          plannedDelta={plannedAssets}
+          currency={operatingCurrency}
         />
         <SummaryCard
           label="Liabilities"
           value={formatAmount(liabilities, operatingCurrency)}
           negative={liabilities < 0}
+          plannedDelta={plannedLiabilities}
+          currency={operatingCurrency}
         />
         <SummaryCard
           label="Net Worth"
           value={formatAmount(netWorth, operatingCurrency)}
           positive={netWorth > 0}
           negative={netWorth < 0}
+          plannedDelta={plannedNetWorth}
+          currency={operatingCurrency}
         />
         <SummaryCard
           label="Income"
           value={formatAmount(Math.abs(income), operatingCurrency)}
           positive
+          plannedDelta={plannedIncome != null ? Math.abs(plannedIncome) : null}
+          currency={operatingCurrency}
         />
         <SummaryCard
           label="Expenses"
           value={formatAmount(expenses, operatingCurrency)}
           negative={expenses > 0}
+          plannedDelta={plannedExpenses}
+          currency={operatingCurrency}
         />
       </div>
 
