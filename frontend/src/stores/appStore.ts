@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction } from '../types';
+import type { Transaction, ViewMode } from '../types';
 
 interface Tab {
   id: string;
@@ -34,6 +34,11 @@ interface AppState {
   setCommandPaletteOpen: (open: boolean) => void;
   focusZone: 'sidebar' | 'register' | 'tabbar';
   setFocusZone: (zone: 'sidebar' | 'register' | 'tabbar') => void;
+
+  // Planned toggle (actual = only * txns, combined = all txns)
+  viewMode: ViewMode;
+  toggleViewMode: () => void;
+  setViewMode: (mode: ViewMode) => void;
 
   // Config
   operatingCurrency: string;
@@ -101,6 +106,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   focusZone: 'sidebar',
   setFocusZone: (zone) => set({ focusZone: zone }),
+
+  // Planned toggle
+  viewMode: 'combined',
+  toggleViewMode: () =>
+    set((s) => ({
+      viewMode: s.viewMode === 'combined' ? 'actual' : 'combined',
+    })),
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   // Config
   operatingCurrency: 'USD',

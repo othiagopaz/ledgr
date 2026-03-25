@@ -42,6 +42,13 @@ export function useKeyboardNav() {
         return;
       }
 
+      // P: toggle planned view mode
+      if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        useAppStore.getState().toggleViewMode();
+        return;
+      }
+
       // Escape: close command palette
       if (e.key === "Escape") {
         const store = useAppStore.getState();

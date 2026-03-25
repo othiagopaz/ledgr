@@ -235,6 +235,197 @@ class TestReportsRouter:
             f"Invariant violated via HTTP: A={t['assets']} L={t['liabilities']} E={t['equity']}"
         )
 
+    # ---------------------------------------------------------------
+    # view_mode filtering — income-expense
+    # ---------------------------------------------------------------
+
+    def test_income_expense_actual_only(self, client: TestClient) -> None:
+        r = client.get("/api/reports/income-expense?view_mode=actual")
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+        assert "planned_series" not in body
+
+    def test_income_expense_planned_only(self, client: TestClient) -> None:
+        r = client.get("/api/reports/income-expense?view_mode=planned")
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+        assert len(body["series"]) > 0
+
+    def test_income_expense_comparative(self, client: TestClient) -> None:
+        r = client.get("/api/reports/income-expense?view_mode=comparative")
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+        assert "planned_series" in body
+
+    def test_income_expense_default_is_combined(self, client: TestClient) -> None:
+        """No view_mode param should behave as combined (backward compat)."""
+        r1 = client.get("/api/reports/income-expense")
+        r2 = client.get("/api/reports/income-expense?view_mode=combined")
+        assert r1.json() == r2.json()
+
+    def test_income_expense_actual_differs_from_combined(self, client: TestClient) -> None:
+        """Fixture has ! transactions so actual and combined must differ."""
+        r_combined = client.get("/api/reports/income-expense?view_mode=combined")
+        r_actual = client.get("/api/reports/income-expense?view_mode=actual")
+        assert r_combined.json()["series"] != r_actual.json()["series"]
+
+    # ---------------------------------------------------------------
+    # view_mode filtering — net-worth
+    # ---------------------------------------------------------------
+
+    def test_net_worth_actual(self, client: TestClient) -> None:
+        r = client.get("/api/reports/net-worth?view_mode=actual")
+        assert r.status_code == 200
+        assert "series" in r.json()
+
+    def test_net_worth_comparative(self, client: TestClient) -> None:
+        r = client.get("/api/reports/net-worth?view_mode=comparative")
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+        assert "planned_series" in body
+
+    def test_net_worth_default_is_combined(self, client: TestClient) -> None:
+        r1 = client.get("/api/reports/net-worth")
+        r2 = client.get("/api/reports/net-worth?view_mode=combined")
+        assert r1.json() == r2.json()
+
+    # ---------------------------------------------------------------
+    # view_mode filtering — account-balance
+    # ---------------------------------------------------------------
+
+    def test_account_balance_actual(self, client: TestClient) -> None:
+        r = client.get("/api/reports/account-balance?account=Assets:Checking&view_mode=actual")
+        assert r.status_code == 200
+        assert "series" in r.json()
+
+    def test_account_balance_comparative(self, client: TestClient) -> None:
+        r = client.get("/api/reports/account-balance?account=Assets:Checking&view_mode=comparative")
+        assert r.status_code == 200
+        body = r.json()
+        assert "series" in body
+        assert "planned_series" in body
+
+    # ---------------------------------------------------------------
+    # view_mode filtering — income-statement
+    # ---------------------------------------------------------------
+
+    def test_income_statement_actual(self, client: TestClient) -> None:
+        r = client.get("/api/reports/income-statement?view_mode=actual")
+        assert r.status_code == 200
+        body = r.json()
+        assert "income" in body
+        assert "expenses" in body
+
+    def test_income_statement_actual_differs_from_combined(self, client: TestClient) -> None:
+        r_combined = client.get("/api/reports/income-statement?view_mode=combined")
+        r_actual = client.get("/api/reports/income-statement?view_mode=actual")
+        assert r_combined.status_code == 200
+        assert r_actual.status_code == 200
+        # Net income should differ because fixture has planned income/expenses
+        assert r_combined.json()["net_income"] != r_actual.json()["net_income"]
+
+    def test_income_statement_rejects_comparative(self, client: TestClient) -> None:
+        """Statement endpoints do not accept comparative."""
+        r = client.get("/api/reports/income-statement?view_mode=comparative")
+        assert r.status_code == 422
+
+    # ---------------------------------------------------------------
+    # view_mode filtering — balance-sheet
+    # ---------------------------------------------------------------
+
+    def test_balance_sheet_actual_invariant(self, client: TestClient) -> None:
+        """Accounting equation must hold in actual mode too."""
+        r = client.get("/api/reports/balance-sheet?view_mode=actual")
+        assert r.status_code == 200
+        t = r.json()["totals"]
+        assert abs(t["assets"] + t["liabilities"] + t["equity"]) < 0.01
+
+    def test_balance_sheet_combined_invariant(self, client: TestClient) -> None:
+        """Accounting equation must hold in combined mode."""
+        r = client.get("/api/reports/balance-sheet?view_mode=combined")
+        assert r.status_code == 200
+        t = r.json()["totals"]
+        assert abs(t["assets"] + t["liabilities"] + t["equity"]) < 0.01
+
+    def test_balance_sheet_rejects_comparative(self, client: TestClient) -> None:
+        r = client.get("/api/reports/balance-sheet?view_mode=comparative")
+        assert r.status_code == 422
+
+    # ---------------------------------------------------------------
+    # view_mode filtering — accounts
+    # ---------------------------------------------------------------
+
+    def test_accounts_actual(self, client: TestClient) -> None:
+        r = client.get("/api/accounts?view_mode=actual")
+        assert r.status_code == 200
+        assert "accounts" in r.json()
+
+    def test_accounts_default_is_combined(self, client: TestClient) -> None:
+        r1 = client.get("/api/accounts")
+        r2 = client.get("/api/accounts?view_mode=combined")
+        assert r1.json() == r2.json()
+
+    def test_accounts_rejects_comparative(self, client: TestClient) -> None:
+        r = client.get("/api/accounts?view_mode=comparative")
+        assert r.status_code == 422
+
+    # ---------------------------------------------------------------
+    # view_mode filtering — transactions
+    # ---------------------------------------------------------------
+
+    def test_transactions_actual_fewer_than_combined(self, client: TestClient) -> None:
+        r_all = client.get("/api/transactions?view_mode=combined")
+        r_actual = client.get("/api/transactions?view_mode=actual")
+        assert r_all.status_code == 200
+        assert r_actual.status_code == 200
+        assert r_actual.json()["count"] < r_all.json()["count"]
+
+    def test_transactions_actual_only_star_flags(self, client: TestClient) -> None:
+        r = client.get("/api/transactions?view_mode=actual")
+        for txn in r.json()["transactions"]:
+            assert txn["flag"] == "*"
+
+    def test_transactions_default_is_combined(self, client: TestClient) -> None:
+        r1 = client.get("/api/transactions")
+        r2 = client.get("/api/transactions?view_mode=combined")
+        assert r1.json() == r2.json()
+
+    def test_transactions_rejects_comparative(self, client: TestClient) -> None:
+        r = client.get("/api/transactions?view_mode=comparative")
+        assert r.status_code == 422
+
+    # ---------------------------------------------------------------
+    # view_mode filtering — cashflow
+    # ---------------------------------------------------------------
+
+    def test_cashflow_actual(self, client: TestClient) -> None:
+        r = client.get("/api/reports/cashflow?view_mode=actual")
+        assert r.status_code == 200
+        body = r.json()
+        assert "periods" in body
+        assert "operating" in body
+
+    def test_cashflow_rejects_comparative(self, client: TestClient) -> None:
+        r = client.get("/api/reports/cashflow?view_mode=comparative")
+        assert r.status_code == 422
+
+    # ---------------------------------------------------------------
+    # view_mode — invalid values
+    # ---------------------------------------------------------------
+
+    def test_invalid_view_mode_rejected(self, client: TestClient) -> None:
+        """Invalid view_mode value should return 422."""
+        r = client.get("/api/reports/income-expense?view_mode=invalid")
+        assert r.status_code == 422
+
+    # ---------------------------------------------------------------
+    # cashflow (existing)
+    # ---------------------------------------------------------------
+
     def test_cashflow(self, client: TestClient) -> None:
         r = client.get("/api/reports/cashflow")
         assert r.status_code == 200

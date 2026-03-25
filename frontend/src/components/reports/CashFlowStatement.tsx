@@ -21,10 +21,11 @@ export default function CashFlowStatement() {
   const [expandAll, setExpandAll] = useState(false);
   const [expandKey, setExpandKey] = useState(0);
   const currency = useAppStore((s) => s.operatingCurrency);
+  const viewMode = useAppStore((s) => s.viewMode);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["cashflow", interval],
-    queryFn: () => fetchCashFlow(undefined, undefined, interval),
+    queryKey: ["cashflow", interval, viewMode],
+    queryFn: () => fetchCashFlow(undefined, undefined, interval, viewMode),
   });
 
   if (isLoading) return <div className="report-loading">Loading...</div>;
