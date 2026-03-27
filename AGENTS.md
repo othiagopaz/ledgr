@@ -176,14 +176,35 @@ The Cash Flow Statement is the only report that Fava/Beancount does not
 implement natively. All custom accounting logic in Ledgr lives here and
 only here.
 
+### 3-tier asset classification
+
+| Tier | Config key | Default | Cash Flow role |
+|------|-----------|---------|----------------|
+| **Cash** | `cash_account_prefixes` | `Assets:Bank`, `Assets:Cash` | Only these accounts generate cash flow postings |
+| **Investment** | `investment_account_prefixes` | `Assets:Investments`, `Assets:Broker` | Counterpart → **Investing** |
+| **Other** | _(everything else)_ | `Assets:Receivables`, `Assets:Vehicle`, … | Counterpart → **Operating** (working capital) |
+
+Key behaviors:
+- Only transactions touching a **cash** account appear in the Cash Flow
+- Cash ↔ Investment = **Investing**
+- Cash ↔ Other non-cash (Receivables, Deposits…) = **Operating** (working capital)
+- Non-cash ↔ Non-cash = **excluded** (no cash movement)
+- Income → Investment (interest reinvested, never hits bank) = **excluded**
+
+Configurable via beancount:
+
+```
+2024-01-01 custom "ledgr-option" "cash_account_prefixes" "Assets:Bank Assets:Cash"
+2024-01-01 custom "ledgr-option" "investment_account_prefixes" "Assets:Investments"
+```
+
 ### Classification rules (order is CRITICAL):
 
 ```
 1. FINANCING   → counterpart is Liabilities:Loans (checked FIRST)
-2. INVESTING   → transaction involves Assets:Investments or Assets:Broker
-                  AND there is asset-to-asset movement (checked BEFORE operating)
-3. OPERATING   → counterpart is Income:*, Expenses:*, or Liabilities:*
-4. TRANSFER    → default (asset ↔ asset without the above)
+2. INVESTING   → counterpart is an investment account (checked BEFORE operating)
+3. OPERATING   → counterpart is Income:*, Expenses:*, Liabilities:*, or other non-cash asset
+4. TRANSFER    → default (cash ↔ cash, e.g. bank transfer)
 ```
 
 **Order matters**:
@@ -192,16 +213,25 @@ only here.
   "financing". This was a real bug — do not regress.
 - `INVESTING` MUST be checked BEFORE `OPERATING`. Otherwise, investment
   transactions with incidental expenses (commissions, fees) get misclassified
-  as operating. Dividends still classify as operating because they involve
-  only Income → Asset (no asset-to-asset movement).
+  as operating. Dividends still classify as operating because they flow
+  from Income → cash account (no investment counterpart).
 
 ### How the Cash Flow is computed:
 
-1. Get a `FilteredLedger` for the period via `FavaLedger.get_filtered(time=...)`
-2. Iterate `filtered.entries`, take only `Transaction` entries
-3. For each transaction, take postings that touch `Assets:*`
-4. Classify each posting by its counterparts using the rules above
-5. Group by category and sum
+1. Get entries for the period
+2. Iterate entries, take only `Transaction` entries
+3. For each transaction, take postings on **cash accounts** (whitelist)
+4. Counterparts = all accounts in the txn that are NOT cash accounts
+5. Classify each cash posting using the 3-tier rules above
+6. Group by category and sum
+
+Transactions with no cash postings (e.g. `Income:Interest → Assets:Investments:Float`
+or `Assets:Investments:Account → Assets:Investments:Bucket1`) are skipped entirely.
+
+### Investing breakdown labels
+
+Investing items strip the `Assets:` prefix from the counterpart name for readability:
+`Assets:Investments:Account` → `"Investments:Account"`, `Assets:Broker:XP` → `"Broker:XP"`.
 
 ### What must NOT be done in `cashflow.py`:
 
@@ -350,7 +380,7 @@ def ledger(tmp_path):
 
 ```python
 # ✅ Correct
-def classify_cashflow(asset_account: str, counterparts: list[str]) -> str:
+def classify_posting(asset_account: str, counterparts: list[str]) -> str:
     """Classify a posting into operating/investing/financing/transfer."""
     ...
 
@@ -396,7 +426,7 @@ def classify(acct, cps):
 | Mistake | Consequence | Fix |
 |---------|-------------|-----|
 | Using `float` for monetary values | Silent rounding errors | Always use `Decimal` |
-| Checking `Liabilities:` before `Liabilities:Loans` | Loans misclassified as operating | Fix the order in `classify_cashflow()` |
+| Checking `Liabilities:` before `Liabilities:Loans` | Loans misclassified as operating | Fix the order in `classify_posting()` |
 | Manually iterating `entries` to compute balance | Wrong results, fragile code | Use `realization.realize()` |
 | Not calling `cap_opt()` on Balance Sheet | Assets ≠ Liabilities + Equity | `summarize.cap_opt()` is mandatory |
 | Writing to `.beancount` with `open()` | File corruption, no rollback | Use `FavaLedger.file.insert_entries()` |

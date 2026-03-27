@@ -3,7 +3,8 @@ Ledgr-specific options parsed from ``custom`` directives in the ``.beancount`` f
 
 Usage in ``.beancount``::
 
-    2024-01-01 custom "ledgr-option" "investment_account_prefixes" "Assets:Investments Assets:Broker"
+    2024-01-01 custom "ledgr-option" "cash_account_prefixes" "Assets:Bank Assets:Cash"
+    2024-01-01 custom "ledgr-option" "investment_account_prefixes" "Assets:Investments"
 
 Follows the same pattern as Fava's ``fava-option`` directives
 (see ``fava/core/fava_options.py``).
@@ -11,7 +12,7 @@ Follows the same pattern as Fava's ``fava-option`` directives
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -19,11 +20,19 @@ if TYPE_CHECKING:
     from beancount.core import data
 
 
-# Default prefixes for accounts considered "investment" in the Cash Flow
-# classifier.  Override with ledgr-option investment_account_prefixes.
+# Default prefixes for accounts considered "investment" in the Cash Flow.
+# Override with ledgr-option investment_account_prefixes.
 DEFAULT_INVESTMENT_PREFIXES: tuple[str, ...] = (
     "Assets:Investments",
     "Assets:Broker",
+)
+
+# Default prefixes for accounts considered "cash/liquid" in the Cash Flow.
+# Only bank accounts and physical cash — NOT receivables, vehicles, etc.
+# Override with ledgr-option cash_account_prefixes.
+DEFAULT_CASH_PREFIXES: tuple[str, ...] = (
+    "Assets:Bank",
+    "Assets:Cash",
 )
 
 
@@ -31,6 +40,7 @@ DEFAULT_INVESTMENT_PREFIXES: tuple[str, ...] = (
 class LedgrOptions:
     """Options for Ledgr parsed from the .beancount file."""
 
+    cash_account_prefixes: tuple[str, ...] = DEFAULT_CASH_PREFIXES
     investment_account_prefixes: tuple[str, ...] = DEFAULT_INVESTMENT_PREFIXES
 
 
@@ -51,7 +61,11 @@ def parse_ledgr_options(entries: Iterable[data.Directive]) -> LedgrOptions:
         name = values[0].value if hasattr(values[0], "value") else str(values[0])
         raw = values[1].value if hasattr(values[1], "value") else str(values[1])
 
-        if name == "investment_account_prefixes":
+        if name == "cash_account_prefixes":
+            prefixes = tuple(p.strip() for p in raw.split() if p.strip())
+            if prefixes:
+                options.cash_account_prefixes = prefixes
+        elif name == "investment_account_prefixes":
             prefixes = tuple(p.strip() for p in raw.split() if p.strip())
             if prefixes:
                 options.investment_account_prefixes = prefixes

@@ -35,5 +35,6 @@ def get_cashflow(
     entries = get_filtered_entries(ledger, view_mode)
     return compute_cashflow(
         entries, from_date, to_date, interval, oc,
+        cash_prefixes=ledgr_opts.cash_account_prefixes,
         investment_prefixes=ledgr_opts.investment_account_prefixes,
     )

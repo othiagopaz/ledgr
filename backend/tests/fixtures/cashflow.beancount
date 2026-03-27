@@ -1,8 +1,8 @@
 option "title" "Cash Flow Test Ledger"
 option "operating_currency" "BRL"
 
-2024-01-01 open Assets:Checking           BRL
-2024-01-01 open Assets:Savings            BRL
+2024-01-01 open Assets:Bank:Checking      BRL
+2024-01-01 open Assets:Bank:Savings       BRL
 2024-01-01 open Assets:Investments:Stocks BRL
 2024-01-01 open Assets:Broker:XP          BRL
 2024-01-01 open Income:Salary             BRL
@@ -14,53 +14,53 @@ option "operating_currency" "BRL"
 
 ; --- OPERATING ---
 
-; Salary deposit: Income → Assets (operating)
+; Salary deposit: Income → cash (operating)
 2024-01-15 * "Employer" "Salary"
-  Assets:Checking         10000.00 BRL
+  Assets:Bank:Checking    10000.00 BRL
   Income:Salary
 
-; Grocery: Assets → Expenses (operating)
+; Grocery: cash → Expenses (operating)
 2024-01-20 * "Supermarket" "Groceries"
   Expenses:Food             500.00 BRL
-  Assets:Checking
+  Assets:Bank:Checking
 
-; Rent: Assets → Expenses (operating)
+; Rent: cash → Expenses (operating)
 2024-01-25 * "Landlord" "Rent"
   Expenses:Rent            3000.00 BRL
-  Assets:Checking
+  Assets:Bank:Checking
 
-; CC payment: Assets → Liabilities:CreditCard (operating, NOT financing)
+; CC payment: cash → Liabilities:CreditCard (operating, NOT financing)
 2024-02-05 * "CC Bill"
   Liabilities:CreditCard    200.00 BRL
-  Assets:Checking
+  Assets:Bank:Checking
 
 ; --- FINANCING ---
 
-; Loan payment: Assets → Liabilities:Loans (financing)
+; Loan payment: cash → Liabilities:Loans (financing)
 2024-02-10 * "Bank" "Mortgage Payment"
   Liabilities:Loans:Mortgage 1500.00 BRL
-  Assets:Checking
+  Assets:Bank:Checking
 
 ; --- INVESTING ---
 
-; Stock purchase: Assets:Checking → Assets:Investments (investing)
+; Stock purchase: cash → investment account (investing)
 2024-02-15 * "Broker" "Buy PETR4"
   Assets:Investments:Stocks  2000.00 BRL
-  Assets:Checking
+  Assets:Bank:Checking
 
-; Broker transfer: Assets:Checking → Assets:Broker (investing)
+; Broker transfer: cash → Assets:Broker (investing)
 2024-02-20 * "Transfer to Broker"
   Assets:Broker:XP           1000.00 BRL
-  Assets:Checking
+  Assets:Bank:Checking
 
 ; --- TRANSFER ---
 
-; Bank-to-bank: Assets → Assets (transfer, no investment account)
+; Bank-to-bank: cash ↔ cash (transfer)
 2024-03-01 * "Bank Transfer"
-  Assets:Savings             5000.00 BRL
-  Assets:Checking
+  Assets:Bank:Savings        5000.00 BRL
+  Assets:Bank:Checking
 
-; --- CC PURCHASE (should NOT appear in cashflow — no asset movement) ---
+; --- CC PURCHASE (should NOT appear in cashflow — no cash posting) ---
 
 2024-03-10 * "Store" "Online Purchase"
   Expenses:Food              150.00 BRL
@@ -69,5 +69,5 @@ option "operating_currency" "BRL"
 ; --- EQUITY (opening balance → transfer) ---
 
 2024-01-01 * "Opening Balance"
-  Assets:Checking          20000.00 BRL
+  Assets:Bank:Checking     20000.00 BRL
   Equity:OpeningBalances
