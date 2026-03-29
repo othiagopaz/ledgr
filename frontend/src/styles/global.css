@@ -2046,9 +2046,11 @@ body {
   font-weight: 600;
   padding: 1px 5px;
   border-radius: 3px;
-  margin-left: 6px;
+  margin-left: 0;
+  margin-right: 6px;
   vertical-align: middle;
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
 

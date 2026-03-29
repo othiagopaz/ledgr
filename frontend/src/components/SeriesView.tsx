@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSeries, fetchTransactions, editTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
-import { formatDateShort, formatAmount } from "../utils/format";
+import { formatDateShort, formatAmount, formatInstallmentBadge } from "../utils/format";
 import type { Transaction, SeriesSummary } from "../types";
 
 type Filter = 'all' | 'recurring' | 'installment' | 'pending';
@@ -469,17 +469,17 @@ export default function SeriesView() {
                             {txn.flag}
                           </td>
                           <td>
-                            <span>{getDescription(txn) || "—"}</span>
                             {sType === 'recurring' && (
                               <span className="series-inline-badge series-inline-recurring">Recurring</span>
                             )}
                             {sType === 'installment' && (
                               <span className="series-inline-badge series-inline-installment">
                                 {txn.metadata['ledgr-series-seq'] != null && txn.metadata['ledgr-series-total'] != null
-                                  ? `${txn.metadata['ledgr-series-seq']}/${txn.metadata['ledgr-series-total']}`
+                                  ? formatInstallmentBadge(txn.metadata['ledgr-series-seq'], txn.metadata['ledgr-series-total'])
                                   : '#'}
                               </span>
                             )}
+                            <span>{getDescription(txn) || "—"}</span>
                           </td>
                           <td className="accounts-summary">
                             {summarizeAccounts(txn)}

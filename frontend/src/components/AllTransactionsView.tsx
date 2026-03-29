@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchTransactions, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
-import { formatDateShort, formatAmount } from "../utils/format";
+import { formatDateShort, formatAmount, formatInstallmentBadge } from "../utils/format";
 
 interface AllTransactionsViewProps {
   onMutated: () => void;
@@ -114,22 +114,22 @@ export default function AllTransactionsView({
                   {txn.flag}
                 </td>
                 <td>
-                  {txn.payee && (
-                    <span className="payee">{txn.payee}</span>
-                  )}
-                  {txn.payee && txn.narration && " — "}
-                  {txn.narration && (
-                    <span className="narration">{txn.narration}</span>
-                  )}
                   {txn.metadata?.['ledgr-series-type'] === 'recurring' && (
                     <span className="series-inline-badge series-inline-recurring" title="Recurring">Recurring</span>
                   )}
                   {txn.metadata?.['ledgr-series-type'] === 'installment' && (
                     <span className="series-inline-badge series-inline-installment" title="Installment">
                       {txn.metadata['ledgr-series-seq'] != null && txn.metadata['ledgr-series-total'] != null
-                        ? `${txn.metadata['ledgr-series-seq']}/${txn.metadata['ledgr-series-total']}`
+                        ? formatInstallmentBadge(txn.metadata['ledgr-series-seq'], txn.metadata['ledgr-series-total'])
                         : '#'}
                     </span>
+                  )}
+                  {txn.payee && (
+                    <span className="payee">{txn.payee}</span>
+                  )}
+                  {txn.payee && txn.narration && " — "}
+                  {txn.narration && (
+                    <span className="narration">{txn.narration}</span>
                   )}
                 </td>
                 <td className="accounts-summary">
