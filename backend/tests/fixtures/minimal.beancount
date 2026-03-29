@@ -2,11 +2,14 @@ option "title" "Test Ledger"
 option "operating_currency" "BRL"
 
 2024-01-01 open Assets:Checking        BRL
+  ledgr-type: "cash"
 2024-01-01 open Assets:Savings         BRL
+  ledgr-type: "cash"
 2024-01-01 open Income:Salary          BRL
 2024-01-01 open Expenses:Food          BRL
 2024-01-01 open Expenses:Rent          BRL
 2024-01-01 open Liabilities:CreditCard BRL
+  ledgr-type: "credit-card"
 2024-01-01 open Equity:OpeningBalances BRL
 
 2024-01-01 * "Opening Balance"
