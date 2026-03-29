@@ -8,6 +8,7 @@ import AccountRegister from "./components/AccountRegister";
 import AllTransactionsView from "./components/AllTransactionsView";
 import ReportsView from "./components/reports/ReportsView";
 import TransactionModal from "./components/TransactionModal";
+import AccountModal from "./components/AccountModal";
 import PlannedToggle from "./components/PlannedToggle";
 import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
@@ -23,6 +24,7 @@ export default function App() {
   const setLocale = useAppStore((s) => s.setLocale);
   const commandPaletteOpen = useAppStore((s) => s.commandPaletteOpen);
   const txnModalOpen = useAppStore((s) => s.txnModalOpen);
+  const acctModalOpen = useAppStore((s) => s.acctModalOpen);
   const viewMode = useAppStore((s) => s.viewMode);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -164,6 +166,7 @@ export default function App() {
 
       {commandPaletteOpen && <CommandPalette />}
       {txnModalOpen && <TransactionModal onMutated={handleMutated} />}
+      {acctModalOpen && <AccountModal onMutated={handleMutated} />}
     </div>
   );
 }
