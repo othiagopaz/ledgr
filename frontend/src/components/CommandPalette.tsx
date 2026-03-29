@@ -24,7 +24,7 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { setCommandPaletteOpen, openTab, toggleTheme } = useAppStore();
+  const { setCommandPaletteOpen, openTab, toggleTheme, openSeriesModal } = useAppStore();
 
   const accountNamesQuery = useQuery({
     queryKey: ["account-names"],
@@ -77,11 +77,62 @@ export default function CommandPalette() {
   });
 
   items.push({
+    id: "action:new-series",
+    label: "New Series",
+    group: "Actions",
+    action: () => {
+      openSeriesModal();
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
     id: "action:toggle-theme",
     label: "Toggle Theme",
     group: "Actions",
     action: () => {
       toggleTheme();
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  // Views
+  items.push({
+    id: "view:series",
+    label: "View Series",
+    group: "Views",
+    action: () => {
+      openTab({ id: "series", type: "series", label: "Series" });
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
+    id: "view:accounts",
+    label: "View Accounts",
+    group: "Views",
+    action: () => {
+      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
+    id: "view:reports",
+    label: "View Reports",
+    group: "Views",
+    action: () => {
+      openTab({ id: "reports", type: "report", label: "Reports" });
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
+    id: "view:dashboard",
+    label: "View Dashboard",
+    group: "Views",
+    action: () => {
+      openTab({ id: "dashboard", type: "dashboard", label: "Dashboard" });
       setCommandPaletteOpen(false);
     },
   });

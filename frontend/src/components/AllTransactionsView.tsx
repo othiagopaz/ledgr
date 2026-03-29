@@ -121,6 +121,16 @@ export default function AllTransactionsView({
                   {txn.narration && (
                     <span className="narration">{txn.narration}</span>
                   )}
+                  {txn.metadata?.['ledgr-series-type'] === 'recurring' && (
+                    <span className="series-inline-badge series-inline-recurring" title="Recurring">Recurring</span>
+                  )}
+                  {txn.metadata?.['ledgr-series-type'] === 'installment' && (
+                    <span className="series-inline-badge series-inline-installment" title="Installment">
+                      {txn.metadata['ledgr-series-seq'] != null && txn.metadata['ledgr-series-total'] != null
+                        ? `${txn.metadata['ledgr-series-seq']}/${txn.metadata['ledgr-series-total']}`
+                        : '#'}
+                    </span>
+                  )}
                 </td>
                 <td className="accounts-summary">
                   {summarizeAccounts(txn.postings)}

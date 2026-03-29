@@ -13,7 +13,10 @@ export default function ReportsView() {
 
   return (
     <div className="reports-view">
-      <div className="reports-nav">
+      <div className="series-view-header">
+        <h2>Reports</h2>
+      </div>
+      <div className="reports-nav" style={{ marginTop: 12 }}>
         {(
           [
             ["charts", "Charts"],

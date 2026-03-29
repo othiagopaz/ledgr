@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from ledger import init_ledger
-from routers import accounts, transactions, reports, cashflow
+from routers import accounts, transactions, reports, cashflow, series
 
 BEANCOUNT_FILE = os.environ.get(
     "BEANCOUNT_FILE",
@@ -39,6 +39,7 @@ app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(reports.router)
 app.include_router(cashflow.router)
+app.include_router(series.router)
 
 # Serve frontend static files in production
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

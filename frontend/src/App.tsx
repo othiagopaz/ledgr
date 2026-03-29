@@ -7,8 +7,10 @@ import AccountsView from "./components/AccountsView";
 import AccountRegister from "./components/AccountRegister";
 import AllTransactionsView from "./components/AllTransactionsView";
 import ReportsView from "./components/reports/ReportsView";
+import SeriesView from "./components/SeriesView";
 import TransactionModal from "./components/TransactionModal";
 import AccountModal from "./components/AccountModal";
+import SeriesModal from "./components/SeriesModal";
 import PlannedToggle from "./components/PlannedToggle";
 import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
@@ -25,6 +27,7 @@ export default function App() {
   const commandPaletteOpen = useAppStore((s) => s.commandPaletteOpen);
   const txnModalOpen = useAppStore((s) => s.txnModalOpen);
   const acctModalOpen = useAppStore((s) => s.acctModalOpen);
+  const seriesModalOpen = useAppStore((s) => s.seriesModalOpen);
   const viewMode = useAppStore((s) => s.viewMode);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -126,6 +129,9 @@ export default function App() {
       case "report":
         return <ReportsView />;
 
+      case "series":
+        return <SeriesView />;
+
       default:
         return <AllTransactionsView onMutated={handleMutated} />;
     }
@@ -167,6 +173,7 @@ export default function App() {
       {commandPaletteOpen && <CommandPalette />}
       {txnModalOpen && <TransactionModal onMutated={handleMutated} />}
       {acctModalOpen && <AccountModal onMutated={handleMutated} />}
+      {seriesModalOpen && <SeriesModal onMutated={handleMutated} />}
     </div>
   );
 }

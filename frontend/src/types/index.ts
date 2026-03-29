@@ -38,6 +38,7 @@ export interface Transaction {
   links: string[];
   lineno: number | null;
   postings: Posting[];
+  metadata: Record<string, string | number>;
 }
 
 export interface AccountsResponse {
@@ -222,6 +223,71 @@ export interface CashFlowResponse {
   planned_financing?: CashFlowSection;
   planned_transfers?: CashFlowSection;
   planned_net_cashflow?: Record<string, number>;
+}
+
+// Series types
+
+export interface SeriesCreateIn {
+  type: 'recurring' | 'installment';
+  payee: string;
+  narration: string;
+  start_date: string;
+  end_date?: string;
+  count?: number;
+  amount: number;
+  amount_is_total?: boolean;
+  currency: string;
+  account_from: string;
+  account_to: string;
+}
+
+export interface SeriesExtendIn {
+  new_end_date: string;
+  new_amount?: number;
+  new_currency?: string;
+}
+
+export interface SeriesExtendResponse {
+  success: boolean;
+  series_id?: string;
+  count?: number;
+  transactions_created?: number;
+  errors?: string[];
+}
+
+export interface SeriesSummary {
+  series_id: string;
+  type: 'recurring' | 'installment';
+  payee: string;
+  narration: string;
+  amount_per_txn: string;
+  currency: string;
+  total: number;
+  confirmed: number;
+  pending: number;
+  first_date: string;
+  last_date: string;
+  account_from: string;
+  account_to: string;
+}
+
+export interface SeriesListResponse {
+  series: SeriesSummary[];
+}
+
+export interface SeriesCreateResponse {
+  success: boolean;
+  series_id?: string;
+  count?: number;
+  transactions_created?: number;
+  errors?: string[];
+}
+
+export interface SeriesCancelResponse {
+  success: boolean;
+  deleted: number;
+  kept: number;
+  errors?: string[];
 }
 
 // Account CRUD types

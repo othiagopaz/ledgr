@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode, AccountNode } from '../types';
+import type { Transaction, ViewMode, AccountNode, SeriesSummary } from '../types';
 
 interface Tab {
   id: string;
-  type: 'register' | 'report' | 'accounts' | 'dashboard';
+  type: 'register' | 'report' | 'accounts' | 'dashboard' | 'series';
   account?: string;
   reportType?: string;
   label: string;
@@ -32,6 +32,13 @@ interface AppState {
   acctModalAccount: AccountNode | null; // null = create, non-null = edit
   openAcctModal: (account?: AccountNode) => void;
   closeAcctModal: () => void;
+
+  // Series modal
+  seriesModalOpen: boolean;
+  seriesModalSeries: SeriesSummary | null; // null = create, non-null = view/edit
+  seriesModalDefaultType: 'recurring' | 'installment' | null;
+  openSeriesModal: (series?: SeriesSummary, defaultType?: 'recurring' | 'installment') => void;
+  closeSeriesModal: () => void;
 
   // UI
   theme: 'dark' | 'light';
@@ -107,6 +114,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   acctModalAccount: null,
   openAcctModal: (account) => set({ acctModalOpen: true, acctModalAccount: account || null }),
   closeAcctModal: () => set({ acctModalOpen: false, acctModalAccount: null }),
+
+  // Series modal
+  seriesModalOpen: false,
+  seriesModalSeries: null,
+  seriesModalDefaultType: null,
+  openSeriesModal: (series, defaultType) => set({ seriesModalOpen: true, seriesModalSeries: series || null, seriesModalDefaultType: defaultType || null }),
+  closeSeriesModal: () => set({ seriesModalOpen: false, seriesModalSeries: null, seriesModalDefaultType: null }),
 
   // UI
   theme: 'light',
