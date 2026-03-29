@@ -7,6 +7,7 @@ interface Props {
   accounts: AccountNode[];
   selectedAccount: string | null;
   onSelect: (account: string) => void;
+  onEdit?: (node: AccountNode) => void;
 }
 
 function isZeroBalance(balances: Balance[]): boolean {
@@ -55,7 +56,7 @@ interface FlatRow {
   depth: number;
   hasChildren: boolean;
   isExpanded: boolean;
-  path: string; // unique key
+  path: string;
 }
 
 function flattenTree(
@@ -75,9 +76,13 @@ function flattenTree(
   return result;
 }
 
-export default function AccountTree({ accounts, selectedAccount, onSelect }: Props) {
+// CSS class suffix per ledgr-type for the colored badge
+function typeBadgeClass(ledgrType: string): string {
+  return `type-badge type-badge--${ledgrType}`;
+}
+
+export default function AccountTree({ accounts, selectedAccount, onSelect, onEdit }: Props) {
   const [expandedSet, setExpandedSet] = useState<Set<string>>(() => {
-    // Expand top-level by default
     return new Set(accounts.map((a) => a.name));
   });
   const [focusIndex, setFocusIndex] = useState<number>(0);
@@ -124,7 +129,6 @@ export default function AccountTree({ accounts, selectedAccount, onSelect }: Pro
         if (row && row.hasChildren && row.isExpanded) {
           toggleExpand(row.path);
         } else if (row && row.depth > 0) {
-          // Move to parent
           const parentName = row.node.name.split(":").slice(0, -1).join(":");
           const parentIdx = flatRows.findIndex((r) => r.path === parentName);
           if (parentIdx >= 0) setFocusIndex(parentIdx);
@@ -137,12 +141,17 @@ export default function AccountTree({ accounts, selectedAccount, onSelect }: Pro
         e.preventDefault();
         const row = flatRows[focusIndex];
         if (row && row.hasChildren) toggleExpand(row.path);
+      } else if ((e.key === "e" || e.key === "E") && onEdit) {
+        // E → open edit modal for focused account
+        e.preventDefault();
+        const row = flatRows[focusIndex];
+        if (row) onEdit(row.node);
       }
     }
 
     el.addEventListener("keydown", handleKeyDown);
     return () => el.removeEventListener("keydown", handleKeyDown);
-  }, [flatRows, focusIndex, toggleExpand, onSelect]);
+  }, [flatRows, focusIndex, toggleExpand, onSelect, onEdit]);
 
   // Scroll focused row into view
   useEffect(() => {
@@ -173,9 +182,14 @@ export default function AccountTree({ accounts, selectedAccount, onSelect }: Pro
         const isFocused = i === focusIndex;
         const isSelected = row.node.name === selectedAccount;
         const zero = isZeroBalance(row.node.balance);
-        const shortName = row.depth === 0
-          ? row.node.name
-          : (row.node.name.split(":").pop() || row.node.name);
+        const shortName =
+          row.depth === 0
+            ? row.node.name
+            : (row.node.name.split(":").pop() || row.node.name);
+        const showBadge =
+          row.node.ledgr_type &&
+          row.node.ledgr_type !== "general" &&
+          row.node.open_date !== null;
 
         return (
           <div
@@ -193,12 +207,20 @@ export default function AccountTree({ accounts, selectedAccount, onSelect }: Pro
               if (row.hasChildren) toggleExpand(row.path);
               onSelect(row.node.name);
             }}
+            onDoubleClick={() => {
+              if (onEdit) onEdit(row.node);
+            }}
           >
             <span className="acct-indent" style={{ width: row.depth * 16 }} />
             <span className="acct-toggle">
               {row.hasChildren ? (row.isExpanded ? "\u25BE" : "\u25B8") : ""}
             </span>
             <span className="acct-name">{shortName}</span>
+            {showBadge && (
+              <span className={typeBadgeClass(row.node.ledgr_type!)}>
+                {row.node.ledgr_type}
+              </span>
+            )}
             <BalanceDisplay balances={row.node.balance} />
           </div>
         );

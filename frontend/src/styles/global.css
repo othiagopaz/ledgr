@@ -1516,6 +1516,166 @@ body {
   padding: 8px 0;
 }
 
+/* ── ledgr-type badge ─────────────────────────────────────────────────────── */
+
+.type-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.type-badge--cash        { background: #dbeafe; color: #1d4ed8; }
+.type-badge--investment  { background: #ede9fe; color: #6d28d9; }
+.type-badge--receivable  { background: #dcfce7; color: #166534; }
+.type-badge--prepaid     { background: #f1f5f9; color: #475569; }
+.type-badge--credit-card { background: #fff7ed; color: #c2410c; }
+.type-badge--loan        { background: #fee2e2; color: #b91c1c; }
+.type-badge--payable     { background: #fef9c3; color: #854d0e; }
+
+[data-theme="dark"] .type-badge--cash        { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .type-badge--investment  { background: #2e1065; color: #c4b5fd; }
+[data-theme="dark"] .type-badge--receivable  { background: #14532d; color: #86efac; }
+[data-theme="dark"] .type-badge--prepaid     { background: #1e293b; color: #94a3b8; }
+[data-theme="dark"] .type-badge--credit-card { background: #431407; color: #fdba74; }
+[data-theme="dark"] .type-badge--loan        { background: #450a0a; color: #fca5a5; }
+[data-theme="dark"] .type-badge--payable     { background: #422006; color: #fde68a; }
+
+/* ── Account Modal ────────────────────────────────────────────────────────── */
+
+.acct-modal {
+  width: 520px;
+}
+
+/* Read-only account name shown in edit mode */
+.acct-modal-fullname {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  margin-bottom: 12px;
+}
+
+/* Section headers inside the modal (Metadata, Initial Balance) */
+.acct-section {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 10px;
+}
+
+.acct-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.acct-optional {
+  font-weight: 400;
+  text-transform: none;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+
+/* Metadata key-value rows */
+.metadata-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 5px;
+  align-items: center;
+}
+
+.metadata-key-input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.metadata-value-input {
+  flex: 2;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.metadata-key-input:focus,
+.metadata-value-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Close Account section */
+.close-account-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-close-account {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--amount-negative);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.btn-close-account:hover {
+  opacity: 1;
+  background: var(--bg-secondary);
+}
+
+.close-account-form {
+  /* inline confirmation form */
+}
+
+.close-account-warning {
+  font-size: 11px;
+  color: var(--flag-pending);
+  margin-bottom: 10px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--flag-pending);
+}
+
+.btn-danger {
+  background: var(--amount-negative);
+  color: #fff;
+  border-color: var(--amount-negative);
+}
+
+.btn-danger:hover {
+  opacity: 0.85;
+}
+
+/* form-hint (keyboard shortcut hint in modal footer) */
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+
 /* ============================================================
    Reports & Charts
    ============================================================ */

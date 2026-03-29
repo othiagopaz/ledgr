@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode } from '../types';
+import type { Transaction, ViewMode, AccountNode } from '../types';
 
 interface Tab {
   id: string;
@@ -26,6 +26,12 @@ interface AppState {
   txnModalTransaction: Transaction | null;
   openTxnModal: (txn?: Transaction) => void;
   closeTxnModal: () => void;
+
+  // Account modal
+  acctModalOpen: boolean;
+  acctModalAccount: AccountNode | null; // null = create, non-null = edit
+  openAcctModal: (account?: AccountNode) => void;
+  closeAcctModal: () => void;
 
   // UI
   theme: 'dark' | 'light';
@@ -95,6 +101,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   txnModalTransaction: null,
   openTxnModal: (txn) => set({ txnModalOpen: true, txnModalTransaction: txn || null }),
   closeTxnModal: () => set({ txnModalOpen: false, txnModalTransaction: null }),
+
+  // Account modal
+  acctModalOpen: false,
+  acctModalAccount: null,
+  openAcctModal: (account) => set({ acctModalOpen: true, acctModalAccount: account || null }),
+  closeAcctModal: () => set({ acctModalOpen: false, acctModalAccount: null }),
 
   // UI
   theme: 'light',
