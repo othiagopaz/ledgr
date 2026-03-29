@@ -18,6 +18,7 @@ export default function AccountBalanceChart() {
   const [interval, setInterval] = useState("monthly");
   const [account, setAccount] = useState("");
   const currency = useAppStore((s) => s.operatingCurrency);
+  const viewMode = useAppStore((s) => s.viewMode);
 
   const namesQuery = useQuery({
     queryKey: ["account-names"],
@@ -25,8 +26,8 @@ export default function AccountBalanceChart() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["account-balance", account, interval],
-    queryFn: () => fetchAccountBalanceSeries(account, interval),
+    queryKey: ["account-balance", account, interval, viewMode],
+    queryFn: () => fetchAccountBalanceSeries(account, interval, viewMode),
     enabled: !!account,
   });
 

@@ -13,8 +13,11 @@ export default function StatusBar({ account, transactions }: StatusBarProps) {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const viewType = activeTab?.type || "dashboard";
 
+  const viewMode = useAppStore((s) => s.viewMode);
+
   // Build context-aware keyboard hints
-  const hints: string[] = ["⌘K search"];
+  const viewLabel = viewMode === 'combined' ? 'Actual + Planned' : 'Actual';
+  const hints: string[] = ["⌘K search", `P ${viewLabel}`];
 
   if (viewType === "register") {
     hints.push("N new", "⌥N modal", "Enter edit", "E advanced", "R reconcile", "Del delete");

@@ -14,11 +14,36 @@ import pytest
 from beancount.core import amount as amt_mod, data
 from fava.core import FavaLedger
 
+from account_types import build_account_type_map
 from cashflow import classify_posting, compute_cashflow, date_to_period
 
 
 # ------------------------------------------------------------------
-# classify_posting — the 8 mandatory test cases from AGENTS.md §7
+# Default type map for classification tests — mirrors cashflow.beancount
+# ------------------------------------------------------------------
+
+DEFAULT_TYPE_MAP: dict[str, str] = {
+    "Assets:Bank:Checking": "cash",
+    "Assets:Bank:Savings": "cash",
+    "Assets:Investments:Stocks": "investment",
+    "Assets:Broker:XP": "investment",
+    "Liabilities:CreditCard": "credit-card",
+    "Liabilities:Loans:Mortgage": "loan",
+    "Income:Salary": "general",
+    "Expenses:Food": "general",
+    "Expenses:Rent": "general",
+    "Expenses:Commissions": "general",
+    "Income:CapitalGains": "general",
+    "Equity:OpeningBalances": "general",
+    # "Other" non-cash assets (receivables, deposits) are not in the map
+    # because they'd have ledgr-type like "receivable" or "prepaid"
+    "Assets:Receivables:Gabi": "receivable",
+    "Assets:Deposits:Rent": "prepaid",
+}
+
+
+# ------------------------------------------------------------------
+# classify_posting — ledgr-type based classification (see AGENTS.md §7)
 # ------------------------------------------------------------------
 
 
@@ -26,80 +51,71 @@ class TestClassifyPosting:
     """Classification order is CRITICAL — see AGENTS.md §7 & §13."""
 
     def test_salary_deposit_is_operating(self) -> None:
-        """Income → Assets = operating."""
+        """Income → cash account = operating."""
         result = classify_posting(
-            asset_account="Assets:Checking",
+            cash_account="Assets:Bank:Checking",
             counterparts=["Income:Salary"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
     def test_grocery_is_operating(self) -> None:
-        """Assets → Expenses = operating."""
+        """Cash account → Expenses = operating."""
         result = classify_posting(
-            asset_account="Assets:Checking",
+            cash_account="Assets:Bank:Checking",
             counterparts=["Expenses:Food"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
     def test_cc_payment_is_operating(self) -> None:
-        """Assets → Liabilities:CreditCard = operating (NOT financing)."""
+        """Cash account → Liabilities:CreditCard = operating (NOT financing)."""
         result = classify_posting(
-            asset_account="Assets:Checking",
+            cash_account="Assets:Bank:Checking",
             counterparts=["Liabilities:CreditCard"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
     def test_loan_payment_is_financing(self) -> None:
-        """Assets → Liabilities:Loans:Mortgage = financing.
+        """Cash account → Liabilities:Loans:Mortgage = financing.
 
-        This is the CRITICAL order test: Liabilities:Loans MUST be checked
-        BEFORE generic Liabilities: prefix.  This was a real bug — do not
+        This is the CRITICAL order test: loans MUST be checked
+        BEFORE generic Liabilities.  This was a real bug — do not
         regress (AGENTS.md §13).
         """
         result = classify_posting(
-            asset_account="Assets:Checking",
+            cash_account="Assets:Bank:Checking",
             counterparts=["Liabilities:Loans:Mortgage"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "financing"
 
-    def test_loan_payment_top_level_is_financing(self) -> None:
-        """Assets → Liabilities:Loans (no sub-account) = financing."""
+    def test_loan_any_name_is_financing(self) -> None:
+        """Account name doesn't matter — only ledgr-type does."""
+        type_map = {**DEFAULT_TYPE_MAP, "Liabilities:Emprestimo": "loan"}
         result = classify_posting(
-            asset_account="Assets:Checking",
-            counterparts=["Liabilities:Loans"],
+            cash_account="Assets:Bank:Checking",
+            counterparts=["Liabilities:Emprestimo"],
+            type_map=type_map,
         )
         assert result == "financing"
 
     def test_stock_purchase_is_investing(self) -> None:
-        """Assets:Checking → Assets:Investments = investing."""
+        """Cash account → investment account = investing."""
         result = classify_posting(
-            asset_account="Assets:Checking",
-            counterparts=[],
-            all_accounts_in_txn=[
-                "Assets:Checking",
-                "Assets:Investments:Stocks",
-            ],
+            cash_account="Assets:Bank:Checking",
+            counterparts=["Assets:Investments:Stocks"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
     def test_broker_transfer_is_investing(self) -> None:
-        """Assets:Checking → Assets:Broker = investing."""
+        """Cash account → Assets:Broker = investing (investment tier)."""
         result = classify_posting(
-            asset_account="Assets:Checking",
-            counterparts=[],
-            all_accounts_in_txn=["Assets:Checking", "Assets:Broker:XP"],
-        )
-        assert result == "investing"
-
-    def test_self_investment_account_is_investing(self) -> None:
-        """The asset posting itself is an investment account."""
-        result = classify_posting(
-            asset_account="Assets:Investments:Stocks",
-            counterparts=[],
-            all_accounts_in_txn=[
-                "Assets:Investments:Stocks",
-                "Assets:Checking",
-            ],
+            cash_account="Assets:Bank:Checking",
+            counterparts=["Assets:Broker:XP"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
@@ -107,104 +123,92 @@ class TestClassifyPosting:
         """Stock buy + commission = investing (NOT operating).
 
         This is the key regression test: the commission (Expenses:Commissions)
-        must NOT cause misclassification as operating.
+        must NOT cause misclassification as operating. The investment account
+        counterpart is checked before Expenses:.
         """
         result = classify_posting(
-            asset_account="Assets:Checking",
-            counterparts=["Expenses:Commissions"],
-            all_accounts_in_txn=[
-                "Assets:Checking",
-                "Assets:Investments:Stocks",
-                "Expenses:Commissions",
-            ],
+            cash_account="Assets:Bank:Checking",
+            counterparts=["Assets:Investments:Stocks", "Expenses:Commissions"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
     def test_stock_sale_with_gain_is_investing(self) -> None:
-        """Stock sale + capital gain = investing."""
+        """Stock sale + capital gain = investing (investment counterpart wins)."""
         result = classify_posting(
-            asset_account="Assets:Checking",
-            counterparts=["Income:CapitalGains"],
-            all_accounts_in_txn=[
-                "Assets:Checking",
-                "Assets:Investments:Stocks",
-                "Income:CapitalGains",
-            ],
+            cash_account="Assets:Bank:Checking",
+            counterparts=["Assets:Investments:Stocks", "Income:CapitalGains"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
-    def test_dividend_into_broker_is_operating(self) -> None:
-        """Dividend into broker cash = operating (no asset-to-asset movement).
+    def test_receivable_reimbursement_is_operating(self) -> None:
+        """Assets:Receivables → cash = operating (working capital, not investing).
 
-        Only Income → BrokerCash, no other asset account involved.
+        Receivables are "other" non-cash assets — they belong to operating
+        working capital, not investing. This is the key 3-tier distinction.
         """
         result = classify_posting(
-            asset_account="Assets:Broker:Cash",
-            counterparts=["Income:Dividends"],
-            all_accounts_in_txn=[
-                "Assets:Broker:Cash",
-                "Income:Dividends",
-            ],
+            cash_account="Assets:Bank:Checking",
+            counterparts=["Assets:Receivables:Gabi"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
-    def test_interest_on_broker_cash_is_operating(self) -> None:
-        """Interest on broker cash = operating."""
+    def test_other_noncash_asset_is_operating(self) -> None:
+        """Deposit/guarantee → cash = operating (other non-cash tier)."""
         result = classify_posting(
-            asset_account="Assets:Broker:Cash",
-            counterparts=["Income:Interest"],
-            all_accounts_in_txn=[
-                "Assets:Broker:Cash",
-                "Income:Interest",
-            ],
+            cash_account="Assets:Bank:Checking",
+            counterparts=["Assets:Deposits:Rent"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
-
-    def test_broker_cash_to_stocks_is_investing(self) -> None:
-        """Broker cash → stocks = investing (multiple investment accts)."""
-        result = classify_posting(
-            asset_account="Assets:Broker:Cash",
-            counterparts=[],
-            all_accounts_in_txn=[
-                "Assets:Broker:Cash",
-                "Assets:Investments:Stocks",
-            ],
-        )
-        assert result == "investing"
 
     def test_bank_to_bank_is_transfer(self) -> None:
-        """Assets:Checking → Assets:Savings = transfer."""
+        """Cash ↔ cash = transfer (no counterparts since both are cash)."""
         result = classify_posting(
-            asset_account="Assets:Checking",
+            cash_account="Assets:Bank:Checking",
             counterparts=[],
-            all_accounts_in_txn=["Assets:Checking", "Assets:Savings"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "transfer"
 
     def test_opening_balance_is_transfer(self) -> None:
-        """Equity → Assets = transfer."""
+        """Equity → cash account = transfer."""
         result = classify_posting(
-            asset_account="Assets:Checking",
+            cash_account="Assets:Bank:Checking",
             counterparts=["Equity:OpeningBalances"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "transfer"
 
-    def test_no_counterparts_no_investments_is_transfer(self) -> None:
+    def test_no_counterparts_is_transfer(self) -> None:
         """Edge case: no counterparts at all defaults to transfer."""
         result = classify_posting(
-            asset_account="Assets:Checking",
+            cash_account="Assets:Bank:Checking",
             counterparts=[],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "transfer"
+
+    def test_cash_account_name_doesnt_matter(self) -> None:
+        """Account with any name but ledgr-type 'cash' is a cash account."""
+        type_map = {**DEFAULT_TYPE_MAP, "Assets:Nubank": "cash"}
+        result = classify_posting(
+            cash_account="Assets:Nubank",
+            counterparts=["Expenses:Food"],
+            type_map=type_map,
+        )
+        assert result == "operating"
 
 
 # ------------------------------------------------------------------
-# CC purchase: Expenses ↔ Liabilities — no asset movement
+# CC purchase: Expenses ↔ Liabilities — no cash posting
 # ------------------------------------------------------------------
 
 
 class TestCCPurchaseExcluded:
-    """A CC purchase (Expenses ↔ Liabilities:CreditCard) has NO asset posting,
+    """A CC purchase (Expenses ↔ Liabilities:CreditCard) has NO cash posting,
     so it should NOT appear in the cash flow statement at all."""
 
     def test_cc_purchase_not_in_cashflow(self, cashflow_ledger: FavaLedger) -> None:
@@ -215,11 +219,8 @@ class TestCCPurchaseExcluded:
         for section in ("operating", "investing", "financing", "transfers"):
             all_items.extend(result[section]["items"])
 
-        # No item should reference the CC purchase counterpart "Store"
-        all_full_names = [item["full_name"] for item in all_items]
         # The CC purchase is Expenses:Food ↔ Liabilities:CreditCard — neither
-        # is an Assets: account, so it shouldn't appear.  We check that the
-        # total of items doesn't include that 150 BRL amount.
+        # is a cash account, so it shouldn't appear.
         # The key insight: the 150 BRL CC purchase should NOT show up anywhere.
 
 
@@ -247,7 +248,6 @@ class TestComputeCashflow:
         operating = result["operating"]
         assert operating["total"] != 0
         # Salary (+10000), Food (-500), Rent (-3000), CC payment (-200) = +6300
-        # The items should include Income:Salary and Expenses counterparts
         item_names = {i["full_name"] for i in operating["items"]}
         assert "Income:Salary" in item_names
 
@@ -260,12 +260,21 @@ class TestComputeCashflow:
     def test_investing_includes_stocks(self, cashflow_ledger: FavaLedger) -> None:
         result = compute_cashflow(cashflow_ledger.all_entries, interval="yearly")
         investing = result["investing"]
-        # Asset-to-asset investment transfers: both sides are classified as
-        # investing, so the net total may be zero (e.g. +2000 + -2000 = 0).
-        # But the breakdown items MUST exist.
+        # Investment accounts appear as counterpart full_names
         item_names = {i["full_name"] for i in investing["items"]}
         assert "Assets:Investments:Stocks" in item_names
         assert "Assets:Broker:XP" in item_names
+
+    def test_investing_labels_strip_assets_prefix(
+        self, cashflow_ledger: FavaLedger
+    ) -> None:
+        """Investing breakdown items use descriptive names (strip 'Assets:' prefix)."""
+        result = compute_cashflow(cashflow_ledger.all_entries, interval="yearly")
+        investing = result["investing"]
+        item_short_names = {i["name"] for i in investing["items"]}
+        # Should show "Investments:Stocks" not just "Stocks"
+        assert "Investments:Stocks" in item_short_names
+        assert "Broker:XP" in item_short_names
 
     def test_transfers_includes_bank_transfer(
         self, cashflow_ledger: FavaLedger
@@ -293,11 +302,9 @@ class TestComputeCashflow:
             cashflow_ledger.all_entries, interval="yearly", operating_currency="BRL"
         )
         assert result["operating_currency"] == "BRL"
-        # other_* fields exist
         assert "other_net_cashflow" in result
         assert "other_opening_balance" in result
         assert "other_closing_balance" in result
-        # Each section has other_items
         for section in ("operating", "investing", "financing", "transfers"):
             assert "other_items" in result[section]
 
@@ -356,11 +363,8 @@ class TestMultiCurrencyCashflow:
             operating_currency="USD",
         )
         assert result["operating_currency"] == "USD"
-        # The ITOT buy (100 ITOT) should NOT be in the main investing totals
-        # Only the USD side (-3500) should appear
         for section in ("operating", "investing", "financing", "transfers"):
             for item in result[section]["items"]:
-                # All amounts in main items should be USD
                 for p, val in item["totals"].items():
                     assert isinstance(val, (int, float)), (
                         f"Non-OC value leaked into {section}: {item}"
@@ -374,15 +378,12 @@ class TestMultiCurrencyCashflow:
             interval="yearly",
             operating_currency="USD",
         )
-        # ITOT and VACHR postings should be in other_items or other_net_cashflow
+        # VACHR goes to Expenses:PTO / Income:PTO (no cash posting → excluded)
+        # ITOT goes to Assets:Brokerage (non-cash asset → not a cash posting)
+        # The buy-shares txn: cash side is USD (OC), ITOT side is non-cash → excluded
         other_net = result.get("other_net_cashflow", [])
         other_currencies = {item["currency"] for item in other_net}
-        # The multicurrency fixture has ITOT and VACHR non-OC postings
-        # ITOT goes to Assets:Brokerage (investing other_items)
-        # VACHR goes to Expenses:PTO / Income:PTO (no asset posting, so not in cashflow)
-        # Only ITOT should appear since it touches Assets:Brokerage
-        if other_currencies:
-            assert "ITOT" in other_currencies
+        assert "ITOT" not in other_currencies
 
     def test_net_cashflow_is_oc_only(
         self, multicurrency_ledger: FavaLedger
@@ -392,7 +393,6 @@ class TestMultiCurrencyCashflow:
             interval="yearly",
             operating_currency="USD",
         )
-        # net_cashflow should equal sum of OC category totals
         for period in result["periods"]:
             expected = round(
                 result["operating"]["totals"].get(period, 0.0)

@@ -20,10 +20,11 @@ export default function BalanceSheet() {
   const [expandAll, setExpandAll] = useState(false);
   const [expandKey, setExpandKey] = useState(0);
   const currency = useAppStore((s) => s.operatingCurrency);
+  const viewMode = useAppStore((s) => s.viewMode);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["balance-sheet", asOfDate],
-    queryFn: () => fetchBalanceSheet(asOfDate || undefined),
+    queryKey: ["balance-sheet", asOfDate, viewMode],
+    queryFn: () => fetchBalanceSheet(asOfDate || undefined, viewMode),
   });
 
   if (isLoading) return <div className="report-loading">Loading...</div>;

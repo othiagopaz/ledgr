@@ -11,6 +11,8 @@ option "operating_currency" "USD"
 
 2024-01-01 custom "ledgr-option" "investment_account_prefixes" "Assets:Investments"
 
+2024-01-01 custom "ledgr-option" "cash_account_prefixes" "Assets:Bank Assets:Cash"
+
 
 * Commodities
 

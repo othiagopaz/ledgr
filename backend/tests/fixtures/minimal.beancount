@@ -2,11 +2,14 @@ option "title" "Test Ledger"
 option "operating_currency" "BRL"
 
 2024-01-01 open Assets:Checking        BRL
+  ledgr-type: "cash"
 2024-01-01 open Assets:Savings         BRL
+  ledgr-type: "cash"
 2024-01-01 open Income:Salary          BRL
 2024-01-01 open Expenses:Food          BRL
 2024-01-01 open Expenses:Rent          BRL
 2024-01-01 open Liabilities:CreditCard BRL
+  ledgr-type: "credit-card"
 2024-01-01 open Equity:OpeningBalances BRL
 
 2024-01-01 * "Opening Balance"
@@ -44,3 +47,11 @@ option "operating_currency" "BRL"
 2024-03-18 * "Transfer to Savings"
   Assets:Savings          3000.00 BRL
   Assets:Checking
+
+2024-04-01 ! "Future Corp" "Expected bonus"
+  Assets:Checking          2000.00 BRL
+  Income:Salary           -2000.00 BRL
+
+2024-04-15 ! "Landlord" "Projected rent"
+  Expenses:Rent            2500.00 BRL
+  Assets:Checking         -2500.00 BRL

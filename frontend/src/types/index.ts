@@ -9,6 +9,10 @@ export interface Balance {
 export interface AccountNode {
   name: string;
   type: string;
+  ledgr_type: string | null;
+  open_date: string | null;
+  currencies: string[];
+  metadata: Record<string, string>;
   balance: Balance[];
   children: AccountNode[];
   is_leaf: boolean;
@@ -94,6 +98,9 @@ export interface OptionsResponse {
   locale: string | null;
 }
 
+// View mode
+export type ViewMode = 'actual' | 'combined';
+
 // Report types
 
 export interface IncomeExpensePoint {
@@ -135,6 +142,21 @@ export interface BalanceSheetNode {
   children: BalanceSheetNode[];
 }
 
+export interface IncomeExpenseResponse {
+  series: IncomeExpensePoint[];
+  planned_series?: IncomeExpensePoint[];
+}
+
+export interface NetWorthResponse {
+  series: NetWorthPoint[];
+  planned_series?: NetWorthPoint[];
+}
+
+export interface AccountBalanceResponse {
+  series: AccountBalancePoint[];
+  planned_series?: AccountBalancePoint[];
+}
+
 export interface IncomeStatementResponse {
   income: AccountReportNode[];
   expenses: AccountReportNode[];
@@ -142,6 +164,9 @@ export interface IncomeStatementResponse {
   net_income: Record<string, number>;
   operating_currency: string;
   other_net_income?: OtherCurrencyAmount[];
+  planned_income?: AccountReportNode[];
+  planned_expenses?: AccountReportNode[];
+  planned_net_income?: Record<string, number>;
 }
 
 export interface BalanceSheetResponse {
@@ -159,6 +184,10 @@ export interface BalanceSheetResponse {
     liabilities: OtherCurrencyAmount[];
     equity: OtherCurrencyAmount[];
   };
+  planned_assets?: BalanceSheetNode[];
+  planned_liabilities?: BalanceSheetNode[];
+  planned_equity?: BalanceSheetNode[];
+  planned_totals?: { assets: number; liabilities: number; equity: number };
 }
 
 export interface CashFlowItem {
@@ -188,4 +217,51 @@ export interface CashFlowResponse {
   other_net_cashflow?: OtherCurrencyAmount[];
   other_opening_balance?: OtherCurrencyAmount[];
   other_closing_balance?: OtherCurrencyAmount[];
+  planned_operating?: CashFlowSection;
+  planned_investing?: CashFlowSection;
+  planned_financing?: CashFlowSection;
+  planned_transfers?: CashFlowSection;
+  planned_net_cashflow?: Record<string, number>;
+}
+
+// Account CRUD types
+
+export interface AccountInput {
+  name: string;
+  currencies?: string[];
+  date?: string;
+  ledgr_type?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface AccountUpdateInput {
+  name: string;
+  ledgr_type?: string;
+  currencies?: string[];
+  metadata?: Record<string, string>;
+}
+
+export interface CloseAccountInput {
+  name: string;
+  date?: string;
+}
+
+export interface AccountTypeOption {
+  value: string;
+  label: string;
+}
+
+export interface AccountTypesResponse {
+  types: Record<string, AccountTypeOption[]>;
+}
+
+export interface AccountWarning {
+  account: string;
+  message: string;
+  open_date: string;
+  lineno: number;
+}
+
+export interface AccountWarningsResponse {
+  warnings: AccountWarning[];
 }

@@ -10,6 +10,7 @@ See AGENTS.md §5 for the full usage contract.
 
 from __future__ import annotations
 
+from beancount.core import data
 from fava.core import FavaLedger
 
 _ledger: FavaLedger | None = None
@@ -40,3 +41,24 @@ def get_ledger() -> FavaLedger:
     if _ledger is None:
         raise RuntimeError("Ledger not initialized — call init_ledger() first")
     return _ledger
+
+
+def get_filtered_entries(
+    ledger: FavaLedger,
+    view_mode: str = "combined",
+) -> list:
+    """Return ledger entries filtered by planned/actual view mode.
+
+    view_mode:
+      - "combined"  → all entries (default, backward-compatible)
+      - "actual"    → only transactions with flag '*'; non-txn entries pass through
+      - "planned"   → only transactions with flag '!'; non-txn entries pass through
+    """
+    if view_mode == "combined":
+        return ledger.all_entries
+
+    flag = "*" if view_mode == "actual" else "!"
+    return [
+        e for e in ledger.all_entries
+        if not isinstance(e, data.Transaction) or e.flag == flag
+    ]

@@ -42,10 +42,11 @@ export default function IncomeStatement() {
   const [expandAll, setExpandAll] = useState(false);
   const [expandKey, setExpandKey] = useState(0);
   const currency = useAppStore((s) => s.operatingCurrency);
+  const viewMode = useAppStore((s) => s.viewMode);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["income-statement", interval],
-    queryFn: () => fetchIncomeStatement(undefined, undefined, interval),
+    queryKey: ["income-statement", interval, viewMode],
+    queryFn: () => fetchIncomeStatement(undefined, undefined, interval, viewMode),
   });
 
   if (isLoading) return <div className="report-loading">Loading...</div>;
