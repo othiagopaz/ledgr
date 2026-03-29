@@ -172,8 +172,16 @@ def edit_transaction(
     txn_date = datetime.date.fromisoformat(body.date)
     bc_postings = _build_bc_postings(body.postings)
 
+    # Start with fresh metadata, then re-apply all ledgr-* keys from the
+    # original entry so that series metadata (ledgr-series, ledgr-series-type,
+    # ledgr-series-seq, ledgr-series-total) is preserved through edits.
+    new_meta = data.new_metadata(str(ledger.beancount_file_path), body.lineno)
+    for k, v in entry.meta.items():
+        if isinstance(k, str) and k.startswith("ledgr-"):
+            new_meta[k] = v
+
     new_txn = data.Transaction(
-        data.new_metadata(str(ledger.beancount_file_path), body.lineno),
+        new_meta,
         txn_date,
         body.flag or "*",
         body.payee or "",

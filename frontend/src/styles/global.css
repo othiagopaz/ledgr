@@ -472,6 +472,7 @@ body {
 /* Register table */
 .register {
   width: 100%;
+  outline: none;
 }
 
 .register-header {
@@ -2029,3 +2030,373 @@ body {
   margin-top: 2px;
   opacity: 0.7;
 }
+
+/* ── Series inline badges (in transaction rows) ─────────────────────────── */
+
+:root {
+  --series-recurring: #7c3aed;
+  --series-installment: #0891b2;
+}
+
+.series-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+.series-inline-recurring {
+  color: var(--series-recurring);
+  background: color-mix(in srgb, var(--series-recurring) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--series-recurring) 30%, transparent);
+}
+
+.series-inline-installment {
+  color: var(--series-installment);
+  background: color-mix(in srgb, var(--series-installment) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--series-installment) 30%, transparent);
+}
+
+/* ── SeriesView page ─────────────────────────────────────────────────────── */
+
+.series-view {
+  padding: 20px 24px;
+  overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.series-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.series-view-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* series-filter-tabs removed — using reports-nav / reports-nav-btn instead */
+
+.series-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.series-reconcile-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+}
+
+.series-summaries,
+.series-transactions {
+  display: flex;
+  flex-direction: column;
+}
+
+.series-summaries {
+  margin-bottom: 24px;
+}
+
+.series-summary-table,
+.series-txn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.series-summary-table th,
+.series-txn-table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.series-summary-table td,
+.series-txn-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+  color: var(--text-primary);
+}
+
+.series-summary-row:hover td {
+  background: var(--bg-row-hover);
+  color: var(--text-primary);
+}
+
+.series-summary-payee {
+  font-weight: 500;
+}
+
+.series-summary-narration {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.series-summary-dates {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.series-currency-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 3px;
+}
+
+/* Series type badge (pill) */
+.series-type-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: capitalize;
+}
+
+.series-type-recurring {
+  color: var(--series-recurring);
+  background: color-mix(in srgb, var(--series-recurring) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--series-recurring) 25%, transparent);
+}
+
+.series-type-installment {
+  color: var(--series-installment);
+  background: color-mix(in srgb, var(--series-installment) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--series-installment) 25%, transparent);
+}
+
+/* Series icon in summary rows */
+.series-icon {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  display: inline-block;
+  min-width: 24px;
+  text-align: center;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.series-icon-recurring {
+  color: var(--series-recurring);
+  background: color-mix(in srgb, var(--series-recurring) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--series-recurring) 25%, transparent);
+}
+.series-icon-installment {
+  color: var(--series-installment);
+  background: color-mix(in srgb, var(--series-installment) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--series-installment) 25%, transparent);
+}
+
+/* Keyboard shortcut hint — fixed at bottom of page view */
+.series-kbd-hint {
+  margin-top: auto;
+  padding: 6px 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-light);
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+/* Progress bar */
+.series-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.series-progress-bar-wrap {
+  width: 80px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.series-progress-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--flag-confirmed);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.series-progress-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.series-progress-confirmed { color: var(--flag-confirmed); }
+.series-progress-pending { color: var(--flag-pending); }
+.series-progress-total { color: var(--text-muted); }
+
+/* Installment progress in transaction cell */
+.series-installment-progress {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* Series empty hint */
+.series-empty-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 16px 0;
+}
+
+/* Checkbox column in series transaction table */
+.series-txn-check {
+  width: 28px;
+  text-align: center;
+}
+
+/* ── SeriesModal ─────────────────────────────────────────────────────────── */
+
+.series-modal {
+  width: 560px;
+  max-width: 98vw;
+}
+
+.series-type-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.series-type-btn {
+  padding: 6px 18px;
+  font-size: 13px;
+  border: none;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.1s, color 0.1s;
+}
+
+.series-type-btn:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.series-type-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.series-type-btn:not(.active):hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.series-amount-label-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  padding-top: 2px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+/* Series detail view (inside modal) */
+.series-detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.series-detail-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.series-detail-label {
+  min-width: 80px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.series-detail-amount {
+  font-family: var(--font-mono);
+}
+
+.series-detail-per-txn {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.series-detail-account {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.series-extend-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* btn-danger */
+.btn-danger {
+  background: var(--amount-negative);
+  color: #ffffff;
+  border-color: var(--amount-negative);
+}
+.btn-danger:hover { opacity: 0.9; background: var(--amount-negative); }

@@ -28,6 +28,10 @@ export default function Sidebar({ errorCount }: SidebarProps) {
     openTab({ id: "reports", type: "report", label: "Reports" });
   }
 
+  function openSeries() {
+    openTab({ id: "series", type: "series", label: "Series" });
+  }
+
   return (
     <div className="sidebar">
       <nav className="sidebar-nav">
@@ -50,6 +54,13 @@ export default function Sidebar({ errorCount }: SidebarProps) {
           onClick={openReports}
         >
           Reports
+        </button>
+
+        <button
+          className={`sidebar-nav-item${activeType === "series" ? " active" : ""}`}
+          onClick={openSeries}
+        >
+          Series
         </button>
 
         {errorCount > 0 && (

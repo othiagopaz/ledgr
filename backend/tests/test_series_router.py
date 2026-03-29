@@ -330,3 +330,55 @@ class TestCancelSeries:
     def test_not_found(self, series_client: TestClient) -> None:
         r = series_client.delete("/api/series/nonexistent")
         assert r.status_code == 404
+
+
+# ------------------------------------------------------------------
+# PUT /api/transactions — ledgr-* metadata preservation
+# ------------------------------------------------------------------
+
+
+class TestEditTransactionPreservesSeriesMetadata:
+    """Editing a series transaction must keep ledgr-* metadata intact.
+
+    Regression: before the fix, edit_transaction built a fresh metadata dict
+    that discarded all ledgr-series* keys, causing the transaction to vanish
+    from its series and the progress count to drop.
+    """
+
+    def test_edit_preserves_ledgr_series_metadata(
+        self, series_client: TestClient
+    ) -> None:
+        # Get the pending installment txn (3/3 of tv-fixture001)
+        r = series_client.get(
+            "/api/transactions", params={"account": "Expenses:Electronics"}
+        )
+        txns = r.json()["transactions"]
+        pending = [t for t in txns if t["flag"] == "!"]
+        assert len(pending) == 1
+        txn = pending[0]
+        lineno = txn["lineno"]
+        assert lineno is not None
+
+        # Edit: flip flag to *
+        r = series_client.put("/api/transactions", json={
+            "lineno": lineno,
+            "date": txn["date"],
+            "flag": "*",
+            "payee": txn["payee"],
+            "narration": txn["narration"],
+            "postings": [
+                {"account": p["account"], "amount": float(p["amount"]), "currency": p["currency"]}
+                for p in txn["postings"]
+                if p["amount"] is not None
+            ],
+        })
+        assert r.json()["success"] is True
+
+        # The series should still show 3 total and 3 confirmed
+        r = series_client.get("/api/series")
+        tv = next(
+            s for s in r.json()["series"] if s["series_id"] == "tv-fixture001"
+        )
+        assert tv["total"] == 3, "Total must not drop after editing a transaction"
+        assert tv["confirmed"] == 3, "Confirmed must reflect the flag flip"
+        assert tv["pending"] == 0

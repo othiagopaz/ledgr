@@ -460,6 +460,32 @@ return <div>{ /* render data */ }</div>;
 
 ---
 
+## 16. Command palette — all actions must be accessible
+
+Every new user-facing action **must** be registered in the Cmd+K command palette (`CommandPalette.tsx`).
+
+This is a hard rule, not a suggestion. The command palette is the primary keyboard-driven entry point for every action in the app.
+
+### What this means in practice
+
+- New modal (e.g., "New Series") → add a palette item: `"New Series"` that calls the relevant store action
+- New view/tab (e.g., "Series") → add a palette item: `"View Series"` that calls `openTab()`
+- New action (e.g., "Export") → add a palette item that triggers the action
+
+### Group names in the palette
+
+| Group | Purpose |
+|-------|---------|
+| `"Actions"` | Primary CRUD and navigation actions (New Transaction, New Account, New Series) |
+| `"Views"` | Navigate to a specific tab (Dashboard, Accounts, Reports, Series) |
+| `"Accounts"` | Individual account register tabs |
+
+When adding a new entry, place it in the correct group and use consistent label conventions:
+- Create actions: `"New <Thing>"`
+- Navigate actions: `"View <Thing>"`
+
+---
+
 ## 15. Frontend PR checklist
 
 - [ ] `eslint` passes with no errors
