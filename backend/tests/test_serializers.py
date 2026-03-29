@@ -220,6 +220,42 @@ class TestSerializeTransaction:
         result = serialize_transaction(txn)
         assert result["lineno"] is None
 
+    def test_metadata_with_ledgr_series(self) -> None:
+        meta = {
+            "lineno": 10,
+            "filename": "test.beancount",
+            "ledgr-series": "tv-abc123",
+            "ledgr-series-type": "installment",
+            "ledgr-series-seq": 1,
+            "ledgr-series-total": 12,
+        }
+        txn = self._make_txn(meta=meta)
+        result = serialize_transaction(txn)
+        assert result["metadata"]["ledgr-series"] == "tv-abc123"
+        assert result["metadata"]["ledgr-series-type"] == "installment"
+        assert result["metadata"]["ledgr-series-seq"] == 1
+        assert result["metadata"]["ledgr-series-total"] == 12
+
+    def test_metadata_without_ledgr_keys(self) -> None:
+        meta = {"lineno": 10, "filename": "test.beancount"}
+        txn = self._make_txn(meta=meta)
+        result = serialize_transaction(txn)
+        assert result["metadata"] == {}
+
+    def test_metadata_excludes_non_ledgr_keys(self) -> None:
+        meta = {
+            "lineno": 10,
+            "filename": "test.beancount",
+            "ledgr-series": "abc",
+            "some-other-key": "value",
+        }
+        txn = self._make_txn(meta=meta)
+        result = serialize_transaction(txn)
+        assert "ledgr-series" in result["metadata"]
+        assert "some-other-key" not in result["metadata"]
+        assert "lineno" not in result["metadata"]
+        assert "filename" not in result["metadata"]
+
 
 # ------------------------------------------------------------------
 # serialize_account_node (integration — uses real FavaLedger)

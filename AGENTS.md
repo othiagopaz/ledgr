@@ -535,3 +535,33 @@ rendering. Non-chart components send `view_mode=combined`.
 1. **Default backward compatibility**: no `view_mode` param = `combined` = current behavior
 2. **Accounting equation in actual mode**: `Assets + Liabilities + Equity == 0` still holds
 3. **Non-transaction entries are never filtered**: `Open`, `Close`, `Balance`, `Price`, `Commodity` always pass through
+
+---
+
+## 14. Series (Recurring & Installments)
+
+Series transactions are normal Beancount transactions linked by
+`ledgr-series` metadata. There is no plugin, no special flag — just
+metadata on standard `!`/`*` transactions.
+
+### Metadata keys:
+- `ledgr-series`: unique series ID (required)
+- `ledgr-series-type`: "recurring" | "installment" (required)
+- `ledgr-series-seq`: 1-indexed sequence as Decimal (installment only)
+- `ledgr-series-total`: total count as Decimal (installment only)
+
+### Rules:
+- All series transactions start as `!` (planned)
+- Users flip individual transactions to `*` via normal editing
+- Cancel = delete all future `!` transactions in the series
+- Extend (recurring only) = append new `!` transactions after last date
+- Individual transactions can be edited via normal CRUD endpoints
+- The series router handles bulk creation/deletion only
+- `series.py` is pure functions — no I/O, no ledger access
+- `routers/series.py` handles I/O via FavaLedger.file
+
+### Invariants:
+- sum(installment amounts) == total purchase price
+- All dates use day-clamping for month-end edge cases
+- Installments cannot be extended; recurring can
+- Metadata integer values (seq, total) stored as `Decimal` (beancount requirement)

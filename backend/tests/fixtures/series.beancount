@@ -1,0 +1,59 @@
+option "title" "Series Test Fixture"
+option "operating_currency" "BRL"
+
+2024-01-01 open Assets:Bank:Checking       BRL
+2024-01-01 open Expenses:Subscriptions     BRL
+2024-01-01 open Expenses:Electronics       BRL
+2024-01-01 open Liabilities:CreditCard     BRL
+
+; -- Pre-existing installment series: 3 txns (2 confirmed, 1 pending) --
+
+2025-01-15 * "Magazine Luiza" "TV 50\" (1/3)"
+  ledgr-series: "tv-fixture001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 1
+  ledgr-series-total: 3
+  Expenses:Electronics  500.00 BRL
+  Liabilities:CreditCard  -500.00 BRL
+
+2025-02-15 * "Magazine Luiza" "TV 50\" (2/3)"
+  ledgr-series: "tv-fixture001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 2
+  ledgr-series-total: 3
+  Expenses:Electronics  500.00 BRL
+  Liabilities:CreditCard  -500.00 BRL
+
+2025-03-15 ! "Magazine Luiza" "TV 50\" (3/3)"
+  ledgr-series: "tv-fixture001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 3
+  ledgr-series-total: 3
+  Expenses:Electronics  500.00 BRL
+  Liabilities:CreditCard  -500.00 BRL
+
+; -- Pre-existing recurring series: 4 txns (1 confirmed, 3 pending) --
+
+2025-01-01 * "Netflix" "Assinatura mensal"
+  ledgr-series: "netflix-fix002"
+  ledgr-series-type: "recurring"
+  Expenses:Subscriptions  55.90 BRL
+  Assets:Bank:Checking  -55.90 BRL
+
+2025-02-01 ! "Netflix" "Assinatura mensal"
+  ledgr-series: "netflix-fix002"
+  ledgr-series-type: "recurring"
+  Expenses:Subscriptions  55.90 BRL
+  Assets:Bank:Checking  -55.90 BRL
+
+2025-03-01 ! "Netflix" "Assinatura mensal"
+  ledgr-series: "netflix-fix002"
+  ledgr-series-type: "recurring"
+  Expenses:Subscriptions  55.90 BRL
+  Assets:Bank:Checking  -55.90 BRL
+
+2025-04-01 ! "Netflix" "Assinatura mensal"
+  ledgr-series: "netflix-fix002"
+  ledgr-series-type: "recurring"
+  Expenses:Subscriptions  55.90 BRL
+  Assets:Bank:Checking  -55.90 BRL
