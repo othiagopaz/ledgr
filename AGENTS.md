@@ -4,6 +4,9 @@ Reference guide for AI agents (Claude Code, Cursor, Copilot, etc.)
 working in this repository. Read this file **in full** before writing
 or modifying any code.
 
+> **Frontend**: For any frontend change, also read
+> [`frontend/docs/front-end-guidelines.md`](frontend/docs/front-end-guidelines.md).
+
 ---
 
 ## 1. What Ledgr is
@@ -414,12 +417,7 @@ def classify(acct, cps):
 
 ### TypeScript / React
 
-- Explicit types for all API responses (in `src/types/`)
-- No `any` without a justifying comment
-- Fetch wrappers in `src/api/` — components do not call `fetch` directly
-- All `useQuery` calls must wrap fetch functions in lambdas (`() => fetchFoo(args)`)
-  to prevent React Query from passing its context object as arguments
-- All data-fetching queries must include `viewMode` in the `queryKey`
+See [`frontend/docs/front-end-guidelines.md`](frontend/docs/front-end-guidelines.md).
 
 ### Naming
 
@@ -428,9 +426,9 @@ def classify(acct, cps):
 | Python files     | `snake_case.py`    |
 | Python classes   | `PascalCase`       |
 | Python functions | `snake_case`       |
-| React components | `PascalCase.tsx`   |
-| React hooks      | `usePascalCase.ts` |
 | API endpoints    | `/api/kebab-case`  |
+
+For frontend naming conventions, see the front-end guidelines.
 
 ---
 
@@ -454,7 +452,7 @@ def classify(acct, cps):
 | Not calling `cap_opt()` on Balance Sheet | Assets ≠ Liabilities + Equity | `summarize.cap_opt()` is mandatory |
 | Writing to `.beancount` with `open()` | File corruption, no rollback | Use `FavaLedger.file.insert_entries()` |
 | Returning raw `Decimal` or `date` in JSON responses | Serialization error 500 | Always pass through `serializers.py` |
-| Passing `fetchFoo` directly as `queryFn` | React Query passes context object as arg → `[object Object]` in URL | Always wrap: `() => fetchFoo(args)` |
+| Passing `fetchFoo` directly as `queryFn` | React Query passes context object as arg → `[object Object]` in URL | Always wrap: `() => fetchFoo(args)` (see front-end guidelines §14) |
 
 ---
 
@@ -512,23 +510,7 @@ Default is always `"combined"` (backward-compatible).
 
 ### Frontend toggle
 
-- **State**: `viewMode` in `appStore.ts` (`'actual' | 'combined'`)
-- **UI**: `PlannedToggle.tsx` pill button in the app header
-- **Keyboard**: `P` key toggles between states
-- **Queries**: every `useQuery` includes `viewMode` in the `queryKey`
-  and passes it to the fetch function
-
-When the toggle is "Actual + Planned", chart components send
-`view_mode=comparative` to get separate actual/planned series for stacked
-rendering. Non-chart components send `view_mode=combined`.
-
-### Chart rendering in combined mode
-
-- **Income vs Expenses**: Stacked bars — actual bars + translucent planned bars.
-  Income above zero, expenses below zero (centered layout).
-- **Net Worth**: Solid line for actual, dashed line for combined (actual+planned).
-- **Dashboard cards**: Show combined total as main value, "X planned" subtitle
-  for the planned portion.
+See [`frontend/docs/front-end-guidelines.md`](frontend/docs/front-end-guidelines.md) §11.
 
 ### Key invariants
 
