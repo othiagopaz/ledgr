@@ -160,6 +160,15 @@ def serialize_transaction(txn: data.Transaction) -> dict[str, Any]:
         "links": list(txn.links) if txn.links else [],
         "lineno": txn.meta.get("lineno") if txn.meta else None,
         "postings": [serialize_posting(p) for p in txn.postings],
+        "metadata": _extract_ledgr_metadata(txn.meta) if txn.meta else {},
+    }
+
+
+def _extract_ledgr_metadata(meta: dict) -> dict[str, Any]:
+    """Extract ``ledgr-*`` metadata keys for frontend consumption."""
+    return {
+        k: v for k, v in meta.items()
+        if isinstance(k, str) and k.startswith("ledgr-")
     }
 
 

@@ -65,6 +65,23 @@ def multicurrency_ledger(multicurrency_file: Path) -> FavaLedger:
 
 
 @pytest.fixture()
+def series_file(tmp_path: Path) -> Path:
+    """Copy the series fixture into a temp directory."""
+    src = FIXTURES_DIR / "series.beancount"
+    dst = tmp_path / "series.beancount"
+    shutil.copy(src, dst)
+    return dst
+
+
+@pytest.fixture()
+def series_ledger(series_file: Path) -> FavaLedger:
+    """A FavaLedger instance loaded from the series fixture."""
+    fava = FavaLedger(str(series_file))
+    fava.load_file()
+    return fava
+
+
+@pytest.fixture()
 def cashflow_ledger(cashflow_file: Path) -> FavaLedger:
     """A FavaLedger instance loaded from the cashflow fixture."""
     fava = FavaLedger(str(cashflow_file))
