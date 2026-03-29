@@ -4,6 +4,9 @@ Reference guide for AI agents (Claude Code, Cursor, Copilot, etc.)
 working in this repository. Read this file **in full** before writing
 or modifying any code.
 
+> **Frontend**: For any frontend change, also read
+> [`frontend/docs/front-end-guidelines.md`](frontend/docs/front-end-guidelines.md).
+
 ---
 
 ## 1. What Ledgr is
@@ -414,12 +417,7 @@ def classify(acct, cps):
 
 ### TypeScript / React
 
-- Explicit types for all API responses (in `src/types/`)
-- No `any` without a justifying comment
-- Fetch wrappers in `src/api/` — components do not call `fetch` directly
-- All `useQuery` calls must wrap fetch functions in lambdas (`() => fetchFoo(args)`)
-  to prevent React Query from passing its context object as arguments
-- All data-fetching queries must include `viewMode` in the `queryKey`
+See [`frontend/docs/front-end-guidelines.md`](frontend/docs/front-end-guidelines.md).
 
 ### Naming
 
@@ -428,9 +426,9 @@ def classify(acct, cps):
 | Python files     | `snake_case.py`    |
 | Python classes   | `PascalCase`       |
 | Python functions | `snake_case`       |
-| React components | `PascalCase.tsx`   |
-| React hooks      | `usePascalCase.ts` |
 | API endpoints    | `/api/kebab-case`  |
+
+For frontend naming conventions, see the front-end guidelines.
 
 ---
 
@@ -454,7 +452,7 @@ def classify(acct, cps):
 | Not calling `cap_opt()` on Balance Sheet | Assets ≠ Liabilities + Equity | `summarize.cap_opt()` is mandatory |
 | Writing to `.beancount` with `open()` | File corruption, no rollback | Use `FavaLedger.file.insert_entries()` |
 | Returning raw `Decimal` or `date` in JSON responses | Serialization error 500 | Always pass through `serializers.py` |
-| Passing `fetchFoo` directly as `queryFn` | React Query passes context object as arg → `[object Object]` in URL | Always wrap: `() => fetchFoo(args)` |
+| Passing `fetchFoo` directly as `queryFn` | React Query passes context object as arg → `[object Object]` in URL | Always wrap: `() => fetchFoo(args)` (see front-end guidelines §14) |
 
 ---
 
@@ -512,26 +510,40 @@ Default is always `"combined"` (backward-compatible).
 
 ### Frontend toggle
 
-- **State**: `viewMode` in `appStore.ts` (`'actual' | 'combined'`)
-- **UI**: `PlannedToggle.tsx` pill button in the app header
-- **Keyboard**: `P` key toggles between states
-- **Queries**: every `useQuery` includes `viewMode` in the `queryKey`
-  and passes it to the fetch function
-
-When the toggle is "Actual + Planned", chart components send
-`view_mode=comparative` to get separate actual/planned series for stacked
-rendering. Non-chart components send `view_mode=combined`.
-
-### Chart rendering in combined mode
-
-- **Income vs Expenses**: Stacked bars — actual bars + translucent planned bars.
-  Income above zero, expenses below zero (centered layout).
-- **Net Worth**: Solid line for actual, dashed line for combined (actual+planned).
-- **Dashboard cards**: Show combined total as main value, "X planned" subtitle
-  for the planned portion.
+See [`frontend/docs/front-end-guidelines.md`](frontend/docs/front-end-guidelines.md) §11.
 
 ### Key invariants
 
 1. **Default backward compatibility**: no `view_mode` param = `combined` = current behavior
 2. **Accounting equation in actual mode**: `Assets + Liabilities + Equity == 0` still holds
 3. **Non-transaction entries are never filtered**: `Open`, `Close`, `Balance`, `Price`, `Commodity` always pass through
+
+---
+
+## 14. Series (Recurring & Installments)
+
+Series transactions are normal Beancount transactions linked by
+`ledgr-series` metadata. There is no plugin, no special flag — just
+metadata on standard `!`/`*` transactions.
+
+### Metadata keys:
+- `ledgr-series`: unique series ID (required)
+- `ledgr-series-type`: "recurring" | "installment" (required)
+- `ledgr-series-seq`: 1-indexed sequence as Decimal (installment only)
+- `ledgr-series-total`: total count as Decimal (installment only)
+
+### Rules:
+- All series transactions start as `!` (planned)
+- Users flip individual transactions to `*` via normal editing
+- Cancel = delete all future `!` transactions in the series
+- Extend (recurring only) = append new `!` transactions after last date
+- Individual transactions can be edited via normal CRUD endpoints
+- The series router handles bulk creation/deletion only
+- `series.py` is pure functions — no I/O, no ledger access
+- `routers/series.py` handles I/O via FavaLedger.file
+
+### Invariants:
+- sum(installment amounts) == total purchase price
+- All dates use day-clamping for month-end edge cases
+- Installments cannot be extended; recurring can
+- Metadata integer values (seq, total) stored as `Decimal` (beancount requirement)

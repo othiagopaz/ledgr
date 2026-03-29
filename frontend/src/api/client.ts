@@ -12,6 +12,12 @@ import type {
   CloseAccountInput,
   AccountTypesResponse,
   AccountWarningsResponse,
+  SeriesListResponse,
+  SeriesCreateIn,
+  SeriesCreateResponse,
+  SeriesExtendIn,
+  SeriesExtendResponse,
+  SeriesCancelResponse,
 } from "../types";
 
 const BASE = "";
@@ -245,4 +251,45 @@ export async function fetchCashFlow(
   if (toDate) params.set("to_date", toDate);
   if (viewMode !== "combined") params.set("view_mode", viewMode);
   return get(`/api/reports/cashflow?${params}`);
+}
+
+// Series
+
+export async function fetchSeries(): Promise<SeriesListResponse> {
+  return get("/api/series");
+}
+
+export async function createSeries(
+  input: SeriesCreateIn
+): Promise<SeriesCreateResponse> {
+  const res = await fetch("/api/series", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+export async function extendSeries(
+  seriesId: string,
+  input: SeriesExtendIn
+): Promise<SeriesExtendResponse> {
+  const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/extend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+export async function cancelSeries(
+  seriesId: string
+): Promise<SeriesCancelResponse> {
+  const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
 }

@@ -23,6 +23,8 @@ export default function StatusBar({ account, transactions }: StatusBarProps) {
     hints.push("N new", "⌥N modal", "Enter edit", "E advanced", "R reconcile", "Del delete");
   } else if (viewType === "accounts") {
     hints.push("↑↓ navigate", "← → expand", "Enter open");
+  } else if (viewType === "series") {
+    hints.push("↑↓ navigate", "Enter edit", "R reconcile", "Space select");
   } else {
     hints.push("N new", "⌥N modal");
   }
