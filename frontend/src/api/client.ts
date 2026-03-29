@@ -7,6 +7,11 @@ import type {
   ErrorsResponse,
   OptionsResponse,
   ViewMode,
+  AccountInput,
+  AccountUpdateInput,
+  CloseAccountInput,
+  AccountTypesResponse,
+  AccountWarningsResponse,
 } from "../types";
 
 const BASE = "";
@@ -77,6 +82,72 @@ export async function fetchAccountNames(): Promise<{ accounts: string[] }> {
   return get("/api/account-names");
 }
 
+// Account CRUD
+
+export interface AccountMutationResponse {
+  success: boolean;
+  account?: {
+    name: string;
+    ledgr_type: string;
+    open_date: string;
+    currencies: string[];
+    metadata: Record<string, string>;
+  };
+  errors?: string[];
+}
+
+export async function fetchAccountTypes(): Promise<AccountTypesResponse> {
+  return get("/api/account-types");
+}
+
+export async function fetchAccountWarnings(): Promise<AccountWarningsResponse> {
+  return get("/api/accounts/warnings");
+}
+
+async function mutateAccount(
+  url: string,
+  method: "POST" | "PUT",
+  body: unknown
+): Promise<AccountMutationResponse> {
+  const res = await fetch(BASE + url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function createAccount(
+  input: AccountInput
+): Promise<AccountMutationResponse> {
+  return mutateAccount("/api/accounts", "POST", input);
+}
+
+export async function updateAccount(
+  input: AccountUpdateInput
+): Promise<AccountMutationResponse> {
+  return mutateAccount("/api/accounts", "PUT", input);
+}
+
+export async function closeAccount(
+  input: CloseAccountInput
+): Promise<{ success: boolean; account: string; close_date: string }> {
+  const res = await fetch(BASE + "/api/accounts/close", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function fetchPayees(): Promise<{ payees: string[] }> {
   return get("/api/payees");
 }
@@ -103,9 +174,6 @@ export async function fetchSuggestions(payee: string): Promise<Suggestion> {
 // Reports
 
 import type {
-  IncomeExpensePoint,
-  AccountBalancePoint,
-  NetWorthPoint,
   IncomeStatementResponse,
   BalanceSheetResponse,
   CashFlowResponse,

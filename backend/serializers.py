@@ -63,15 +63,24 @@ def serialize_inventory(inv: inventory.Inventory) -> list[dict[str, Any]]:
 # Account tree
 # ------------------------------------------------------------------
 
-def serialize_account_node(real_acct: realization.RealAccount) -> dict[str, Any]:
+# Internal metadata keys to exclude from the user-visible metadata dict.
+_INTERNAL_META_KEYS = frozenset({"filename", "lineno", "ledgr-type"})
+
+
+def serialize_account_node(
+    real_acct: realization.RealAccount,
+    opens_map: dict[str, data.Open] | None = None,
+) -> dict[str, Any]:
     """Recursively serialize a ``RealAccount`` into a JSON-friendly dict.
 
-    Returns the shape expected by ``AccountNode`` on the frontend::
+    When ``opens_map`` is provided, enriches nodes with Open directive data:
+    ``ledgr_type``, ``open_date``, ``currencies``, and ``metadata``.
 
-        {"name": "Assets:Checking", "type": "Assets",
-         "balance": [...], "children": [...], "is_leaf": true}
+    Returns the shape expected by ``AccountNode`` on the frontend.
     """
-    children = [serialize_account_node(c) for c in real_acct.values()]
+    children = [
+        serialize_account_node(c, opens_map) for c in real_acct.values()
+    ]
     children.sort(key=lambda n: n["name"])
 
     balance = realization.compute_balance(real_acct)
@@ -80,9 +89,29 @@ def serialize_account_node(real_acct: realization.RealAccount) -> dict[str, Any]
     acct_name = real_acct.account
     acct_type = acct_name.split(":")[0] if acct_name else ""
 
+    # Enrich from Open directive
+    open_entry = opens_map.get(acct_name) if opens_map else None
+    ledgr_type = None
+    open_date = None
+    currencies: list[str] = []
+    metadata: dict[str, str] = {}
+
+    if open_entry:
+        ledgr_type = open_entry.meta.get("ledgr-type")
+        open_date = open_entry.date.isoformat()
+        currencies = list(open_entry.currencies) if open_entry.currencies else []
+        metadata = {
+            k: str(v) for k, v in open_entry.meta.items()
+            if k not in _INTERNAL_META_KEYS
+        }
+
     return {
         "name": acct_name,
         "type": acct_type,
+        "ledgr_type": ledgr_type,
+        "open_date": open_date,
+        "currencies": currencies,
+        "metadata": metadata,
         "balance": balance_list,
         "children": children,
         "is_leaf": len(children) == 0,

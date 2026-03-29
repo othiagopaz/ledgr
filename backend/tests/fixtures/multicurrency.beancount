@@ -2,13 +2,16 @@ option "title" "Multi-Currency Test Ledger"
 option "operating_currency" "USD"
 
 2024-01-01 open Assets:Bank:Checking  USD
+  ledgr-type: "cash"
 2024-01-01 open Assets:Brokerage      ITOT
+  ledgr-type: "investment"
 2024-01-01 open Income:Salary         USD
 2024-01-01 open Income:Dividends      USD
 2024-01-01 open Income:PTO            VACHR
 2024-01-01 open Expenses:Food         USD
 2024-01-01 open Expenses:PTO          VACHR
 2024-01-01 open Liabilities:CreditCard USD
+  ledgr-type: "credit-card"
 2024-01-01 open Equity:OpeningBalances
 
 2024-01-01 * "Opening Balance"

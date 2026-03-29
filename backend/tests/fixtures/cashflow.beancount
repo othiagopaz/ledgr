@@ -2,14 +2,20 @@ option "title" "Cash Flow Test Ledger"
 option "operating_currency" "BRL"
 
 2024-01-01 open Assets:Bank:Checking      BRL
+  ledgr-type: "cash"
 2024-01-01 open Assets:Bank:Savings       BRL
+  ledgr-type: "cash"
 2024-01-01 open Assets:Investments:Stocks BRL
+  ledgr-type: "investment"
 2024-01-01 open Assets:Broker:XP          BRL
+  ledgr-type: "investment"
 2024-01-01 open Income:Salary             BRL
 2024-01-01 open Expenses:Food             BRL
 2024-01-01 open Expenses:Rent             BRL
 2024-01-01 open Liabilities:CreditCard    BRL
+  ledgr-type: "credit-card"
 2024-01-01 open Liabilities:Loans:Mortgage BRL
+  ledgr-type: "loan"
 2024-01-01 open Equity:OpeningBalances    BRL
 
 ; --- OPERATING ---
