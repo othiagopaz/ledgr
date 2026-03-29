@@ -313,7 +313,10 @@ export default function SeriesView() {
       {/* Header */}
       <div className="series-view-header">
         <h2>Series &amp; Scheduled</h2>
-        <button className="btn btn-primary" onClick={() => openSeriesModal()}>
+        <button
+          className="btn btn-primary"
+          onClick={() => openSeriesModal(undefined, filter === 'recurring' || filter === 'installment' ? filter : undefined)}
+        >
           + New Series
         </button>
       </div>
@@ -366,7 +369,10 @@ export default function SeriesView() {
           {filteredSeries.length === 0 && filter !== 'pending' && (
             <div className="series-empty-hint">
               No {filter === 'all' ? '' : filter + ' '}series yet.{' '}
-              <button className="btn-link" onClick={() => openSeriesModal()}>
+              <button
+                className="btn-link"
+                onClick={() => openSeriesModal(undefined, filter === 'recurring' || filter === 'installment' ? filter : undefined)}
+              >
                 Create one
               </button>
             </div>

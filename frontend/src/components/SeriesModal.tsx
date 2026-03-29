@@ -19,6 +19,7 @@ type Mode = 'create' | 'view' | 'extend';
 
 export default function SeriesModal({ onMutated }: SeriesModalProps) {
   const series = useAppStore((s) => s.seriesModalSeries);
+  const seriesModalDefaultType = useAppStore((s) => s.seriesModalDefaultType);
   const closeSeriesModal = useAppStore((s) => s.closeSeriesModal);
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const queryClient = useQueryClient();
@@ -28,7 +29,7 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
 
   // ── Create form state ─────────────────────────────────────────────────────
 
-  const [seriesType, setSeriesType] = useState<'recurring' | 'installment'>('recurring');
+  const [seriesType, setSeriesType] = useState<'recurring' | 'installment'>(seriesModalDefaultType ?? 'recurring');
   const [payee, setPayee] = useState(isEditing ? series!.payee : "");
   const [narration, setNarration] = useState(isEditing ? series!.narration : "");
   const [startDate, setStartDate] = useState(formatDateFull(today(), operatingCurrency));

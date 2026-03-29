@@ -2266,7 +2266,8 @@ body {
 .series-empty-hint {
   font-size: 13px;
   color: var(--text-muted);
-  padding: 16px 0;
+  padding: 4px 0;
+  margin-bottom: 20px;
 }
 
 /* Checkbox column in series transaction table */
