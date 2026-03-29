@@ -97,6 +97,7 @@ export default function SeriesView() {
   const [selectedLinenos, setSelectedLinenos] = useState<Set<number>>(new Set());
   const [reconciling, setReconciling] = useState(false);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  const [expandedSplits, setExpandedSplits] = useState<Set<number>>(new Set());
 
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -107,10 +108,15 @@ export default function SeriesView() {
     }
   }, [txnModalOpen]);
 
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // Auto-select first row on mount and when filter changes
   useEffect(() => {
     setSelectedRowIndex(0);
-    requestAnimationFrame(() => tableRef.current?.focus());
+    requestAnimationFrame(() => tableRef.current?.focus({ preventScroll: true }));
   }, [filter]);
 
   const seriesQuery = useQuery({
@@ -163,7 +169,7 @@ export default function SeriesView() {
   useEffect(() => {
     if (hasData && selectedRowIndex === null) {
       setSelectedRowIndex(0);
-      requestAnimationFrame(() => tableRef.current?.focus());
+      requestAnimationFrame(() => tableRef.current?.focus({ preventScroll: true }));
     }
   }, [hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -295,11 +301,11 @@ export default function SeriesView() {
   }
 
   function summarizeAmount(txn: Transaction): string {
-    const pos = txn.postings.find((p) => p.amount && parseFloat(p.amount) > 0);
-    if (pos?.amount && pos.currency) {
-      return formatAmount(parseFloat(pos.amount), pos.currency);
-    }
-    return "";
+    const positives = txn.postings.filter((p) => p.amount && parseFloat(p.amount) > 0);
+    if (positives.length === 0) return "";
+    const total = positives.reduce((sum, p) => sum + parseFloat(p.amount!), 0);
+    const cur = positives[0].currency || operatingCurrency;
+    return formatAmount(total, cur);
   }
 
   const pendingEligibleCount = displayTxns.filter(
@@ -431,16 +437,18 @@ export default function SeriesView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayTxns.map((txn, i) => {
+                    {displayTxns.flatMap((txn, i) => {
                       const isPending = txn.flag === '!';
                       const isSelected = txn.lineno != null && selectedLinenos.has(txn.lineno);
                       const isRowSelected = selectedRowIndex === i;
                       const sType = getSeriesType(txn);
+                      const isSplit = txn.postings.length > 2;
+                      const isExpanded = expandedSplits.has(i);
 
-                      return (
+                      const mainRow = (
                         <tr
                           key={txn.lineno ?? i}
-                          className={`register-row${isPending ? ' pending' : ''}${isSelected ? ' row-selected' : ''}${isRowSelected ? ' row-selected' : ''}`}
+                          className={`register-row${isPending ? ' pending' : ''}${isSelected ? ' row-selected' : ''}${isRowSelected ? ' row-selected' : ''}${isSplit ? ' register-row-split' : ''}`}
                           onClick={() => {
                             setSelectedRowIndex(i);
                             openTxnModal(txn);
@@ -482,13 +490,58 @@ export default function SeriesView() {
                             <span>{getDescription(txn) || "—"}</span>
                           </td>
                           <td className="accounts-summary">
-                            {summarizeAccounts(txn)}
+                            {isSplit ? (
+                              <span
+                                className="split-toggle"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedSplits((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(i)) next.delete(i);
+                                    else next.add(i);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <span className="split-arrow">{isExpanded ? "▾" : "▸"}</span>
+                                — Split —
+                              </span>
+                            ) : (
+                              summarizeAccounts(txn)
+                            )}
                           </td>
                           <td className="num amount">
                             {summarizeAmount(txn)}
                           </td>
                         </tr>
                       );
+
+                      if (!isSplit || !isExpanded) return [mainRow];
+
+                      const splitRows = txn.postings.map((p, pi) => {
+                        const amt = p.amount ? parseFloat(p.amount) : 0;
+                        const shortAcct = p.account.split(":").length > 2
+                          ? p.account.split(":").slice(1).join(":")
+                          : p.account;
+                        return (
+                          <tr key={`${i}-split-${pi}`} className="register-split-row">
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td
+                              className="register-split-account"
+                              colSpan={2}
+                            >
+                              {shortAcct}
+                            </td>
+                            <td className={`num amount ${amt > 0 ? "positive" : amt < 0 ? "negative" : ""}`}>
+                              {amt !== 0 ? formatAmount(Math.abs(amt), operatingCurrency) : ""}
+                            </td>
+                          </tr>
+                        );
+                      });
+
+                      return [mainRow, ...splitRows];
                     })}
                   </tbody>
                 </table>

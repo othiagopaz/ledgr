@@ -55,7 +55,7 @@ class TestListSeries:
         assert r.status_code == 200
         body = r.json()
         assert "series" in body
-        assert len(body["series"]) == 2
+        assert len(body["series"]) == 3  # tv, netflix, split
 
     def test_summary_shape(self, series_client: TestClient) -> None:
         r = series_client.get("/api/series")
@@ -66,6 +66,7 @@ class TestListSeries:
             "amount_per_txn", "currency", "total", "confirmed",
             "pending", "first_date", "last_date",
             "account_from", "account_to",
+            "postings", "is_split",
         }
         assert expected_keys.issubset(s.keys())
 
@@ -83,11 +84,31 @@ class TestListSeries:
         r = series_client.get("/api/series")
         body = r.json()
         recurring = next(
-            s for s in body["series"] if s["type"] == "recurring"
+            s for s in body["series"]
+            if s["type"] == "recurring" and s["series_id"] == "netflix-fix002"
         )
         assert recurring["total"] == 4
         assert recurring["confirmed"] == 1
         assert recurring["pending"] == 3
+
+    def test_split_series_fields(self, series_client: TestClient) -> None:
+        r = series_client.get("/api/series")
+        body = r.json()
+        split = next(
+            s for s in body["series"] if s["series_id"] == "split-fix003"
+        )
+        assert split["is_split"] is True
+        assert len(split["postings"]) == 3
+        # amount_per_txn = sum of positive postings = 60 + 40 = 100
+        assert split["amount_per_txn"] == "100.00"
+
+    def test_simple_series_not_split(self, series_client: TestClient) -> None:
+        r = series_client.get("/api/series")
+        body = r.json()
+        netflix = next(
+            s for s in body["series"] if s["series_id"] == "netflix-fix002"
+        )
+        assert netflix["is_split"] is False
 
     def test_empty_when_no_series(self, minimal_client: TestClient) -> None:
         r = minimal_client.get("/api/series")
@@ -109,10 +130,11 @@ class TestCreateInstallmentSeries:
             "narration": "TV",
             "start_date": "2025-04-15",
             "count": 6,
-            "amount": "250.00",
             "currency": "BRL",
-            "account_from": "Liabilities:CreditCard",
-            "account_to": "Expenses:Food",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "250.00"},
+                {"account": "Liabilities:CreditCard", "amount": "-250.00"},
+            ],
         })
         assert r.status_code == 200
         body = r.json()
@@ -127,10 +149,11 @@ class TestCreateInstallmentSeries:
             "narration": "Gadget",
             "start_date": "2025-05-01",
             "count": 3,
-            "amount": "100",
             "currency": "BRL",
-            "account_from": "Liabilities:CreditCard",
-            "account_to": "Expenses:Food",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "100"},
+                {"account": "Liabilities:CreditCard", "amount": "-100"},
+            ],
         })
         r = minimal_client.get("/api/series")
         body = r.json()
@@ -144,10 +167,11 @@ class TestCreateInstallmentSeries:
             "payee": "Store",
             "narration": "TV",
             "start_date": "2025-04-15",
-            "amount": "250.00",
             "currency": "BRL",
-            "account_from": "Liabilities:CreditCard",
-            "account_to": "Expenses:Food",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "250.00"},
+                {"account": "Liabilities:CreditCard", "amount": "-250.00"},
+            ],
         })
         assert r.status_code == 400
 
@@ -158,11 +182,12 @@ class TestCreateInstallmentSeries:
             "narration": "TV",
             "start_date": "2025-01-01",
             "count": 3,
-            "amount": "1000",
             "amount_is_total": True,
             "currency": "BRL",
-            "account_from": "Liabilities:CreditCard",
-            "account_to": "Expenses:Food",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "1000"},
+                {"account": "Liabilities:CreditCard", "amount": "-1000"},
+            ],
         })
         assert r.status_code == 200
         body = r.json()
@@ -200,10 +225,11 @@ class TestCreateRecurringSeries:
             "narration": "Assinatura",
             "start_date": "2025-04-01",
             "end_date": "2025-09-01",
-            "amount": "55.90",
             "currency": "BRL",
-            "account_from": "Assets:Checking",
-            "account_to": "Expenses:Food",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "55.90"},
+                {"account": "Assets:Checking", "amount": "-55.90"},
+            ],
         })
         assert r.status_code == 200
         body = r.json()
@@ -216,10 +242,11 @@ class TestCreateRecurringSeries:
             "payee": "Netflix",
             "narration": "Assinatura",
             "start_date": "2025-04-01",
-            "amount": "55.90",
             "currency": "BRL",
-            "account_from": "Assets:Checking",
-            "account_to": "Expenses:Food",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "55.90"},
+                {"account": "Assets:Checking", "amount": "-55.90"},
+            ],
         })
         assert r.status_code == 400
 
@@ -239,11 +266,118 @@ class TestSeriesValidation:
             "narration": "Sub",
             "start_date": "2025-04-01",
             "end_date": "2025-06-01",
-            "amount": "100",
-            "amount_is_total": True,
             "currency": "BRL",
-            "account_from": "Assets:Checking",
-            "account_to": "Expenses:Food",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "100"},
+                {"account": "Assets:Checking", "amount": "-100"},
+            ],
+            "amount_is_total": True,
+        })
+        assert r.status_code == 400
+
+    def test_rejects_less_than_two_postings(
+        self, minimal_client: TestClient
+    ) -> None:
+        r = minimal_client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "P",
+            "narration": "N",
+            "start_date": "2025-04-01",
+            "end_date": "2025-06-01",
+            "currency": "BRL",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "100"},
+            ],
+        })
+        assert r.status_code == 400
+
+    def test_rejects_multiple_auto_balance(
+        self, minimal_client: TestClient
+    ) -> None:
+        r = minimal_client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "P",
+            "narration": "N",
+            "start_date": "2025-04-01",
+            "end_date": "2025-06-01",
+            "currency": "BRL",
+            "postings": [
+                {"account": "Expenses:Food"},
+                {"account": "Assets:Checking"},
+            ],
+        })
+        assert r.status_code == 400
+
+
+# ------------------------------------------------------------------
+# POST /api/series — split (multi-posting)
+# ------------------------------------------------------------------
+
+
+class TestCreateSplitSeries:
+    def test_creates_three_posting_series(
+        self, minimal_client: TestClient
+    ) -> None:
+        r = minimal_client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "Combo",
+            "narration": "Monthly split",
+            "start_date": "2025-04-01",
+            "end_date": "2025-06-01",
+            "currency": "BRL",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "60"},
+                {"account": "Expenses:Entertainment", "amount": "40"},
+                {"account": "Assets:Checking", "amount": "-100"},
+            ],
+        })
+        assert r.status_code == 200
+        body = r.json()
+        assert body["success"] is True
+        assert body["count"] == 3
+
+        # Verify it appears as split in list
+        r2 = minimal_client.get("/api/series")
+        series = r2.json()["series"][0]
+        assert series["is_split"] is True
+        assert len(series["postings"]) == 3
+
+    def test_split_with_auto_balance(
+        self, minimal_client: TestClient
+    ) -> None:
+        r = minimal_client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "Combo",
+            "narration": "Auto balance split",
+            "start_date": "2025-04-01",
+            "end_date": "2025-05-01",
+            "currency": "BRL",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "60"},
+                {"account": "Expenses:Entertainment", "amount": "40"},
+                {"account": "Assets:Checking"},
+            ],
+        })
+        assert r.status_code == 200
+        body = r.json()
+        assert body["success"] is True
+
+    def test_rejects_amount_is_total_for_split(
+        self, minimal_client: TestClient
+    ) -> None:
+        r = minimal_client.post("/api/series", json={
+            "type": "installment",
+            "payee": "P",
+            "narration": "N",
+            "start_date": "2025-01-01",
+            "count": 3,
+            "currency": "BRL",
+            "amount_is_total": True,
+            "postings": [
+                {"account": "Expenses:Food", "amount": "60"},
+                {"account": "Expenses:Entertainment", "amount": "40"},
+                {"account": "Assets:Checking", "amount": "-100"},
+            ],
         })
         assert r.status_code == 400
 
@@ -296,6 +430,31 @@ class TestExtendSeries:
             json={"new_end_date": "2025-12-01"},
         )
         assert r.status_code == 404
+
+
+class TestExtendSplitSeries:
+    def test_extend_split_series_carries_postings(
+        self, series_client: TestClient
+    ) -> None:
+        """Extending a split series carries forward all postings."""
+        r = series_client.post(
+            "/api/series/split-fix003/extend",
+            json={"new_end_date": "2025-06-01"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["success"] is True
+        assert body["transactions_created"] == 3  # Apr, May, Jun
+
+    def test_extend_split_rejects_new_amount(
+        self, series_client: TestClient
+    ) -> None:
+        """Cannot provide new_amount when extending a split series."""
+        r = series_client.post(
+            "/api/series/split-fix003/extend",
+            json={"new_end_date": "2025-06-01", "new_amount": "200"},
+        )
+        assert r.status_code == 400
 
 
 # ------------------------------------------------------------------
