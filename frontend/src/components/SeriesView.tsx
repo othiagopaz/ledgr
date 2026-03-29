@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSeries, fetchTransactions, editTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
-import { formatDateShort, formatAmount, formatInstallmentBadge } from "../utils/format";
+import { formatDateFull, formatAmount, formatInstallmentBadge } from "../utils/format";
 import type { Transaction, SeriesSummary } from "../types";
 
 type Filter = 'all' | 'recurring' | 'installment' | 'pending';
@@ -423,7 +423,7 @@ export default function SeriesView() {
                           />
                         )}
                       </th>
-                      <th style={{ width: 90 }}>Date</th>
+                      <th style={{ width: 110 }}>Date</th>
                       <th style={{ width: 20 }}>F</th>
                       <th>Payee / Narration</th>
                       <th>Accounts</th>
@@ -464,7 +464,7 @@ export default function SeriesView() {
                               />
                             )}
                           </td>
-                          <td>{formatDateShort(txn.date, operatingCurrency)}</td>
+                          <td>{formatDateFull(txn.date, operatingCurrency)}</td>
                           <td className={txn.flag === '*' ? 'flag-confirmed' : 'flag-pending'}>
                             {txn.flag}
                           </td>
