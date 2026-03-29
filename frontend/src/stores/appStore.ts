@@ -36,7 +36,8 @@ interface AppState {
   // Series modal
   seriesModalOpen: boolean;
   seriesModalSeries: SeriesSummary | null; // null = create, non-null = view/edit
-  openSeriesModal: (series?: SeriesSummary) => void;
+  seriesModalDefaultType: 'recurring' | 'installment' | null;
+  openSeriesModal: (series?: SeriesSummary, defaultType?: 'recurring' | 'installment') => void;
   closeSeriesModal: () => void;
 
   // UI
@@ -117,8 +118,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Series modal
   seriesModalOpen: false,
   seriesModalSeries: null,
-  openSeriesModal: (series) => set({ seriesModalOpen: true, seriesModalSeries: series || null }),
-  closeSeriesModal: () => set({ seriesModalOpen: false, seriesModalSeries: null }),
+  seriesModalDefaultType: null,
+  openSeriesModal: (series, defaultType) => set({ seriesModalOpen: true, seriesModalSeries: series || null, seriesModalDefaultType: defaultType || null }),
+  closeSeriesModal: () => set({ seriesModalOpen: false, seriesModalSeries: null, seriesModalDefaultType: null }),
 
   // UI
   theme: 'light',
