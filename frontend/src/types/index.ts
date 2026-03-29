@@ -9,6 +9,10 @@ export interface Balance {
 export interface AccountNode {
   name: string;
   type: string;
+  ledgr_type: string | null;
+  open_date: string | null;
+  currencies: string[];
+  metadata: Record<string, string>;
   balance: Balance[];
   children: AccountNode[];
   is_leaf: boolean;
@@ -218,4 +222,46 @@ export interface CashFlowResponse {
   planned_financing?: CashFlowSection;
   planned_transfers?: CashFlowSection;
   planned_net_cashflow?: Record<string, number>;
+}
+
+// Account CRUD types
+
+export interface AccountInput {
+  name: string;
+  currencies?: string[];
+  date?: string;
+  ledgr_type?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface AccountUpdateInput {
+  name: string;
+  ledgr_type?: string;
+  currencies?: string[];
+  metadata?: Record<string, string>;
+}
+
+export interface CloseAccountInput {
+  name: string;
+  date?: string;
+}
+
+export interface AccountTypeOption {
+  value: string;
+  label: string;
+}
+
+export interface AccountTypesResponse {
+  types: Record<string, AccountTypeOption[]>;
+}
+
+export interface AccountWarning {
+  account: string;
+  message: string;
+  open_date: string;
+  lineno: number;
+}
+
+export interface AccountWarningsResponse {
+  warnings: AccountWarning[];
 }

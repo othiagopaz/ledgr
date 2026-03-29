@@ -21,7 +21,12 @@ from typing import Any
 
 from beancount.core import data
 
-from ledgr_options import DEFAULT_CASH_PREFIXES, DEFAULT_INVESTMENT_PREFIXES
+from account_types import (
+    build_account_type_map,
+    is_cash_account,
+    is_investment_account,
+    is_loan_account,
+)
 from serializers import decimal_to_report_number, format_other_balances
 
 
@@ -41,30 +46,21 @@ def date_to_period(d: datetime.date, interval: str) -> str:
 
 
 # ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
-def _is_cash_account(account: str, cash_prefixes: tuple[str, ...]) -> bool:
-    """Return True if account is a cash/liquid account (bank or physical cash)."""
-    return any(account.startswith(pfx) for pfx in cash_prefixes)
-
-
-# ------------------------------------------------------------------
 # Classification — ORDER IS CRITICAL (see AGENTS.md §7 & §13)
 # ------------------------------------------------------------------
 #
-# Three tiers of Assets: accounts:
-#   cash        → cash_prefixes (Assets:Bank, Assets:Cash)
-#   investment  → investment_prefixes (Assets:Investments, Assets:Broker)
-#   other       → everything else (Assets:Receivables, Assets:Vehicle, …)
+# Three tiers of Assets accounts (determined by ledgr-type metadata):
+#   cash        → ledgr-type: "cash"
+#   investment  → ledgr-type: "investment"
+#   other       → everything else (receivable, prepaid, …)
 #
 # The check order must be:
-#   1. Liabilities:Loans   → financing
-#   2. Investment asset counterpart → investing
+#   1. Loan counterpart       → financing
+#   2. Investment counterpart  → investing
 #   3. Income / Expenses / Liabilities / other non-cash asset → operating
-#   4. default  → transfer
+#   4. default                 → transfer
 #
-# Liabilities:Loans MUST be checked BEFORE the generic Liabilities: prefix.
+# Loans MUST be checked BEFORE generic Liabilities.
 # This was a real bug — do not regress.
 #
 # INVESTING MUST be checked BEFORE OPERATING. Otherwise, investment
@@ -79,47 +75,34 @@ def _is_cash_account(account: str, cash_prefixes: tuple[str, ...]) -> bool:
 def classify_posting(
     cash_account: str,
     counterparts: list[str],
-    cash_prefixes: tuple[str, ...] = DEFAULT_CASH_PREFIXES,
-    investment_prefixes: tuple[str, ...] = DEFAULT_INVESTMENT_PREFIXES,
+    type_map: dict[str, str],
 ) -> str:
-    """Classify a cash flow posting per IAS 7 categories using 3-tier asset logic.
+    """Classify a cash flow posting per IAS 7 categories using ledgr-type.
 
-    Asset tiers:
-      - **Cash** (``cash_prefixes``): bank accounts, physical cash — these are
-        the only accounts that generate cash flow postings.
-      - **Investment** (``investment_prefixes``): brokerage, investment accounts —
-        counterpart triggers INVESTING classification.
-      - **Other non-cash** (everything else): receivables, deposits, vehicles —
-        counterpart triggers OPERATING (working capital).
-
-    Order (CRITICAL — do not rearrange):
-      1. FINANCING: counterpart is Liabilities:Loans (must be first)
-      2. INVESTING: counterpart is an investment account
-      3. OPERATING: counterpart is Income/Expenses/Liabilities/other non-cash asset
-      4. TRANSFER: default (cash ↔ cash, e.g. bank transfer)
-
-    Investing is checked BEFORE operating so that investment transactions with
-    incidental expenses (commissions, fees) are correctly classified as investing,
-    not operating. Dividends classify as operating because they flow from
-    Income → cash account (no investment counterpart).
+    Classification order (CRITICAL — do not rearrange):
+      1. FINANCING: counterpart has ledgr-type "loan"
+      2. INVESTING: counterpart has ledgr-type "investment"
+      3. OPERATING: counterpart is Income/Expenses/Liabilities(non-loan) or non-cash Asset
+      4. TRANSFER: default (cash ↔ cash)
     """
-    # ── Step 1: FINANCING (Liabilities:Loans BEFORE generic Liabilities) ──
+    # ── Step 1: FINANCING — counterpart is a loan account ──
     for cp in counterparts:
-        if cp.startswith("Liabilities:Loans"):
+        if is_loan_account(cp, type_map):
             return "financing"
 
     # ── Step 2: INVESTING — counterpart is an investment account ──
     for cp in counterparts:
-        if cp.startswith("Assets:") and not _is_cash_account(cp, cash_prefixes):
-            if any(cp.startswith(pfx) for pfx in investment_prefixes):
-                return "investing"
+        if is_investment_account(cp, type_map):
+            return "investing"
 
     # ── Step 3: OPERATING — Income / Expenses / Liabilities / other non-cash asset ──
     for cp in counterparts:
-        if cp.startswith(("Income:", "Expenses:", "Liabilities:")):
+        if cp.startswith(("Income:", "Expenses:")):
             return "operating"
-        if cp.startswith("Assets:") and not _is_cash_account(cp, cash_prefixes):
-            return "operating"  # "other" non-cash (Receivables, Deposits, …)
+        if cp.startswith("Liabilities:"):
+            return "operating"  # Non-loan liabilities (credit-card, payable)
+        if cp.startswith("Assets:") and not is_cash_account(cp, type_map):
+            return "operating"  # Receivables, prepaid — working capital
 
     # ── Step 4: TRANSFER (default) ──
     return "transfer"
@@ -135,21 +118,25 @@ def compute_cashflow(
     to_date: str | None = None,
     interval: str = "monthly",
     operating_currency: str | None = None,
-    cash_prefixes: tuple[str, ...] = DEFAULT_CASH_PREFIXES,
-    investment_prefixes: tuple[str, ...] = DEFAULT_INVESTMENT_PREFIXES,
+    type_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Compute the Cash Flow Statement for a period.
 
-    Only transactions that touch a **cash** account (``cash_prefixes`` whitelist)
-    are included. Each cash posting is classified using the 3-tier asset logic
-    in ``classify_posting``.
+    Only transactions that touch a **cash** account (ledgr-type ``"cash"``)
+    are included. Each cash posting is classified using the ledgr-type-based
+    logic in ``classify_posting``.
 
     When ``operating_currency`` is provided, only postings in that currency
     are included in the main totals.  Non-OC postings are collected into
     ``other_items`` / ``other_*`` fields.
 
+    If ``type_map`` is ``None``, it is built from ``entries`` (convenience for tests).
+
     Returns the shape expected by ``CashFlowResponse`` on the frontend.
     """
+    if type_map is None:
+        type_map = build_account_type_map(entries)
+
     oc = operating_currency
     txns = [e for e in entries if isinstance(e, data.Transaction)]
 
@@ -168,14 +155,14 @@ def compute_cashflow(
     for txn in txns:
         cash_postings = [
             p for p in txn.postings
-            if _is_cash_account(p.account, cash_prefixes) and p.units is not None
+            if is_cash_account(p.account, type_map) and p.units is not None
         ]
         if not cash_postings:
             continue  # No cash movement → not a cash flow event
 
         counterparts = [
             p.account for p in txn.postings
-            if not _is_cash_account(p.account, cash_prefixes)
+            if not is_cash_account(p.account, type_map)
         ]
 
         period = date_to_period(txn.date, interval)
@@ -183,7 +170,7 @@ def compute_cashflow(
 
         for posting in cash_postings:
             category = classify_posting(
-                posting.account, counterparts, cash_prefixes, investment_prefixes
+                posting.account, counterparts, type_map
             )
 
             if counterparts:
@@ -246,7 +233,7 @@ def compute_cashflow(
         [e for e in entries if isinstance(e, data.Transaction)],
         key=lambda t: t.date,
     )
-    balances = _compute_period_asset_balances(all_txns, periods, interval, oc, cash_prefixes)
+    balances = _compute_period_asset_balances(all_txns, periods, interval, oc, type_map)
 
     # Breakdown: group items by counterpart within each category (OC only)
     def build_breakdown(cat: str) -> list[dict[str, Any]]:
@@ -362,16 +349,18 @@ def _compute_period_asset_balances(
     periods: list[str],
     interval: str,
     operating_currency: str | None = None,
-    cash_prefixes: tuple[str, ...] = DEFAULT_CASH_PREFIXES,
+    type_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Compute opening and closing cash balances for each period.
 
-    Only accounts matching ``cash_prefixes`` are included.
+    Only accounts with ledgr-type ``"cash"`` are included.
 
     When ``operating_currency`` is provided, returns OC balances in
     ``opening``/``closing`` and non-OC balances in ``other_opening``/
     ``other_closing``.
     """
+    if type_map is None:
+        type_map = {}
     oc = operating_currency
     cumulative = Decimal(0)
     # currency → cumulative Decimal
@@ -382,7 +371,7 @@ def _compute_period_asset_balances(
 
     for txn in all_txns:
         for p in txn.postings:
-            if _is_cash_account(p.account, cash_prefixes) and p.units is not None:
+            if is_cash_account(p.account, type_map) and p.units is not None:
                 if oc and p.units.currency != oc:
                     c = p.units.currency
                     other_cumulative[c] = other_cumulative.get(c, Decimal(0)) + p.units.number
