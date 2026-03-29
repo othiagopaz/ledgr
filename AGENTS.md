@@ -384,3 +384,20 @@ def classify(acct, cps):
 - [ ] Changes to the cashflow classifier have a test for the new case
 - [ ] Balance Sheet invariant test passes: `assets == liabilities + equity`
 - [ ] `mypy` reports no errors in `backend/`
+- [ ] `basedpyright` reports no new errors (run `./scripts/typecheck.sh`)
+
+---
+
+## 15. Type checking — mandatory after code changes
+
+After modifying any Python code in `backend/` or `ledgr/`, **always** run the
+type checker before considering the task complete:
+
+```bash
+./scripts/typecheck.sh
+```
+
+This runs `basedpyright` against the full project (configured in
+`pyrightconfig.json`). The script must exit cleanly with no **new** errors
+introduced by your changes. If the checker reports errors on lines you touched,
+fix them before committing.

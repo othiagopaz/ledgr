@@ -1,0 +1,7 @@
+{
+  "include": ["backend", "ledgr"],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.12",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false
+}
