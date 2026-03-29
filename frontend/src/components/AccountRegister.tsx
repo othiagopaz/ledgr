@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type { Transaction, TransactionInput } from "../types";
 import { addTransaction, editTransaction, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
-import { formatAmount, formatDateFull, getLocale } from "../utils/format";
+import { formatAmount, formatDateFull, getLocale, formatInstallmentBadge } from "../utils/format";
 import InlineEditor from "./InlineEditor";
 
 interface Props {
@@ -288,15 +288,15 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
               >
                 <td>{formatDateFull(row.txn.date, operatingCurrency)}</td>
                 <td>
-                  <span>{description || "—"}</span>
                   {seriesType === 'recurring' && (
                     <span className="series-inline-badge series-inline-recurring" title="Recurring">Recurring</span>
                   )}
                   {seriesType === 'installment' && (
                     <span className="series-inline-badge series-inline-installment" title="Installment">
-                      {seriesSeq != null && seriesTotal != null ? `${seriesSeq}/${seriesTotal}` : '#'}
+                      {seriesSeq != null && seriesTotal != null ? formatInstallmentBadge(seriesSeq, seriesTotal) : '#'}
                     </span>
                   )}
+                  <span>{description || "—"}</span>
                   {costBasis && (
                     <span className="cost-basis">{costBasis}</span>
                   )}

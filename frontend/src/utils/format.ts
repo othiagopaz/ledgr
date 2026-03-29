@@ -95,3 +95,11 @@ export function getDatePlaceholder(currency: string): string {
     return 'YYYY-MM-DD';
   }
 }
+
+
+export function formatInstallmentBadge(seq: unknown, total: unknown): string {
+  const s = Math.round(Number(seq));
+  const t = Math.round(Number(total));
+  const pad = Math.max(2, String(t).length);
+  return `${String(s).padStart(pad, '0')}/${String(t).padStart(pad, '0')}`;
+}
