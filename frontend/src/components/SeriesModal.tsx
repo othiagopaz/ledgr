@@ -337,7 +337,7 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
                   <div className="series-detail-row">
                     <span className="series-detail-label">Total</span>
                     <span className="series-detail-amount">
-                      {formatAmount(parseFloat(series.amount_per_txn) * series.total, series.currency)} {series.currency}
+                      {formatAmount(parseFloat(series.total_amount), series.currency)} {series.currency}
                       <span className="series-detail-per-txn"> ({series.total} installments)</span>
                     </span>
                   </div>
