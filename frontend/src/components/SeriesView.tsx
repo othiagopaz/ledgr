@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSeries, fetchTransactions, editTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
@@ -101,17 +101,17 @@ export default function SeriesView() {
 
   const tableRef = useRef<HTMLDivElement>(null);
 
+  // Scroll to top before paint on mount
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // Refocus table when modal closes
   useEffect(() => {
     if (!txnModalOpen) {
-      requestAnimationFrame(() => tableRef.current?.focus());
+      requestAnimationFrame(() => tableRef.current?.focus({ preventScroll: true }));
     }
   }, [txnModalOpen]);
-
-  // Scroll to top on mount
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
 
   // Auto-select first row on mount and when filter changes
   useEffect(() => {
