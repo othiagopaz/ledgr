@@ -31,6 +31,12 @@ router = APIRouter()
 # ------------------------------------------------------------------
 
 
+class PostingSpecIn(BaseModel):
+    account: str
+    amount: Decimal | None = None  # None = auto-balance
+    currency: str | None = None    # falls back to series-level currency
+
+
 class SeriesCreateIn(BaseModel):
     type: Literal["recurring", "installment"]
     payee: str
@@ -38,11 +44,9 @@ class SeriesCreateIn(BaseModel):
     start_date: str
     end_date: str | None = None
     count: int | None = None
-    amount: Decimal
+    currency: str                       # series default currency
+    postings: list[PostingSpecIn]       # replaces account_from/account_to/amount
     amount_is_total: bool = False
-    currency: str
-    account_from: str
-    account_to: str
 
 
 class SeriesExtendIn(BaseModel):
@@ -79,19 +83,34 @@ def _summarize_series(
     confirmed = sum(1 for t in txns if t.flag == "*")
     pending = sum(1 for t in txns if t.flag == "!")
 
-    # Extract accounts from first transaction's postings.
-    # Convention: positive-amount posting = account_to, negative = account_from.
+    # Build postings list from first transaction.
+    postings_out: list[dict[str, str | None]] = []
+    positive_amounts: list[Decimal] = []
     account_to = ""
     account_from = ""
-    amount_str = "0"
     currency = ""
     for p in first.postings:
-        if p.units and p.units.number > 0:
-            account_to = p.account
-            amount_str = str(p.units.number)
-            currency = p.units.currency
-        elif p.units and p.units.number < 0:
-            account_from = p.account
+        if p.units:
+            postings_out.append({
+                "account": p.account,
+                "amount": str(p.units.number),
+                "currency": p.units.currency,
+            })
+            if p.units.number > 0:
+                positive_amounts.append(p.units.number)
+                account_to = account_to or p.account
+                currency = currency or p.units.currency
+            elif p.units.number < 0:
+                account_from = account_from or p.account
+        else:
+            postings_out.append({
+                "account": p.account,
+                "amount": None,
+                "currency": None,
+            })
+
+    amount_per_txn = str(sum(positive_amounts)) if positive_amounts else "0"
+    is_split = len(positive_amounts) > 1
 
     narration = first.narration
 
@@ -100,7 +119,7 @@ def _summarize_series(
         "type": series_type,
         "payee": first.payee or "",
         "narration": narration,
-        "amount_per_txn": amount_str,
+        "amount_per_txn": amount_per_txn,
         "currency": currency,
         "total": len(txns),
         "confirmed": confirmed,
@@ -109,6 +128,8 @@ def _summarize_series(
         "last_date": max(t.date for t in txns).isoformat(),
         "account_from": account_from,
         "account_to": account_to,
+        "postings": postings_out,
+        "is_split": is_split,
     }
 
 
@@ -124,6 +145,27 @@ def create_series(
 ) -> dict[str, Any]:
     """Create a new recurring or installment series."""
     start = datetime.date.fromisoformat(body.start_date)
+
+    # --- Posting validation ---
+    if len(body.postings) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="At least 2 postings are required.",
+        )
+    auto_balance_count = sum(1 for p in body.postings if p.amount is None)
+    if auto_balance_count > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="At most one posting may have amount=None (auto-balance).",
+        )
+    positive_count = sum(
+        1 for p in body.postings if p.amount is not None and p.amount > 0
+    )
+    if body.amount_is_total and positive_count > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="'amount_is_total' is only valid for series with a single positive posting.",
+        )
 
     # --- Validation & count derivation ---
     if body.type == "installment":
@@ -148,16 +190,34 @@ def create_series(
             detail="'amount_is_total' is only valid for installment series.",
         )
 
-    # --- Amount computation ---
+    # --- Build postings_spec ---
+    postings_spec: list[dict] = []
+    for p in body.postings:
+        postings_spec.append({
+            "account": p.account,
+            "amount": p.amount,
+            "currency": p.currency,
+        })
+
+    # --- Amount computation for amount_is_total ---
+    last_adj = None
     if body.amount_is_total:
-        per_txn = (body.amount / count).quantize(
-            Decimal("0.01"), ROUND_HALF_UP
-        )
-        remainder = body.amount - per_txn * count
-        last_adj = per_txn + remainder if remainder else None
-    else:
-        per_txn = body.amount
-        last_adj = None
+        # Find the single positive posting and divide
+        for spec in postings_spec:
+            if spec["amount"] is not None and spec["amount"] > 0:
+                total_amount = spec["amount"]
+                per_txn = (total_amount / count).quantize(
+                    Decimal("0.01"), ROUND_HALF_UP
+                )
+                remainder = total_amount - per_txn * count
+                spec["amount"] = per_txn
+                # For the negative posting, also scale
+                for neg_spec in postings_spec:
+                    if neg_spec["amount"] is not None and neg_spec["amount"] < 0:
+                        neg_spec["amount"] = -per_txn
+                        break
+                last_adj = per_txn + remainder if remainder else None
+                break
 
     # --- Generate ---
     series_id = generate_series_id(body.payee)
@@ -168,10 +228,8 @@ def create_series(
         narration=body.narration,
         start_date=start,
         count=count,
-        amount_per_txn=per_txn,
-        currency=body.currency,
-        account_from=body.account_from,
-        account_to=body.account_to,
+        postings_spec=postings_spec,
+        default_currency=body.currency,
         beancount_file_path=str(ledger.beancount_file_path),
         last_installment_adjustment=last_adj,
     )
@@ -252,29 +310,48 @@ def extend_series(
             detail="new_end_date results in zero new transactions.",
         )
 
-    # Use new amount if provided, else carry forward from existing
-    amount = body.new_amount
-    currency = body.new_currency
-    if amount is None:
-        for p in txns[-1].postings:
-            if p.units and p.units.number > 0:
-                amount = p.units.number
-                currency = currency or p.units.currency
-                break
-    if currency is None:
-        for p in txns[-1].postings:
-            if p.units:
-                currency = p.units.currency
-                break
+    # Determine if this is a split series
+    positive_postings = [
+        p for p in txns[0].postings if p.units and p.units.number > 0
+    ]
+    is_split = len(positive_postings) > 1
 
-    # Carry forward accounts from existing series
-    account_from = ""
-    account_to = ""
+    if body.new_amount is not None and is_split:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change amount for a split series.",
+        )
+
+    # Reconstruct postings_spec from first transaction's postings
+    postings_spec: list[dict] = []
+    default_currency = body.new_currency
     for p in txns[0].postings:
-        if p.units and p.units.number > 0:
-            account_to = p.account
-        elif p.units and p.units.number < 0:
-            account_from = p.account
+        if p.units is None:
+            postings_spec.append({
+                "account": p.account,
+                "amount": None,
+                "currency": None,
+            })
+        else:
+            postings_spec.append({
+                "account": p.account,
+                "amount": p.units.number,
+                "currency": p.units.currency,
+            })
+            if default_currency is None:
+                default_currency = p.units.currency
+
+    # If new_amount provided (simple series): replace positive/negative amounts
+    if body.new_amount is not None:
+        for spec in postings_spec:
+            if spec["amount"] is not None and spec["amount"] > 0:
+                spec["amount"] = body.new_amount
+                if body.new_currency:
+                    spec["currency"] = body.new_currency
+            elif spec["amount"] is not None and spec["amount"] < 0:
+                spec["amount"] = -body.new_amount
+                if body.new_currency:
+                    spec["currency"] = body.new_currency
 
     new_txns = generate_series_transactions(
         series_type="recurring",
@@ -283,10 +360,8 @@ def extend_series(
         narration=txns[0].narration or "",
         start_date=next_start,
         count=new_count,
-        amount_per_txn=amount,
-        currency=currency,
-        account_from=account_from,
-        account_to=account_to,
+        postings_spec=postings_spec,
+        default_currency=default_currency or "",
         beancount_file_path=str(ledger.beancount_file_path),
     )
 

@@ -17,6 +17,16 @@ interface SeriesModalProps {
 
 type Mode = 'create' | 'view' | 'extend';
 
+interface ModalSeriesPosting {
+  id: number;
+  account: string;
+  amount: string;   // "" = auto-balance
+  currency: string;
+}
+
+let _nextId = 10;
+function nextId() { return _nextId++; }
+
 export default function SeriesModal({ onMutated }: SeriesModalProps) {
   const series = useAppStore((s) => s.seriesModalSeries);
   const seriesModalDefaultType = useAppStore((s) => s.seriesModalDefaultType);
@@ -35,11 +45,16 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
   const [startDate, setStartDate] = useState(formatDateFull(today(), operatingCurrency));
   const [endDate, setEndDate] = useState("");
   const [count, setCount] = useState("");
-  const [amount, setAmount] = useState(isEditing ? series!.amount_per_txn : "");
   const [amountIsTotal, setAmountIsTotal] = useState(false);
   const [currency, setCurrency] = useState(isEditing ? series!.currency : operatingCurrency);
-  const [accountFrom, setAccountFrom] = useState(isEditing ? series!.account_from : "");
-  const [accountTo, setAccountTo] = useState(isEditing ? series!.account_to : "");
+
+  // Posting rows for create mode
+  const emptyPosting = (): ModalSeriesPosting => ({
+    id: nextId(), account: "", amount: "", currency: operatingCurrency,
+  });
+  const [postings, setPostings] = useState<ModalSeriesPosting[]>(() => [
+    emptyPosting(), emptyPosting(), emptyPosting(),
+  ]);
 
   // ── Extend form state ─────────────────────────────────────────────────────
 
@@ -66,6 +81,39 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
     if (mode === 'create') payeeRef.current?.focus();
   }, [mode]);
 
+  // ── Posting row helpers ──────────────────────────────────────────────────
+
+  function handlePostingChange(index: number, field: keyof ModalSeriesPosting, value: string) {
+    setPostings((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+
+      // Auto-add empty row when last row's account gets filled
+      if (field === "account" && value.length > 0 && index === prev.length - 1) {
+        updated.push(emptyPosting());
+      }
+
+      return updated;
+    });
+  }
+
+  function addPosting() {
+    setPostings((prev) => [...prev, emptyPosting()]);
+  }
+
+  function removePosting(index: number) {
+    setPostings((prev) => {
+      if (prev.length <= 2) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  // Count positive postings for amount_is_total logic
+  const filledPostings = postings.filter((p) => p.account.trim());
+  const positivePostingCount = filledPostings.filter(
+    (p) => p.amount.trim() && parseFloat(p.amount) > 0
+  ).length;
+
   // ── Create ────────────────────────────────────────────────────────────────
 
   async function handleCreate() {
@@ -75,7 +123,6 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
 
     try {
       const parsedStart = parseSmartDate(startDate);
-      const amountNum = parseFloat(amount);
       if (!payee.trim() && !narration.trim()) {
         setError("Payee or narration is required.");
         return;
@@ -84,18 +131,34 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
         setError("Start date is required.");
         return;
       }
-      if (isNaN(amountNum) || amountNum <= 0) {
-        setError("Amount must be a positive number.");
-        return;
-      }
       if (!currency.trim()) {
         setError("Currency is required.");
         return;
       }
-      if (!accountFrom.trim() || !accountTo.trim()) {
-        setError("Both accounts are required.");
+
+      // Validate postings
+      const filled = postings.filter((p) => p.account.trim());
+      if (filled.length < 2) {
+        setError("At least 2 postings with accounts are required.");
         return;
       }
+      const emptyAmountCount = filled.filter((p) => !p.amount.trim()).length;
+      if (emptyAmountCount > 1) {
+        setError("At most one posting may have an empty amount (auto-balance).");
+        return;
+      }
+      const hasExplicitAmount = filled.some((p) => p.amount.trim() && parseFloat(p.amount) !== 0);
+      if (!hasExplicitAmount) {
+        setError("At least one posting must have an explicit amount.");
+        return;
+      }
+
+      // Build postings array for API
+      const apiPostings = filled.map((p) => ({
+        account: p.account.trim(),
+        amount: p.amount.trim() ? p.amount.trim() : null,
+        currency: p.currency.trim() || null,
+      }));
 
       if (seriesType === 'recurring') {
         if (!endDate.trim()) {
@@ -109,10 +172,8 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
           narration: narration.trim(),
           start_date: parsedStart,
           end_date: parsedEnd,
-          amount: amountNum,
           currency: currency.trim().toUpperCase(),
-          account_from: accountFrom.trim(),
-          account_to: accountTo.trim(),
+          postings: apiPostings,
         });
         if (!result.success) {
           setError(result.errors?.join(", ") || "Failed to create series.");
@@ -130,11 +191,9 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
           narration: narration.trim(),
           start_date: parsedStart,
           count: countNum,
-          amount: amountNum,
           amount_is_total: amountIsTotal,
           currency: currency.trim().toUpperCase(),
-          account_from: accountFrom.trim(),
-          account_to: accountTo.trim(),
+          postings: apiPostings,
         });
         if (!result.success) {
           setError(result.errors?.join(", ") || "Failed to create series.");
@@ -308,14 +367,32 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
                   <span className="series-detail-label">Dates</span>
                   <span>{series.first_date} → {series.last_date}</span>
                 </div>
-                <div className="series-detail-row">
-                  <span className="series-detail-label">From</span>
-                  <span className="series-detail-account">{series.account_from || "—"}</span>
-                </div>
-                <div className="series-detail-row">
-                  <span className="series-detail-label">To</span>
-                  <span className="series-detail-account">{series.account_to || "—"}</span>
-                </div>
+
+                {/* Postings: split vs simple */}
+                {series.is_split ? (
+                  <div className="series-detail-row">
+                    <span className="series-detail-label">Postings</span>
+                    <div className="series-postings-list">
+                      {series.postings.map((p, i) => (
+                        <div key={i} className="series-posting-item">
+                          <span className="series-detail-account">{p.account}</span>
+                          <span>{p.amount ? `${formatAmount(parseFloat(p.amount), p.currency || series.currency)} ${p.currency || series.currency}` : "(auto)"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="series-detail-row">
+                      <span className="series-detail-label">From</span>
+                      <span className="series-detail-account">{series.account_from || "—"}</span>
+                    </div>
+                    <div className="series-detail-row">
+                      <span className="series-detail-label">To</span>
+                      <span className="series-detail-account">{series.account_to || "—"}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {error && <div className="error-msg">{error}</div>}
@@ -377,49 +454,77 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
                 New transactions will be appended after that date.
               </p>
 
-              <div className="form-row">
-                <div className="form-field">
-                  <label>New End Date</label>
-                  <input
-                    type="text"
-                    value={extendEndDate}
-                    onChange={(e) => setExtendEndDate(e.target.value)}
-                    onBlur={() => {
-                      const parsed = parseSmartDate(extendEndDate);
-                      if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
-                        setExtendEndDate(formatDateFull(parsed, operatingCurrency));
-                      }
-                    }}
-                    placeholder={datePlaceholder}
-                    autoFocus
-                  />
-                </div>
-              </div>
+              {series.is_split ? (
+                <>
+                  <div className="form-row">
+                    <div className="form-field">
+                      <label>New End Date</label>
+                      <input
+                        type="text"
+                        value={extendEndDate}
+                        onChange={(e) => setExtendEndDate(e.target.value)}
+                        onBlur={() => {
+                          const parsed = parseSmartDate(extendEndDate);
+                          if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+                            setExtendEndDate(formatDateFull(parsed, operatingCurrency));
+                          }
+                        }}
+                        placeholder={datePlaceholder}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <p className="series-extend-hint" style={{ marginTop: 0 }}>
+                    This is a split series. Amounts carry forward from the original structure.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="form-row">
+                    <div className="form-field">
+                      <label>New End Date</label>
+                      <input
+                        type="text"
+                        value={extendEndDate}
+                        onChange={(e) => setExtendEndDate(e.target.value)}
+                        onBlur={() => {
+                          const parsed = parseSmartDate(extendEndDate);
+                          if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+                            setExtendEndDate(formatDateFull(parsed, operatingCurrency));
+                          }
+                        }}
+                        placeholder={datePlaceholder}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
 
-              <div className="form-row">
-                <div className="form-field">
-                  <label>New Amount <span className="acct-optional">(leave blank to keep current)</span></label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={extendAmount}
-                    onChange={(e) => setExtendAmount(e.target.value)}
-                    placeholder={series.amount_per_txn}
-                    className="amount-input"
-                  />
-                </div>
-                <div className="form-field" style={{ flex: "0 0 80px" }}>
-                  <label>Currency</label>
-                  <input
-                    type="text"
-                    value={extendCurrency}
-                    onChange={(e) => setExtendCurrency(e.target.value.toUpperCase())}
-                    placeholder={series.currency}
-                    maxLength={10}
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
+                  <div className="form-row">
+                    <div className="form-field">
+                      <label>New Amount <span className="acct-optional">(leave blank to keep current)</span></label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={extendAmount}
+                        onChange={(e) => setExtendAmount(e.target.value)}
+                        placeholder={series.amount_per_txn}
+                        className="amount-input"
+                      />
+                    </div>
+                    <div className="form-field" style={{ flex: "0 0 80px" }}>
+                      <label>Currency</label>
+                      <input
+                        type="text"
+                        value={extendCurrency}
+                        onChange={(e) => setExtendCurrency(e.target.value.toUpperCase())}
+                        placeholder={series.currency}
+                        maxLength={10}
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               {error && <div className="error-msg">{error}</div>}
 
@@ -539,28 +644,7 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
                     />
                   </div>
                 )}
-              </div>
 
-              {/* Amount + Currency */}
-              <div className="form-row">
-                <div className="form-field">
-                  <label>
-                    Amount
-                    {seriesType === 'installment' && (
-                      <span className="series-amount-label-hint">
-                        {amountIsTotal ? " (total)" : " (per installment)"}
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="amount-input"
-                  />
-                </div>
                 <div className="form-field" style={{ flex: "0 0 80px" }}>
                   <label>Currency</label>
                   <input
@@ -572,7 +656,8 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
                     autoComplete="off"
                   />
                 </div>
-                {seriesType === 'installment' && (
+
+                {seriesType === 'installment' && positivePostingCount <= 1 && (
                   <div className="form-field" style={{ flex: "0 0 auto", justifyContent: "flex-end" }}>
                     <label>&nbsp;</label>
                     <label className="checkbox-label">
@@ -587,28 +672,53 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
                 )}
               </div>
 
-              {/* Accounts */}
-              <div className="form-row">
-                <div className="form-field">
-                  <label>From Account <span className="acct-optional">(source / payer)</span></label>
-                  <InlineAutocomplete
-                    value={accountFrom}
-                    onChange={setAccountFrom}
-                    options={accountNames}
-                    placeholder="Liabilities:CreditCard:Nubank"
-                  />
-                </div>
+              {/* Postings */}
+              <div className="posting-header">
+                <span className="account-col">Account</span>
+                <span className="amount-col">Amount</span>
+                <span className="currency-col">Cur.</span>
+                <span className="action-col"></span>
               </div>
-              <div className="form-row">
-                <div className="form-field">
-                  <label>To Account <span className="acct-optional">(destination / expense)</span></label>
+              {postings.map((p, index) => (
+                <div key={p.id} className="posting-row">
                   <InlineAutocomplete
-                    value={accountTo}
-                    onChange={setAccountTo}
+                    value={p.account}
+                    onChange={(v) => handlePostingChange(index, "account", v)}
                     options={accountNames}
-                    placeholder="Expenses:Entertainment"
+                    placeholder="Expenses:Food"
                   />
+                  <input
+                    type="number"
+                    step="any"
+                    className="amount-input"
+                    value={p.amount}
+                    onChange={(e) => handlePostingChange(index, "amount", e.target.value)}
+                    placeholder="auto"
+                  />
+                  <input
+                    type="text"
+                    className="currency-input"
+                    value={p.currency}
+                    onChange={(e) => handlePostingChange(index, "currency", e.target.value.toUpperCase())}
+                    placeholder={currency || "BRL"}
+                    maxLength={10}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="remove-btn"
+                    onClick={() => removePosting(index)}
+                    disabled={postings.length <= 2}
+                    title="Remove posting"
+                  >
+                    ×
+                  </button>
                 </div>
+              ))}
+              <div className="posting-actions">
+                <button type="button" className="btn-link" onClick={addPosting}>
+                  + Add Posting
+                </button>
               </div>
 
               {error && <div className="error-msg">{error}</div>}

@@ -2386,6 +2386,29 @@ body {
   color: var(--text-secondary);
 }
 
+.series-postings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.series-posting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.series-posting-item .series-detail-account {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .series-extend-hint {
   font-size: 12px;
   color: var(--text-secondary);
