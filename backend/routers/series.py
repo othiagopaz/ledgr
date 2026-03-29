@@ -93,10 +93,7 @@ def _summarize_series(
         elif p.units and p.units.number < 0:
             account_from = p.account
 
-    # Strip installment counter from narration for display.
     narration = first.narration
-    if series_type == "installment" and " (" in narration:
-        narration = narration.rsplit(" (", 1)[0]
 
     return {
         "series_id": series_id,

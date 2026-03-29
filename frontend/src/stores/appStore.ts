@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode, AccountNode } from '../types';
+import type { Transaction, ViewMode, AccountNode, SeriesSummary } from '../types';
 
 interface Tab {
   id: string;
-  type: 'register' | 'report' | 'accounts' | 'dashboard';
+  type: 'register' | 'report' | 'accounts' | 'dashboard' | 'series';
   account?: string;
   reportType?: string;
   label: string;
@@ -32,6 +32,12 @@ interface AppState {
   acctModalAccount: AccountNode | null; // null = create, non-null = edit
   openAcctModal: (account?: AccountNode) => void;
   closeAcctModal: () => void;
+
+  // Series modal
+  seriesModalOpen: boolean;
+  seriesModalSeries: SeriesSummary | null; // null = create, non-null = view/edit
+  openSeriesModal: (series?: SeriesSummary) => void;
+  closeSeriesModal: () => void;
 
   // UI
   theme: 'dark' | 'light';
@@ -107,6 +113,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   acctModalAccount: null,
   openAcctModal: (account) => set({ acctModalOpen: true, acctModalAccount: account || null }),
   closeAcctModal: () => set({ acctModalOpen: false, acctModalAccount: null }),
+
+  // Series modal
+  seriesModalOpen: false,
+  seriesModalSeries: null,
+  openSeriesModal: (series) => set({ seriesModalOpen: true, seriesModalSeries: series || null }),
+  closeSeriesModal: () => set({ seriesModalOpen: false, seriesModalSeries: null }),
 
   // UI
   theme: 'light',

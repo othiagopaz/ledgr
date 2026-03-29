@@ -101,10 +101,7 @@ def generate_series_transactions(
         seq = seq_offset + i + 1  # 1-indexed
 
         # --- Narration ---
-        if series_type == "installment":
-            txn_narration = f"{narration} ({seq}/{total_display})"
-        else:
-            txn_narration = narration
+        txn_narration = narration
 
         # --- Amount ---
         is_last = i == len(dates) - 1

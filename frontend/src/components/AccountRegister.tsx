@@ -266,6 +266,9 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
             }
 
             const isPending = row.txn.flag === "!";
+            const seriesType = row.txn.metadata?.['ledgr-series-type'];
+            const seriesSeq = row.txn.metadata?.['ledgr-series-seq'];
+            const seriesTotal = row.txn.metadata?.['ledgr-series-total'];
             const debitVal = row.amount > 0 ? formatAmount(row.amount, operatingCurrency) : "";
             const creditVal = row.amount < 0 ? formatAmount(Math.abs(row.amount), operatingCurrency) : "";
             const bal = formatAmount(row.balance, operatingCurrency);
@@ -286,6 +289,14 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
                 <td>{formatDateFull(row.txn.date, operatingCurrency)}</td>
                 <td>
                   <span>{description || "—"}</span>
+                  {seriesType === 'recurring' && (
+                    <span className="series-inline-badge series-inline-recurring" title="Recurring">Recurring</span>
+                  )}
+                  {seriesType === 'installment' && (
+                    <span className="series-inline-badge series-inline-installment" title="Installment">
+                      {seriesSeq != null && seriesTotal != null ? `${seriesSeq}/${seriesTotal}` : '#'}
+                    </span>
+                  )}
                   {costBasis && (
                     <span className="cost-basis">{costBasis}</span>
                   )}

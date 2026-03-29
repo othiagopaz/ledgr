@@ -168,9 +168,9 @@ class TestGenerateInstallmentTransactions:
             account_to="Expenses:Stuff",
             beancount_file_path="test.beancount",
         )
-        assert txns[0].narration == "TV (1/3)"
-        assert txns[1].narration == "TV (2/3)"
-        assert txns[2].narration == "TV (3/3)"
+        assert txns[0].narration == "TV"
+        assert txns[1].narration == "TV"
+        assert txns[2].narration == "TV"
 
     def test_metadata_keys(self) -> None:
         txns = generate_series_transactions(
@@ -367,4 +367,4 @@ class TestSeqOffset:
         )
         assert txns[0].meta["ledgr-series-seq"] == Decimal(7)
         assert txns[0].meta["ledgr-series-total"] == Decimal(9)  # 6 + 3
-        assert txns[0].narration == "N (7/9)"
+        assert txns[0].narration == "N"

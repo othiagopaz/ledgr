@@ -227,6 +227,34 @@ export interface CashFlowResponse {
 
 // Series types
 
+export interface SeriesCreateIn {
+  type: 'recurring' | 'installment';
+  payee: string;
+  narration: string;
+  start_date: string;
+  end_date?: string;
+  count?: number;
+  amount: number;
+  amount_is_total?: boolean;
+  currency: string;
+  account_from: string;
+  account_to: string;
+}
+
+export interface SeriesExtendIn {
+  new_end_date: string;
+  new_amount?: number;
+  new_currency?: string;
+}
+
+export interface SeriesExtendResponse {
+  success: boolean;
+  series_id?: string;
+  count?: number;
+  transactions_created?: number;
+  errors?: string[];
+}
+
 export interface SeriesSummary {
   series_id: string;
   type: 'recurring' | 'installment';
