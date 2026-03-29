@@ -468,6 +468,7 @@ def classify(acct, cps):
 - [ ] Balance Sheet invariant test passes: `assets == liabilities + equity`
 - [ ] `mypy` reports no errors in `backend/`
 - [ ] `view_mode` param tested for all affected endpoints
+- [ ] `basedpyright` reports no new errors (run `./scripts/typecheck.sh`)
 
 ---
 
@@ -535,3 +536,19 @@ rendering. Non-chart components send `view_mode=combined`.
 1. **Default backward compatibility**: no `view_mode` param = `combined` = current behavior
 2. **Accounting equation in actual mode**: `Assets + Liabilities + Equity == 0` still holds
 3. **Non-transaction entries are never filtered**: `Open`, `Close`, `Balance`, `Price`, `Commodity` always pass through
+
+---
+
+## 16. Type checking — mandatory after code changes
+
+After modifying any Python code in `backend/` or `ledgr/`, **always** run the
+type checker before considering the task complete:
+
+```bash
+./scripts/typecheck.sh
+```
+
+This runs `basedpyright` against the full project (configured in
+`pyrightconfig.json`). The script must exit cleanly with no **new** errors
+introduced by your changes. If the checker reports errors on lines you touched,
+fix them before committing.
