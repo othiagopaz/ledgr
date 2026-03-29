@@ -98,9 +98,9 @@ export default function IncomeExpenseChart({ mini }: Props) {
           />
           <ReferenceLine y={0} stroke="var(--border)" />
           <Tooltip
-            formatter={(value: number, name: string) => {
-              const absVal = Math.abs(value);
-              return [formatAmount(absVal, currency), name];
+            formatter={(value: unknown, name: unknown) => {
+              const absVal = Math.abs(Number(value));
+              return [formatAmount(absVal, currency), String(name ?? "")];
             }}
             contentStyle={{
               background: "var(--bg-secondary)",

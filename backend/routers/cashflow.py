@@ -11,9 +11,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from fava.core import FavaLedger
 
+from account_types import build_account_type_map
 from cashflow import compute_cashflow
 from ledger import get_filtered_entries, get_ledger
-from ledgr_options import parse_ledgr_options
 
 router = APIRouter()
 
@@ -28,13 +28,10 @@ def get_cashflow(
 ) -> dict[str, Any]:
     """Cash Flow Statement — delegates to ``cashflow.py``."""
     oc = ledger.options["operating_currency"][0]
-    from beancount.core import data as bc_data
-    custom_entries = [e for e in ledger.all_entries if isinstance(e, bc_data.Custom)]
-    ledgr_opts = parse_ledgr_options(custom_entries)
+    type_map = build_account_type_map(ledger.all_entries)
 
     entries = get_filtered_entries(ledger, view_mode)
     return compute_cashflow(
         entries, from_date, to_date, interval, oc,
-        cash_prefixes=ledgr_opts.cash_account_prefixes,
-        investment_prefixes=ledgr_opts.investment_account_prefixes,
+        type_map=type_map,
     )

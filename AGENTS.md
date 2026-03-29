@@ -40,7 +40,7 @@ ledgr/
 │   ├── ledger.py            # Singleton: FavaLedger wrapper + entry filtering
 │   ├── serializers.py       # Fava/Beancount types → JSON dicts
 │   ├── cashflow.py          # Only custom accounting logic: Cash Flow
-│   ├── ledgr_options.py     # Custom directives (ledgr-options)
+│   ├── account_types.py     # ledgr-type vocabulary, type map, classification helpers
 │   ├── routers/
 │   │   ├── accounts.py      # GET /api/accounts, /api/account-names, etc.
 │   │   ├── transactions.py  # GET/POST/PUT/DELETE /api/transactions
@@ -176,13 +176,40 @@ The Cash Flow Statement is the only report that Fava/Beancount does not
 implement natively. All custom accounting logic in Ledgr lives here and
 only here.
 
+### `ledgr-type` metadata — account classification
+
+Accounts are classified by `ledgr-type` metadata on their `Open` directive,
+not by name prefixes. This lives in `account_types.py`.
+
+```beancount
+2024-01-01 open Assets:Bank:Itau  BRL
+  ledgr-type: "cash"
+
+2024-01-01 open Liabilities:CreditCard:Nubank  BRL
+  ledgr-type: "credit-card"
+```
+
+| `ledgr-type` | Applies to | Cash Flow role |
+|---|---|---|
+| `cash` | Assets | **Cash account** — generates cash flow postings |
+| `investment` | Assets | Counterpart → **Investing** |
+| `receivable` | Assets | Operating working capital |
+| `prepaid` | Assets | Operating working capital |
+| `credit-card` | Liabilities | Operating counterpart |
+| `loan` | Liabilities | Counterpart → **Financing** |
+| `payable` | Liabilities | Operating counterpart |
+| `general` | Income/Expenses/Equity | Default, no special behavior |
+
+**Enforcement**: `Assets` and `Liabilities` accounts **require** `ledgr-type`.
+`Income`, `Expenses`, `Equity` default to `"general"` if absent.
+
 ### 3-tier asset classification
 
-| Tier | Config key | Default | Cash Flow role |
-|------|-----------|---------|----------------|
-| **Cash** | `cash_account_prefixes` | `Assets:Bank`, `Assets:Cash` | Only these accounts generate cash flow postings |
-| **Investment** | `investment_account_prefixes` | `Assets:Investments`, `Assets:Broker` | Counterpart → **Investing** |
-| **Other** | _(everything else)_ | `Assets:Receivables`, `Assets:Vehicle`, … | Counterpart → **Operating** (working capital) |
+| Tier | `ledgr-type` | Cash Flow role |
+|------|-------------|----------------|
+| **Cash** | `"cash"` | Only these accounts generate cash flow postings |
+| **Investment** | `"investment"` | Counterpart → **Investing** |
+| **Other** | `"receivable"`, `"prepaid"`, etc. | Counterpart → **Operating** (working capital) |
 
 Key behaviors:
 - Only transactions touching a **cash** account appear in the Cash Flow
@@ -191,24 +218,20 @@ Key behaviors:
 - Non-cash ↔ Non-cash = **excluded** (no cash movement)
 - Income → Investment (interest reinvested, never hits bank) = **excluded**
 
-Configurable via beancount:
-
-```
-2024-01-01 custom "ledgr-option" "cash_account_prefixes" "Assets:Bank Assets:Cash"
-2024-01-01 custom "ledgr-option" "investment_account_prefixes" "Assets:Investments"
-```
+Account names do not matter — only `ledgr-type` does. `Liabilities:Emprestimo`
+with `ledgr-type: "loan"` correctly classifies as financing.
 
 ### Classification rules (order is CRITICAL):
 
 ```
-1. FINANCING   → counterpart is Liabilities:Loans (checked FIRST)
-2. INVESTING   → counterpart is an investment account (checked BEFORE operating)
+1. FINANCING   → counterpart has ledgr-type "loan" (checked FIRST)
+2. INVESTING   → counterpart has ledgr-type "investment" (checked BEFORE operating)
 3. OPERATING   → counterpart is Income:*, Expenses:*, Liabilities:*, or other non-cash asset
 4. TRANSFER    → default (cash ↔ cash, e.g. bank transfer)
 ```
 
 **Order matters**:
-- `Liabilities:Loans` MUST be checked BEFORE the generic `Liabilities:` prefix.
+- Loan accounts MUST be checked BEFORE generic Liabilities.
   Otherwise, loan payments are misclassified as "operating" instead of
   "financing". This was a real bug — do not regress.
 - `INVESTING` MUST be checked BEFORE `OPERATING`. Otherwise, investment

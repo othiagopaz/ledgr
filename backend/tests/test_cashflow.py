@@ -14,11 +14,36 @@ import pytest
 from beancount.core import amount as amt_mod, data
 from fava.core import FavaLedger
 
+from account_types import build_account_type_map
 from cashflow import classify_posting, compute_cashflow, date_to_period
 
 
 # ------------------------------------------------------------------
-# classify_posting — 3-tier asset classification (see AGENTS.md §7)
+# Default type map for classification tests — mirrors cashflow.beancount
+# ------------------------------------------------------------------
+
+DEFAULT_TYPE_MAP: dict[str, str] = {
+    "Assets:Bank:Checking": "cash",
+    "Assets:Bank:Savings": "cash",
+    "Assets:Investments:Stocks": "investment",
+    "Assets:Broker:XP": "investment",
+    "Liabilities:CreditCard": "credit-card",
+    "Liabilities:Loans:Mortgage": "loan",
+    "Income:Salary": "general",
+    "Expenses:Food": "general",
+    "Expenses:Rent": "general",
+    "Expenses:Commissions": "general",
+    "Income:CapitalGains": "general",
+    "Equity:OpeningBalances": "general",
+    # "Other" non-cash assets (receivables, deposits) are not in the map
+    # because they'd have ledgr-type like "receivable" or "prepaid"
+    "Assets:Receivables:Gabi": "receivable",
+    "Assets:Deposits:Rent": "prepaid",
+}
+
+
+# ------------------------------------------------------------------
+# classify_posting — ledgr-type based classification (see AGENTS.md §7)
 # ------------------------------------------------------------------
 
 
@@ -30,6 +55,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Income:Salary"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
@@ -38,6 +64,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Expenses:Food"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
@@ -46,27 +73,31 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Liabilities:CreditCard"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
     def test_loan_payment_is_financing(self) -> None:
         """Cash account → Liabilities:Loans:Mortgage = financing.
 
-        This is the CRITICAL order test: Liabilities:Loans MUST be checked
-        BEFORE generic Liabilities: prefix.  This was a real bug — do not
+        This is the CRITICAL order test: loans MUST be checked
+        BEFORE generic Liabilities.  This was a real bug — do not
         regress (AGENTS.md §13).
         """
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Liabilities:Loans:Mortgage"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "financing"
 
-    def test_loan_payment_top_level_is_financing(self) -> None:
-        """Cash account → Liabilities:Loans (no sub-account) = financing."""
+    def test_loan_any_name_is_financing(self) -> None:
+        """Account name doesn't matter — only ledgr-type does."""
+        type_map = {**DEFAULT_TYPE_MAP, "Liabilities:Emprestimo": "loan"}
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
-            counterparts=["Liabilities:Loans"],
+            counterparts=["Liabilities:Emprestimo"],
+            type_map=type_map,
         )
         assert result == "financing"
 
@@ -75,6 +106,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Assets:Investments:Stocks"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
@@ -83,6 +115,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Assets:Broker:XP"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
@@ -96,6 +129,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Assets:Investments:Stocks", "Expenses:Commissions"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
@@ -104,6 +138,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Assets:Investments:Stocks", "Income:CapitalGains"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "investing"
 
@@ -116,6 +151,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Assets:Receivables:Gabi"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
@@ -124,6 +160,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Assets:Deposits:Rent"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "operating"
 
@@ -132,6 +169,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=[],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "transfer"
 
@@ -140,6 +178,7 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=["Equity:OpeningBalances"],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "transfer"
 
@@ -148,24 +187,17 @@ class TestClassifyPosting:
         result = classify_posting(
             cash_account="Assets:Bank:Checking",
             counterparts=[],
+            type_map=DEFAULT_TYPE_MAP,
         )
         assert result == "transfer"
 
-    def test_custom_investment_prefixes(self) -> None:
-        """Custom investment_prefixes changes what is classified as investing."""
+    def test_cash_account_name_doesnt_matter(self) -> None:
+        """Account with any name but ledgr-type 'cash' is a cash account."""
+        type_map = {**DEFAULT_TYPE_MAP, "Assets:Nubank": "cash"}
         result = classify_posting(
-            cash_account="Assets:Bank:Checking",
-            counterparts=["Assets:US:ETrade:Stocks"],
-            investment_prefixes=("Assets:US:ETrade",),
-        )
-        assert result == "investing"
-
-    def test_non_investment_noncash_asset_is_operating(self) -> None:
-        """Non-investment non-cash asset falls through to operating."""
-        result = classify_posting(
-            cash_account="Assets:Bank:Checking",
-            counterparts=["Assets:Broker:XP"],
-            investment_prefixes=("Assets:US:ETrade",),  # Broker:XP not in prefixes
+            cash_account="Assets:Nubank",
+            counterparts=["Expenses:Food"],
+            type_map=type_map,
         )
         assert result == "operating"
 
