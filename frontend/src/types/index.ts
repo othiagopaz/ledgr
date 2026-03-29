@@ -265,6 +265,7 @@ export interface SeriesSummary {
   payee: string;
   narration: string;
   amount_per_txn: string;
+  total_amount: string;
   currency: string;
   total: number;
   confirmed: number;

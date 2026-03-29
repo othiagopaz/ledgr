@@ -112,6 +112,13 @@ def _summarize_series(
     amount_per_txn = str(sum(positive_amounts)) if positive_amounts else "0"
     is_split = len(positive_amounts) > 1
 
+    # Compute real total from all transactions (handles manual edits).
+    total_amount = Decimal(0)
+    for t in txns:
+        for p in t.postings:
+            if p.units and p.units.number > 0:
+                total_amount += p.units.number
+
     narration = first.narration
 
     return {
@@ -120,6 +127,7 @@ def _summarize_series(
         "payee": first.payee or "",
         "narration": narration,
         "amount_per_txn": amount_per_txn,
+        "total_amount": str(total_amount),
         "currency": currency,
         "total": len(txns),
         "confirmed": confirmed,
