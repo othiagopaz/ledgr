@@ -63,10 +63,8 @@ def generate_series_transactions(
     narration: str,
     start_date: datetime.date,
     count: int,
-    amount_per_txn: Decimal,
-    currency: str,
-    account_from: str,
-    account_to: str,
+    postings_spec: list[dict],
+    default_currency: str,
     beancount_file_path: str,
     last_installment_adjustment: Decimal | None = None,
     seq_offset: int = 0,
@@ -77,16 +75,17 @@ def generate_series_transactions(
         series_type: "recurring" or "installment".
         series_id: shared ID for all transactions in the series.
         payee: transaction payee.
-        narration: base narration (counter appended for installments).
+        narration: base narration.
         start_date: first transaction date.
         count: number of transactions to generate.
-        amount_per_txn: amount for each transaction.
-        currency: currency code.
-        account_from: source account (e.g., credit card).
-        account_to: destination account (e.g., expense).
+        postings_spec: list of dicts with keys ``account``,
+            ``amount`` (Decimal | None), ``currency`` (str | None).
+            ``amount=None`` produces an auto-balance posting.
+        default_currency: fallback currency when a posting omits it.
         beancount_file_path: for metadata source.
-        last_installment_adjustment: if set, the last txn uses this amount
-            instead of ``amount_per_txn`` (handles remainder from division).
+        last_installment_adjustment: if set, the last txn scales all
+            explicit amounts proportionally (handles remainder from
+            division for ``amount_is_total``).
         seq_offset: for extend operations — start sequence numbering from
             this value (only relevant for installments, default 0).
 
@@ -97,19 +96,17 @@ def generate_series_transactions(
     transactions: list[data.Transaction] = []
     total_display = seq_offset + count
 
+    # Pre-compute base total for proportional scaling (sum of positive explicit amounts).
+    base_total = sum(
+        s["amount"] for s in postings_spec
+        if s.get("amount") is not None and s["amount"] > 0
+    )
+
     for i, txn_date in enumerate(dates):
         seq = seq_offset + i + 1  # 1-indexed
 
         # --- Narration ---
         txn_narration = narration
-
-        # --- Amount ---
-        is_last = i == len(dates) - 1
-        txn_amount = (
-            last_installment_adjustment
-            if is_last and last_installment_adjustment is not None
-            else amount_per_txn
-        )
 
         # --- Metadata ---
         meta = data.new_metadata(beancount_file_path, 0)
@@ -120,18 +117,34 @@ def generate_series_transactions(
             meta["ledgr-series-total"] = Decimal(total_display)
 
         # --- Postings ---
-        postings = [
-            data.Posting(
-                account_to,
-                amt_mod.Amount(txn_amount, currency),
-                None, None, None, None,
-            ),
-            data.Posting(
-                account_from,
-                amt_mod.Amount(-txn_amount, currency),
-                None, None, None, None,
-            ),
-        ]
+        is_last = i == len(dates) - 1
+        use_adjustment = is_last and last_installment_adjustment is not None
+
+        postings: list[data.Posting] = []
+        for spec in postings_spec:
+            spec_amount = spec.get("amount")
+            cur = spec.get("currency") or default_currency
+
+            if spec_amount is None:
+                # Auto-balance posting
+                postings.append(
+                    data.Posting(spec["account"], None, None, None, None, None)
+                )
+            else:
+                if use_adjustment and base_total:
+                    scale = last_installment_adjustment / base_total
+                    scaled = (spec_amount * scale).quantize(
+                        Decimal("0.01"), ROUND_HALF_UP
+                    )
+                else:
+                    scaled = spec_amount
+                postings.append(
+                    data.Posting(
+                        spec["account"],
+                        amt_mod.Amount(scaled, cur),
+                        None, None, None, None,
+                    )
+                )
 
         txn = data.Transaction(
             meta,

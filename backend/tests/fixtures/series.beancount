@@ -4,6 +4,8 @@ option "operating_currency" "BRL"
 2024-01-01 open Assets:Bank:Checking       BRL
 2024-01-01 open Expenses:Subscriptions     BRL
 2024-01-01 open Expenses:Electronics       BRL
+2024-01-01 open Expenses:Food              BRL
+2024-01-01 open Expenses:Entertainment     BRL
 2024-01-01 open Liabilities:CreditCard     BRL
 
 ; -- Pre-existing installment series: 3 txns (2 confirmed, 1 pending) --
@@ -57,3 +59,26 @@ option "operating_currency" "BRL"
   ledgr-series-type: "recurring"
   Expenses:Subscriptions  55.90 BRL
   Assets:Bank:Checking  -55.90 BRL
+
+; -- Pre-existing split (3-posting) recurring series: 3 txns (1 confirmed, 2 pending) --
+
+2025-01-01 * "Combo" "Monthly combo"
+  ledgr-series: "split-fix003"
+  ledgr-series-type: "recurring"
+  Expenses:Food  60.00 BRL
+  Expenses:Entertainment  40.00 BRL
+  Assets:Bank:Checking  -100.00 BRL
+
+2025-02-01 ! "Combo" "Monthly combo"
+  ledgr-series: "split-fix003"
+  ledgr-series-type: "recurring"
+  Expenses:Food  60.00 BRL
+  Expenses:Entertainment  40.00 BRL
+  Assets:Bank:Checking  -100.00 BRL
+
+2025-03-01 ! "Combo" "Monthly combo"
+  ledgr-series: "split-fix003"
+  ledgr-series-type: "recurring"
+  Expenses:Food  60.00 BRL
+  Expenses:Entertainment  40.00 BRL
+  Assets:Bank:Checking  -100.00 BRL

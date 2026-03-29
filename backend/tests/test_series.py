@@ -133,6 +133,24 @@ class TestMonthsBetween:
 
 
 # ------------------------------------------------------------------
+# Helper: two-posting spec
+# ------------------------------------------------------------------
+
+
+def _two_posting_spec(
+    account_to: str,
+    account_from: str,
+    amount: Decimal,
+    currency: str = "BRL",
+) -> list[dict]:
+    """Build a standard two-posting spec (positive + negative)."""
+    return [
+        {"account": account_to, "amount": amount, "currency": currency},
+        {"account": account_from, "amount": -amount, "currency": currency},
+    ]
+
+
+# ------------------------------------------------------------------
 # generate_series_transactions — installment
 # ------------------------------------------------------------------
 
@@ -146,10 +164,12 @@ class TestGenerateInstallmentTransactions:
             narration='TV 65"',
             start_date=datetime.date(2025, 4, 15),
             count=12,
-            amount_per_txn=Decimal("250.00"),
-            currency="BRL",
-            account_from="Liabilities:CreditCard:Nubank",
-            account_to="Expenses:Home:Electronics",
+            postings_spec=_two_posting_spec(
+                "Expenses:Home:Electronics",
+                "Liabilities:CreditCard:Nubank",
+                Decimal("250.00"),
+            ),
+            default_currency="BRL",
             beancount_file_path="test.beancount",
         )
         assert len(txns) == 12
@@ -162,10 +182,10 @@ class TestGenerateInstallmentTransactions:
             narration="TV",
             start_date=datetime.date(2025, 1, 1),
             count=3,
-            amount_per_txn=Decimal("100"),
-            currency="BRL",
-            account_from="Liabilities:CC",
-            account_to="Expenses:Stuff",
+            postings_spec=_two_posting_spec(
+                "Expenses:Stuff", "Liabilities:CC", Decimal("100"),
+            ),
+            default_currency="BRL",
             beancount_file_path="test.beancount",
         )
         assert txns[0].narration == "TV"
@@ -180,10 +200,10 @@ class TestGenerateInstallmentTransactions:
             narration="TV",
             start_date=datetime.date(2025, 1, 1),
             count=3,
-            amount_per_txn=Decimal("100"),
-            currency="BRL",
-            account_from="Liabilities:CC",
-            account_to="Expenses:Stuff",
+            postings_spec=_two_posting_spec(
+                "Expenses:Stuff", "Liabilities:CC", Decimal("100"),
+            ),
+            default_currency="BRL",
             beancount_file_path="test.beancount",
         )
         for i, txn in enumerate(txns):
@@ -200,10 +220,8 @@ class TestGenerateInstallmentTransactions:
             narration="N",
             start_date=datetime.date(2025, 1, 1),
             count=5,
-            amount_per_txn=Decimal("10"),
-            currency="BRL",
-            account_from="L:CC",
-            account_to="E:S",
+            postings_spec=_two_posting_spec("E:S", "L:CC", Decimal("10")),
+            default_currency="BRL",
             beancount_file_path="t.bc",
         )
         assert all(t.flag == "!" for t in txns)
@@ -216,10 +234,10 @@ class TestGenerateInstallmentTransactions:
             narration="N",
             start_date=datetime.date(2025, 1, 1),
             count=1,
-            amount_per_txn=Decimal("250.00"),
-            currency="BRL",
-            account_from="Liabilities:CC",
-            account_to="Expenses:Stuff",
+            postings_spec=_two_posting_spec(
+                "Expenses:Stuff", "Liabilities:CC", Decimal("250.00"),
+            ),
+            default_currency="BRL",
             beancount_file_path="t.bc",
         )
         txn = txns[0]
@@ -247,10 +265,12 @@ class TestGenerateRecurringTransactions:
             narration="Assinatura mensal",
             start_date=datetime.date(2025, 4, 1),
             count=6,
-            amount_per_txn=Decimal("55.90"),
-            currency="BRL",
-            account_from="Assets:Bank:Nubank",
-            account_to="Expenses:Entertainment:Streaming",
+            postings_spec=_two_posting_spec(
+                "Expenses:Entertainment:Streaming",
+                "Assets:Bank:Nubank",
+                Decimal("55.90"),
+            ),
+            default_currency="BRL",
             beancount_file_path="test.beancount",
         )
         assert len(txns) == 6
@@ -263,10 +283,8 @@ class TestGenerateRecurringTransactions:
             narration="Assinatura mensal",
             start_date=datetime.date(2025, 1, 1),
             count=3,
-            amount_per_txn=Decimal("55.90"),
-            currency="BRL",
-            account_from="A:B",
-            account_to="E:S",
+            postings_spec=_two_posting_spec("E:S", "A:B", Decimal("55.90")),
+            default_currency="BRL",
             beancount_file_path="t.bc",
         )
         assert all(t.narration == "Assinatura mensal" for t in txns)
@@ -279,10 +297,8 @@ class TestGenerateRecurringTransactions:
             narration="N",
             start_date=datetime.date(2025, 1, 1),
             count=3,
-            amount_per_txn=Decimal("10"),
-            currency="BRL",
-            account_from="A:B",
-            account_to="E:S",
+            postings_spec=_two_posting_spec("E:S", "A:B", Decimal("10")),
+            default_currency="BRL",
             beancount_file_path="t.bc",
         )
         for txn in txns:
@@ -308,10 +324,8 @@ class TestRemainderAdjustment:
             narration="N",
             start_date=datetime.date(2025, 1, 1),
             count=3,
-            amount_per_txn=per_txn,
-            currency="BRL",
-            account_from="L:CC",
-            account_to="E:S",
+            postings_spec=_two_posting_spec("E:S", "L:CC", per_txn),
+            default_currency="BRL",
             beancount_file_path="t.bc",
             last_installment_adjustment=last_adj,
         )
@@ -333,10 +347,8 @@ class TestRemainderAdjustment:
             narration="N",
             start_date=datetime.date(2025, 1, 1),
             count=count,
-            amount_per_txn=per_txn,
-            currency="BRL",
-            account_from="L:CC",
-            account_to="E:S",
+            postings_spec=_two_posting_spec("E:S", "L:CC", per_txn),
+            default_currency="BRL",
             beancount_file_path="t.bc",
             last_installment_adjustment=last_adj,
         )
@@ -358,13 +370,116 @@ class TestSeqOffset:
             narration="N",
             start_date=datetime.date(2025, 7, 1),
             count=3,
-            amount_per_txn=Decimal("100"),
-            currency="BRL",
-            account_from="L:CC",
-            account_to="E:S",
+            postings_spec=_two_posting_spec("E:S", "L:CC", Decimal("100")),
+            default_currency="BRL",
             beancount_file_path="t.bc",
             seq_offset=6,
         )
         assert txns[0].meta["ledgr-series-seq"] == Decimal(7)
         assert txns[0].meta["ledgr-series-total"] == Decimal(9)  # 6 + 3
         assert txns[0].narration == "N"
+
+
+# ------------------------------------------------------------------
+# Multi-posting (split) transactions
+# ------------------------------------------------------------------
+
+
+class TestMultiPostingTransactions:
+    def test_three_postings_sum_to_zero(self) -> None:
+        """3-posting spec: two expenses + one source (all amounts explicit)."""
+        spec = [
+            {"account": "Expenses:Food", "amount": Decimal("60"), "currency": "BRL"},
+            {"account": "Expenses:Entertainment", "amount": Decimal("40"), "currency": "BRL"},
+            {"account": "Assets:Checking", "amount": Decimal("-100"), "currency": "BRL"},
+        ]
+        txns = generate_series_transactions(
+            series_type="recurring",
+            series_id="split-r",
+            payee="Combo",
+            narration="Monthly combo",
+            start_date=datetime.date(2025, 1, 1),
+            count=2,
+            postings_spec=spec,
+            default_currency="BRL",
+            beancount_file_path="t.bc",
+        )
+        assert len(txns) == 2
+        for txn in txns:
+            assert len(txn.postings) == 3
+            total = sum(p.units.number for p in txn.postings)
+            assert total == Decimal("0")
+
+    def test_auto_balance_posting(self) -> None:
+        """One posting with amount=None should produce a Posting with units=None."""
+        spec = [
+            {"account": "Expenses:Food", "amount": Decimal("60"), "currency": "BRL"},
+            {"account": "Expenses:Entertainment", "amount": Decimal("40"), "currency": "BRL"},
+            {"account": "Assets:Checking", "amount": None, "currency": None},
+        ]
+        txns = generate_series_transactions(
+            series_type="recurring",
+            series_id="split-ab",
+            payee="Combo",
+            narration="Auto balance",
+            start_date=datetime.date(2025, 1, 1),
+            count=1,
+            postings_spec=spec,
+            default_currency="BRL",
+            beancount_file_path="t.bc",
+        )
+        txn = txns[0]
+        assert len(txn.postings) == 3
+        assert txn.postings[0].units.number == Decimal("60")
+        assert txn.postings[1].units.number == Decimal("40")
+        assert txn.postings[2].units is None  # auto-balance
+
+    def test_last_installment_scales_proportionally(self) -> None:
+        """last_installment_adjustment scales all explicit amounts proportionally."""
+        spec = [
+            {"account": "Expenses:Food", "amount": Decimal("60"), "currency": "BRL"},
+            {"account": "Expenses:Entertainment", "amount": Decimal("40"), "currency": "BRL"},
+            {"account": "Assets:Checking", "amount": Decimal("-100"), "currency": "BRL"},
+        ]
+        # Adjustment: last txn should total 110 instead of 100
+        txns = generate_series_transactions(
+            series_type="installment",
+            series_id="split-adj",
+            payee="Combo",
+            narration="Scaled",
+            start_date=datetime.date(2025, 1, 1),
+            count=2,
+            postings_spec=spec,
+            default_currency="BRL",
+            beancount_file_path="t.bc",
+            last_installment_adjustment=Decimal("110"),
+        )
+        # First txn: normal amounts
+        assert txns[0].postings[0].units.number == Decimal("60")
+        assert txns[0].postings[1].units.number == Decimal("40")
+        assert txns[0].postings[2].units.number == Decimal("-100")
+        # Last txn: scaled by 110/100 (base_total = sum of positive = 60+40 = 100)
+        # scale = 110/100 = 1.1; 60*1.1=66, 40*1.1=44, -100*1.1=-110
+        assert txns[1].postings[0].units.number == Decimal("66.00")
+        assert txns[1].postings[1].units.number == Decimal("44.00")
+        assert txns[1].postings[2].units.number == Decimal("-110.00")
+
+    def test_currency_falls_back_to_default(self) -> None:
+        """Posting without explicit currency uses default_currency."""
+        spec = [
+            {"account": "Expenses:Food", "amount": Decimal("100"), "currency": None},
+            {"account": "Assets:Checking", "amount": Decimal("-100"), "currency": None},
+        ]
+        txns = generate_series_transactions(
+            series_type="recurring",
+            series_id="fb",
+            payee="P",
+            narration="N",
+            start_date=datetime.date(2025, 1, 1),
+            count=1,
+            postings_spec=spec,
+            default_currency="USD",
+            beancount_file_path="t.bc",
+        )
+        assert txns[0].postings[0].units.currency == "USD"
+        assert txns[0].postings[1].units.currency == "USD"

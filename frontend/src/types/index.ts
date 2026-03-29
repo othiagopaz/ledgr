@@ -227,6 +227,12 @@ export interface CashFlowResponse {
 
 // Series types
 
+export interface PostingSpec {
+  account: string;
+  amount: string | null;   // null = auto-balance
+  currency: string | null;
+}
+
 export interface SeriesCreateIn {
   type: 'recurring' | 'installment';
   payee: string;
@@ -234,11 +240,9 @@ export interface SeriesCreateIn {
   start_date: string;
   end_date?: string;
   count?: number;
-  amount: number;
-  amount_is_total?: boolean;
   currency: string;
-  account_from: string;
-  account_to: string;
+  postings: PostingSpec[];
+  amount_is_total?: boolean;
 }
 
 export interface SeriesExtendIn {
@@ -269,6 +273,8 @@ export interface SeriesSummary {
   last_date: string;
   account_from: string;
   account_to: string;
+  postings: PostingSpec[];
+  is_split: boolean;
 }
 
 export interface SeriesListResponse {
