@@ -67,6 +67,16 @@ export default function CommandPalette() {
   });
 
   items.push({
+    id: "action:new-account",
+    label: "New Account",
+    group: "Actions",
+    action: () => {
+      useAppStore.getState().openAcctModal();
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
     id: "action:toggle-theme",
     label: "Toggle Theme",
     group: "Actions",
