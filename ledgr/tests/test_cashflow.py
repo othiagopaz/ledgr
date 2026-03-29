@@ -1,5 +1,5 @@
 """
-Tests for ``cashflow.py`` — classification rules and computation.
+Tests for ``ledgr.cashflow`` — classification rules and computation.
 
 Every category (operating, investing, financing, transfer) must be tested,
 including edge cases.  See AGENTS.md §7 and §10.
@@ -14,7 +14,7 @@ import pytest
 from beancount.core import amount as amt_mod, data
 from fava.core import FavaLedger
 
-from cashflow import classify_posting, compute_cashflow, date_to_period
+from ledgr.cashflow import classify_posting, compute_cashflow, date_to_period
 
 
 # ------------------------------------------------------------------

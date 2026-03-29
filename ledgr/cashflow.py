@@ -16,13 +16,15 @@ This module must NOT:
 from __future__ import annotations
 
 import datetime
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any
 
 from beancount.core import data
+from fava.beans.abc import Directive
 
-from ledgr_options import DEFAULT_INVESTMENT_PREFIXES
-from serializers import decimal_to_report_number, format_other_balances
+from ledgr.options import DEFAULT_INVESTMENT_PREFIXES
+from ledgr.serializers import decimal_to_report_number, format_other_balances
 
 
 # ------------------------------------------------------------------
@@ -121,7 +123,7 @@ def classify_posting(
 # ------------------------------------------------------------------
 
 def compute_cashflow(
-    entries: list,
+    entries: Sequence[Directive],
     from_date: str | None = None,
     to_date: str | None = None,
     interval: str = "monthly",
@@ -172,6 +174,7 @@ def compute_cashflow(
 
         all_accts = [p.account for p in txn.postings]
         for posting in asset_postings:
+            assert posting.units is not None  # guaranteed by asset_postings filter
             category = classify_posting(posting.account, counterparts, all_accts, investment_prefixes)
 
             if counterparts:
@@ -340,7 +343,7 @@ def compute_cashflow(
 
 
 def _compute_period_asset_balances(
-    all_txns: list,
+    all_txns: Sequence[data.Transaction],
     periods: list[str],
     interval: str,
     operating_currency: str | None = None,
@@ -361,12 +364,16 @@ def _compute_period_asset_balances(
 
     for txn in all_txns:
         for p in txn.postings:
-            if p.account.startswith("Assets:") and p.units is not None:
-                if oc and p.units.currency != oc:
-                    c = p.units.currency
-                    other_cumulative[c] = other_cumulative.get(c, Decimal(0)) + p.units.number
+            units = p.units
+            if p.account.startswith("Assets:") and units is not None:
+                num = units.number
+                if num is None:
+                    continue
+                if oc and units.currency != oc:
+                    c = units.currency
+                    other_cumulative[c] = other_cumulative.get(c, Decimal(0)) + num
                 else:
-                    cumulative += p.units.number
+                    cumulative += num
         period = date_to_period(txn.date, interval)
         period_end_balance[period] = decimal_to_report_number(cumulative)
         if oc:

@@ -1,5 +1,5 @@
 """
-Tests for ``ledgr_options.py`` — parsing ledgr-option custom directives
+Tests for ``ledgr.options`` — parsing ledgr-option custom directives
 and their effect on classify_posting().
 """
 
@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from cashflow import classify_posting
-from ledgr_options import DEFAULT_INVESTMENT_PREFIXES, LedgrOptions, parse_ledgr_options
+from ledgr.cashflow import classify_posting
+from ledgr.options import DEFAULT_INVESTMENT_PREFIXES, LedgrOptions, parse_ledgr_options
 
 
 def _make_custom_entry(name: str, raw_value: str) -> SimpleNamespace:

@@ -9,17 +9,14 @@ Tests verify:
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from fava.core import FavaLedger
 
-import ledger as ledger_mod
-
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+from ledgr.tests.conftest import FIXTURES_DIR
+import ledgr.ledger as ledger_mod
 
 
 @pytest.fixture()

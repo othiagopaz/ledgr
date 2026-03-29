@@ -201,7 +201,8 @@ def attach_other_currencies_to_report_tree(
         for child in node.get("children", []):
             _walk(child)
 
-        other_totals: dict[str, list[dict[str, Any]]] = {}
+        # Accumulate per-period and overall other-currency data
+        other_totals_agg: dict[str, dict[str, Decimal]] = {}
         other_total_agg: dict[str, Decimal] = {}
 
         # Own data
@@ -209,20 +210,19 @@ def attach_other_currencies_to_report_tree(
             period_data = own_other.get(period, {})
             for curr, val in period_data.items():
                 other_total_agg[curr] = other_total_agg.get(curr, Decimal(0)) + val * sign
-                # Build per-period aggregation too
-                if period not in other_totals:
-                    other_totals[period] = {}
-                other_totals[period][curr] = other_totals[period].get(curr, Decimal(0)) + val * sign
+                if period not in other_totals_agg:
+                    other_totals_agg[period] = {}
+                other_totals_agg[period][curr] = other_totals_agg[period].get(curr, Decimal(0)) + val * sign
 
         # Add children's other data
         for child in node.get("children", []):
             for period, items in (child.get("other_totals") or {}).items():
-                if period not in other_totals:
-                    other_totals[period] = {}
+                if period not in other_totals_agg:
+                    other_totals_agg[period] = {}
                 for item in items:
                     c = item["currency"]
                     v = Decimal(item["amount"])
-                    other_totals[period][c] = other_totals[period].get(c, Decimal(0)) + v
+                    other_totals_agg[period][c] = other_totals_agg[period].get(c, Decimal(0)) + v
             for item in (child.get("other_total") or []):
                 c = item["currency"]
                 v = Decimal(item["amount"])
@@ -231,7 +231,7 @@ def attach_other_currencies_to_report_tree(
         # Convert aggregated dicts to sorted lists
         node["other_totals"] = {
             p: format_other_balances(currs)
-            for p, currs in other_totals.items()
+            for p, currs in other_totals_agg.items()
         }
         node["other_total"] = format_other_balances(other_total_agg)
 

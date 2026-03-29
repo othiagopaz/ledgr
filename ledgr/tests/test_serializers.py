@@ -1,5 +1,5 @@
 """
-Tests for ``serializers.py`` — every function, with real Beancount types.
+Tests for ``ledgr.serializers`` — every function, with real Beancount types.
 
 See AGENTS.md §6: "Serializers are 100% covered in ``test_serializers.py``."
 """
@@ -11,9 +11,10 @@ from decimal import Decimal
 
 import pytest
 from beancount.core import amount as amt_mod, data, inventory, realization
+from beancount.core.position import Cost, CostSpec, Position
 from fava.core import FavaLedger
 
-from serializers import (
+from ledgr.serializers import (
     ACCOUNT_TYPE_ORDER,
     build_balance_tree,
     build_report_tree,
@@ -56,8 +57,8 @@ class TestSerializeInventory:
 
     def test_with_cost(self) -> None:
         inv = inventory.Inventory()
-        cost = inventory.Cost(Decimal("10.50"), "USD", datetime.date(2024, 1, 15), None)
-        inv.add_position(inventory.Position(amt_mod.Amount(Decimal("5"), "PETR4"), cost))
+        cost = Cost(Decimal("10.50"), "USD", datetime.date(2024, 1, 15), None)
+        inv.add_position(Position(amt_mod.Amount(Decimal("5"), "PETR4"), cost))
         result = serialize_inventory(inv)
         assert len(result) == 1
         assert result[0]["number"] == "5"
@@ -106,7 +107,7 @@ class TestSerializePosting:
 
     def test_posting_with_cost(self) -> None:
         # CostSpec uses number_per (not number) in Beancount v3
-        cost = data.CostSpec(
+        cost = CostSpec(
             number_per=Decimal("10.00"),
             number_total=None,
             currency="USD",
@@ -234,6 +235,7 @@ class TestSerializeAccountNode:
         assert "Assets" in children_names
 
         assets_node = realization.get(real_root, "Assets")
+        assert assets_node is not None
         result = serialize_account_node(assets_node)
         assert result["name"] == "Assets"
         assert result["type"] == "Assets"
@@ -244,6 +246,7 @@ class TestSerializeAccountNode:
     def test_leaf_node(self, ledger: FavaLedger) -> None:
         real_root = realization.realize(ledger.all_entries)
         checking = realization.get(real_root, "Assets:Checking")
+        assert checking is not None
         result = serialize_account_node(checking)
         assert result["is_leaf"] is True
         assert result["name"] == "Assets:Checking"
@@ -253,6 +256,7 @@ class TestSerializeAccountNode:
     def test_balance_numbers_are_strings(self, ledger: FavaLedger) -> None:
         real_root = realization.realize(ledger.all_entries)
         checking = realization.get(real_root, "Assets:Checking")
+        assert checking is not None
         result = serialize_account_node(checking)
         for b in result["balance"]:
             assert isinstance(b["number"], str)

@@ -11,12 +11,9 @@ Follows the same pattern as Fava's ``fava-option`` directives
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from beancount.core import data
+from typing import Any
 
 
 # Default prefixes for accounts considered "investment" in the Cash Flow
@@ -34,7 +31,7 @@ class LedgrOptions:
     investment_account_prefixes: tuple[str, ...] = DEFAULT_INVESTMENT_PREFIXES
 
 
-def parse_ledgr_options(entries: Iterable[data.Directive]) -> LedgrOptions:
+def parse_ledgr_options(entries: Iterable[Any]) -> LedgrOptions:
     """Parse ``custom "ledgr-option"`` entries from the ledger.
 
     Unrecognised option names are silently ignored (forward-compatible).

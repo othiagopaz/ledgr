@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from ledger import init_ledger
+from ledgr import init_ledger
 from routers import accounts, transactions, reports, cashflow
 
 BEANCOUNT_FILE = os.environ.get(
