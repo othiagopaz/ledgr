@@ -97,6 +97,32 @@ export interface OptionsResponse {
   title: string;
   filename: string;
   locale: string | null;
+  default_payment_account: string | null;
+}
+
+// Fast Input types
+
+export type TxnModalMode = 'fast' | 'advanced';
+
+export interface TransactionDraft {
+  date: string;
+  flag: '*' | '!';
+  payee: string;
+  narration: string;
+  tags: string[];
+  links: string[];
+  postings: DraftPosting[];
+}
+
+export interface DraftPosting {
+  id: number;
+  account: string;
+  amount: string;
+  currency: string;
+  cost: string;
+  costCurrency: string;
+  price: string;
+  priceCurrency: string;
 }
 
 // View mode

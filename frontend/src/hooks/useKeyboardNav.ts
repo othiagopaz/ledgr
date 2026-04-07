@@ -14,16 +14,24 @@ export function useKeyboardNav() {
         return;
       }
 
-      // Cmd+Shift+N or Alt+N / Ctrl+N: open transaction modal (always works)
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
+      // Opt+Cmd+N → Advanced mode (check before Opt+N to avoid false match)
+      if (e.altKey && e.metaKey && e.code === "KeyN") {
         e.preventDefault();
-        useAppStore.getState().openTxnModal();
+        useAppStore.getState().openTxnModal(undefined, 'advanced');
         return;
       }
-      // Alt/Option+N — use e.code because macOS Option produces composed characters
-      if (e.altKey && e.code === "KeyN") {
+
+      // Opt+N → Fast mode (use e.code because macOS Option produces composed chars)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyN") {
         e.preventDefault();
-        useAppStore.getState().openTxnModal();
+        useAppStore.getState().openTxnModal(undefined, 'fast');
+        return;
+      }
+
+      // Cmd+Shift+N: also open advanced mode (legacy shortcut)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        useAppStore.getState().openTxnModal(undefined, 'advanced');
         return;
       }
 

@@ -82,6 +82,7 @@ function typeBadgeClass(ledgrType: string): string {
 }
 
 export default function AccountTree({ accounts, selectedAccount, onSelect, onEdit }: Props) {
+  const defaultPaymentAccount = useAppStore((s) => s.defaultPaymentAccount);
   const [expandedSet, setExpandedSet] = useState<Set<string>>(() => {
     return new Set(accounts.map((a) => a.name));
   });
@@ -220,6 +221,9 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
               <span className={typeBadgeClass(row.node.ledgr_type!)}>
                 {row.node.ledgr_type}
               </span>
+            )}
+            {row.node.name === defaultPaymentAccount && (
+              <span className="type-badge type-badge--default">default</span>
             )}
             <BalanceDisplay balances={row.node.balance} />
           </div>

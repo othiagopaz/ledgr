@@ -1545,6 +1545,7 @@ body {
 .type-badge--credit-card { background: #fff7ed; color: #c2410c; }
 .type-badge--loan        { background: #fee2e2; color: #b91c1c; }
 .type-badge--payable     { background: #fef9c3; color: #854d0e; }
+.type-badge--default     { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
 
 [data-theme="dark"] .type-badge--cash        { background: #1e3a5f; color: #93c5fd; }
 [data-theme="dark"] .type-badge--investment  { background: #2e1065; color: #c4b5fd; }
@@ -1553,6 +1554,7 @@ body {
 [data-theme="dark"] .type-badge--credit-card { background: #431407; color: #fdba74; }
 [data-theme="dark"] .type-badge--loan        { background: #450a0a; color: #fca5a5; }
 [data-theme="dark"] .type-badge--payable     { background: #422006; color: #fde68a; }
+[data-theme="dark"] .type-badge--default     { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
 
 /* ── Account Modal ────────────────────────────────────────────────────────── */
 
@@ -1593,6 +1595,23 @@ body {
   text-transform: none;
   color: var(--text-muted);
   letter-spacing: 0;
+}
+
+.default-account-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.default-account-check input[type="checkbox"] {
+  margin: 0;
+}
+
+.default-account-check .acct-optional {
+  font-size: 12px;
 }
 
 /* Metadata key-value rows */
@@ -2426,3 +2445,196 @@ body {
   border-color: var(--amount-negative);
 }
 .btn-danger:hover { opacity: 0.9; background: var(--amount-negative); }
+
+/* ========== Fast Input ========== */
+
+.fast-input {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fast-input-field {
+  position: relative;
+}
+
+.fast-input-text {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+.fast-input-text:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.fast-input-text::placeholder {
+  color: var(--text-muted);
+}
+
+/* Dropdown */
+.fast-input-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+  margin-top: 4px;
+}
+
+.fast-input-dropdown-label {
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.fast-input-dropdown-item {
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.fast-input-dropdown-item:hover,
+.fast-input-dropdown-item.active {
+  background: var(--bg-row-hover);
+}
+
+/* Pills */
+.fast-input-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fast-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.fast-pill button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+  color: inherit;
+}
+
+.fast-pill button:hover { opacity: 1; }
+
+.pill-blue { background: #dbeafe; color: #1e40af; }
+.pill-green { background: #dcfce7; color: #166534; }
+.pill-purple { background: #ede9fe; color: #5b21b6; }
+.pill-amber { background: #fef3c7; color: #92400e; }
+.pill-teal { background: #ccfbf1; color: #115e59; }
+.pill-pink { background: #fce7f3; color: #9d174d; }
+.pill-coral { background: #fee2e2; color: #991b1b; }
+
+[data-theme="dark"] .pill-blue { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .pill-green { background: #14532d; color: #86efac; }
+[data-theme="dark"] .pill-purple { background: #3b0764; color: #c4b5fd; }
+[data-theme="dark"] .pill-amber { background: #451a03; color: #fcd34d; }
+[data-theme="dark"] .pill-teal { background: #134e4a; color: #5eead4; }
+[data-theme="dark"] .pill-pink { background: #500724; color: #f9a8d4; }
+[data-theme="dark"] .pill-coral { background: #450a0a; color: #fca5a5; }
+
+.ghost-pill {
+  opacity: 0.5;
+  cursor: pointer;
+  border: 1px dashed currentColor;
+}
+
+.ghost-pill:hover { opacity: 0.8; }
+
+/* Helper cheatsheet */
+.fast-input-helper {
+  transition: opacity 0.2s;
+}
+
+.fast-input-helper.faded {
+  opacity: 0.5;
+}
+
+.helper-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 24px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.helper-grid kbd {
+  display: inline-block;
+  min-width: 14px;
+  text-align: center;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.helper-dates {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Transaction modal tab bar */
+.txn-modal-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.txn-modal-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.txn-modal-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.txn-modal-tab:hover:not(.active):not(:disabled) {
+  color: var(--text-primary);
+}
+
+.txn-modal-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

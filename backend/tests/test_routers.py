@@ -93,6 +93,57 @@ class TestAccountsRouter:
         assert "operating_currency" in body
         assert "title" in body
         assert "BRL" in body["operating_currency"]
+        assert "default_payment_account" in body
+        assert body["default_payment_account"] == "Assets:Checking"
+
+    def test_get_tags(self, client: TestClient) -> None:
+        r = client.get("/api/tags")
+        assert r.status_code == 200
+        body = r.json()
+        assert "tags" in body
+        assert isinstance(body["tags"], list)
+        assert "groceries" in body["tags"]
+        assert "dining" in body["tags"]
+        assert "eating-out" in body["tags"]
+        # Tags should be sorted
+        assert body["tags"] == sorted(body["tags"])
+
+    def test_set_default_payment_account(self, client: TestClient) -> None:
+        # Change default to Savings
+        r = client.post(
+            "/api/options/default-payment-account",
+            json={"account": "Assets:Savings"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["default_payment_account"] == "Assets:Savings"
+
+        # Verify it persisted
+        r2 = client.get("/api/options")
+        assert r2.json()["default_payment_account"] == "Assets:Savings"
+
+    def test_set_default_payment_account_replaces(self, client: TestClient) -> None:
+        # Set to Savings, then change to Checking — only 1 directive should exist
+        client.post("/api/options/default-payment-account", json={"account": "Assets:Savings"})
+        r = client.post("/api/options/default-payment-account", json={"account": "Assets:Checking"})
+        assert r.status_code == 200
+        assert r.json()["default_payment_account"] == "Assets:Checking"
+
+    def test_clear_default_payment_account(self, client: TestClient) -> None:
+        # Clear default
+        r = client.post(
+            "/api/options/default-payment-account",
+            json={"account": None},
+        )
+        assert r.status_code == 200
+        assert r.json()["default_payment_account"] is None
+
+    def test_set_default_payment_account_invalid(self, client: TestClient) -> None:
+        r = client.post(
+            "/api/options/default-payment-account",
+            json={"account": "Assets:DoesNotExist"},
+        )
+        assert r.status_code == 400
 
     def test_get_suggestions(self, client: TestClient) -> None:
         r = client.get("/api/suggestions", params={"payee": "Employer"})

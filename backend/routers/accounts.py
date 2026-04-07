@@ -13,7 +13,9 @@ from typing import Any
 
 from beancount.core import data, realization
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fava.beans.funcs import hash_entry
 from fava.core import FavaLedger
+from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
 from account_types import (
@@ -99,20 +101,91 @@ def get_errors(
 def get_options(
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """Ledger options (currency, title, locale)."""
+    """Ledger options (currency, title, locale, default payment account)."""
     locale = None
+    default_payment_account = None
     for e in ledger.all_entries:
-        if isinstance(e, data.Custom) and e.type == "ledgr-locale":
-            if e.values and len(e.values) > 0:
-                locale = str(e.values[0].value)
-                break
+        if isinstance(e, data.Custom):
+            if e.type == "ledgr-locale" and not locale:
+                if e.values and len(e.values) > 0:
+                    locale = str(e.values[0].value)
+            elif e.type == "ledgr-option":
+                if e.values and len(e.values) >= 2:
+                    key = str(e.values[0].value)
+                    if key == "default-payment-account":
+                        default_payment_account = str(e.values[1].value)
 
     return {
         "operating_currency": ledger.options.get("operating_currency", []),
         "title": ledger.options.get("title", ""),
         "filename": ledger.options.get("filename", ""),
         "locale": locale,
+        "default_payment_account": default_payment_account,
     }
+
+
+class DefaultPaymentAccountIn(BaseModel):
+    account: str | None = None
+
+
+@router.post("/api/options/default-payment-account")
+def set_default_payment_account(
+    body: DefaultPaymentAccountIn,
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Set or clear the default payment account."""
+    # Validate account exists if setting (not clearing)
+    if body.account:
+        opens = _get_opens(ledger)
+        if body.account not in opens:
+            raise HTTPException(status_code=400, detail=f"Account '{body.account}' not found")
+
+    # Find existing directive
+    existing_entry = None
+    for e in ledger.all_entries:
+        if (
+            isinstance(e, data.Custom)
+            and e.type == "ledgr-option"
+            and e.values
+            and len(e.values) >= 2
+            and str(e.values[0].value) == "default-payment-account"
+        ):
+            existing_entry = e
+            break
+
+    if body.account:
+        # Build source for the directive
+        date_str = (existing_entry.date.isoformat() if existing_entry
+                    else datetime.date.today().isoformat())
+        source = f'{date_str} custom "ledgr-option" "default-payment-account" "{body.account}"'
+
+        if existing_entry:
+            _, entry_sha = get_entry_slice(existing_entry)
+            ledger.file.save_entry_slice(hash_entry(existing_entry), source, entry_sha)
+        else:
+            with open(str(ledger.beancount_file_path), "a") as f:
+                f.write(f"\n{source}\n")
+    elif existing_entry:
+        # Clear: remove the existing directive
+        _, entry_sha = get_entry_slice(existing_entry)
+        ledger.file.save_entry_slice(hash_entry(existing_entry), "", entry_sha)
+
+    ledger.load_file()
+
+    # Return updated options
+    return get_options(ledger)
+
+
+@router.get("/api/tags")
+def get_tags(
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, list[str]]:
+    """All tags used across transactions (for autocomplete)."""
+    seen: set[str] = set()
+    for e in ledger.all_entries:
+        if isinstance(e, data.Transaction) and e.tags:
+            seen.update(e.tags)
+    return {"tags": sorted(seen)}
 
 
 @router.get("/api/suggestions")
@@ -336,8 +409,6 @@ def update_account(
 
     updated = data.Open(new_meta, open_entry.date, body.name, new_currencies, None)
 
-    # Use save_entry_slice to replace the existing entry
-    entry_hash = ledger.file.get_entry_slice(open_entry)[1]
     # Build source text for the updated directive
     source_lines = [
         f"{open_entry.date.isoformat()} open {body.name}"
@@ -350,8 +421,9 @@ def update_account(
             continue
         source_lines.append(f'  {k}: "{v}"')
 
-    source = "\n".join(source_lines) + "\n"
-    ledger.file.save_entry_slice(open_entry, source, entry_hash)
+    source = "\n".join(source_lines)
+    _, entry_sha = get_entry_slice(open_entry)
+    ledger.file.save_entry_slice(hash_entry(open_entry), source, entry_sha)
     ledger.load_file()
 
     new_opens = _get_opens(ledger)

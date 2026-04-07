@@ -1,186 +1,91 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import {
-  fetchAccountNames,
-  fetchPayees,
-  addTransaction,
-  editTransaction,
-} from "../api/client";
+import { useState, useCallback, useRef } from "react";
 import { useAppStore } from "../stores/appStore";
-import { formatDateFull, getDatePlaceholder } from "../utils/format";
-import { today, parseSmartDate } from "../utils/dateUtils";
-import InlineAutocomplete from "./InlineAutocomplete";
-
-interface ModalPosting {
-  id: number;
-  account: string;
-  amount: string;
-  currency: string;
-  cost: string;
-  costCurrency: string;
-  price: string;
-  priceCurrency: string;
-  showCostPrice: boolean;
-}
-
-let nextId = 1;
-
-function emptyPosting(currency: string): ModalPosting {
-  return {
-    id: nextId++,
-    account: "",
-    amount: "",
-    currency,
-    cost: "",
-    costCurrency: "",
-    price: "",
-    priceCurrency: "",
-    showCostPrice: false,
-  };
-}
+import { addTransaction, editTransaction } from "../api/client";
+import { parseSmartDate } from "../utils/dateUtils";
+import { formatDateFull } from "../utils/format";
+import FastInput from "./FastInput";
+import AdvancedInput from "./AdvancedInput";
+import type { TransactionDraft, DraftPosting, TxnModalMode } from "../types";
 
 interface TransactionModalProps {
   onMutated: () => void;
 }
 
+let nextId = 5000;
+
+function emptyDraft(operatingCurrency: string): TransactionDraft {
+  return {
+    date: new Date().toISOString().slice(0, 10),
+    flag: '*',
+    payee: '',
+    narration: '',
+    tags: [],
+    links: [],
+    postings: [
+      { id: nextId++, account: '', amount: '', currency: operatingCurrency, cost: '', costCurrency: '', price: '', priceCurrency: '' },
+      { id: nextId++, account: '', amount: '', currency: operatingCurrency, cost: '', costCurrency: '', price: '', priceCurrency: '' },
+    ],
+  };
+}
+
+function txnToDraft(txn: { date: string; flag: string; payee: string; narration: string; tags: string[]; links: string[]; postings: { account: string; amount: string | null; currency: string | null; cost?: string | null; cost_currency?: string; price?: string | null; price_currency?: string; }[] }, operatingCurrency: string): TransactionDraft {
+  return {
+    date: txn.date,
+    flag: txn.flag === '!' ? '!' : '*',
+    payee: txn.payee,
+    narration: txn.narration,
+    tags: txn.tags || [],
+    links: txn.links || [],
+    postings: txn.postings.map(p => ({
+      id: nextId++,
+      account: p.account,
+      amount: p.amount || '',
+      currency: p.currency || operatingCurrency,
+      cost: p.cost || '',
+      costCurrency: p.cost_currency || '',
+      price: p.price || '',
+      priceCurrency: p.price_currency || '',
+    })),
+  };
+}
+
 export default function TransactionModal({ onMutated }: TransactionModalProps) {
   const txn = useAppStore((s) => s.txnModalTransaction);
+  const initialMode = useAppStore((s) => s.txnModalMode);
   const closeTxnModal = useAppStore((s) => s.closeTxnModal);
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
 
   const isEditing = !!txn;
-
-  const [date, setDate] = useState(() => {
-    if (txn?.date) return formatDateFull(txn.date, operatingCurrency);
-    return formatDateFull(today(), operatingCurrency);
-  });
-  const [flag, setFlag] = useState(txn?.flag || "*");
-  const [payee, setPayee] = useState(txn?.payee || "");
-  const [narration, setNarration] = useState(txn?.narration || "");
-  const [tags, setTags] = useState<string[]>(txn?.tags || []);
-  const [links, setLinks] = useState<string[]>(txn?.links || []);
-  const [tagInput, setTagInput] = useState("");
-  const [linkInput, setLinkInput] = useState("");
-  const [postings, setPostings] = useState<ModalPosting[]>(() => {
-    if (txn?.postings) {
-      const mapped = txn.postings.map((p) => ({
-        id: nextId++,
-        account: p.account,
-        amount: p.amount || "",
-        currency: p.currency || operatingCurrency,
-        cost: p.cost || "",
-        costCurrency: p.cost_currency || "",
-        price: p.price || "",
-        priceCurrency: p.price_currency || "",
-        showCostPrice: !!(p.cost || p.price),
-      }));
-      // Add an empty row at the end
-      mapped.push(emptyPosting(operatingCurrency));
-      return mapped;
-    }
-    return [
-      emptyPosting(operatingCurrency),
-      emptyPosting(operatingCurrency),
-      emptyPosting(operatingCurrency),
-    ];
-  });
+  const [mode, setMode] = useState<TxnModalMode>(initialMode);
+  const [draft, setDraft] = useState<TransactionDraft>(() =>
+    txn ? txnToDraft(txn, operatingCurrency) : emptyDraft(operatingCurrency)
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [continueMode, setContinueMode] = useState(false);
+  const [continueMode, setContinueMode] = useState(true);
+  const [formKey, setFormKey] = useState(0); // increment to remount Fast/AdvancedInput
 
-  const dateRef = useRef<HTMLInputElement>(null);
-
-  const accountNamesQuery = useQuery({
-    queryKey: ["account-names"],
-    queryFn: fetchAccountNames,
-  });
-
-  const payeesQuery = useQuery({
-    queryKey: ["payees"],
-    queryFn: fetchPayees,
-  });
-
-  useEffect(() => {
-    dateRef.current?.focus();
-    dateRef.current?.select();
+  const draftRef = useRef(draft);
+  const handleDraftChange = useCallback((newDraft: TransactionDraft) => {
+    draftRef.current = newDraft;
+    setDraft(newDraft);
   }, []);
 
-  // Auto-add empty posting row when last row gets an account
-  const handlePostingChange = useCallback(
-    (index: number, field: keyof ModalPosting, value: string) => {
-      setPostings((prev) => {
-        const updated = [...prev];
-        updated[index] = { ...updated[index], [field]: value };
+  // Determine if Advanced → Fast tab should be disabled
+  const canSwitchToFast = !isEditing &&
+    draft.postings.filter(p => p.account).length <= 2 &&
+    !draft.postings.some(p => p.cost || p.price);
 
-        // If this is the last row and account was just filled, add a new empty row
-        if (
-          field === "account" &&
-          value.length > 0 &&
-          index === prev.length - 1
-        ) {
-          updated.push(emptyPosting(operatingCurrency));
-        }
-
-        return updated;
-      });
-    },
-    [operatingCurrency]
-  );
-
-  function addPosting() {
-    setPostings((prev) => [...prev, emptyPosting(operatingCurrency)]);
-  }
-
-  function removePosting(index: number) {
-    setPostings((prev) => {
-      if (prev.length <= 2) return prev;
-      return prev.filter((_, i) => i !== index);
-    });
+  function handleTabSwitch(newMode: TxnModalMode) {
+    if (newMode === mode) return;
+    if (newMode === 'fast' && !canSwitchToFast) return;
+    setMode(newMode);
   }
 
   function resetForm() {
-    setDate(formatDateFull(today(), operatingCurrency));
-    setFlag("*");
-    setPayee("");
-    setNarration("");
-    setTags([]);
-    setLinks([]);
-    setTagInput("");
-    setLinkInput("");
-    setPostings([
-      emptyPosting(operatingCurrency),
-      emptyPosting(operatingCurrency),
-      emptyPosting(operatingCurrency),
-    ]);
+    setDraft(emptyDraft(operatingCurrency));
     setError(null);
-    dateRef.current?.focus();
-    dateRef.current?.select();
-  }
-
-  function handleTagKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" || e.key === "," || e.key === " ") {
-      e.preventDefault();
-      const val = tagInput.replace(/^#/, "").trim();
-      if (val && !tags.includes(val)) {
-        setTags([...tags, val]);
-      }
-      setTagInput("");
-    } else if (e.key === "Backspace" && tagInput === "" && tags.length > 0) {
-      setTags(tags.slice(0, -1));
-    }
-  }
-
-  function handleLinkKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" || e.key === "," || e.key === " ") {
-      e.preventDefault();
-      const val = linkInput.replace(/^\^/, "").trim();
-      if (val && !links.includes(val)) {
-        setLinks([...links, val]);
-      }
-      setLinkInput("");
-    } else if (e.key === "Backspace" && linkInput === "" && links.length > 0) {
-      setLinks(links.slice(0, -1));
-    }
+    setFormKey(k => k + 1); // remount child to clear all internal state (pills, input, etc.)
   }
 
   async function handleSave() {
@@ -189,33 +94,37 @@ export default function TransactionModal({ onMutated }: TransactionModalProps) {
     setSaving(true);
 
     try {
-      const parsedDate = parseSmartDate(date);
+      const d = draftRef.current;
+      const parsedDate = parseSmartDate(d.date);
 
       // Filter out empty posting rows
-      const filledPostings = postings.filter((p) => p.account.length > 0);
+      const filledPostings = d.postings.filter((p) => p.account.length > 0);
       if (filledPostings.length < 2) {
-        setError("At least 2 postings are required.");
+        if (mode === 'fast' && filledPostings.length === 1) {
+          setError("Payment account is missing. Use > to select both accounts.");
+        } else {
+          setError("At least 2 postings are required.");
+        }
         setSaving(false);
         return;
       }
 
-      // At most one posting can have an empty amount (auto-balanced)
-      const emptyAmountCount = filledPostings.filter(
-        (p) => p.amount === ""
-      ).length;
+      // At most one posting can have an empty amount
+      const emptyAmountCount = filledPostings.filter((p) => p.amount === "").length;
       if (emptyAmountCount > 1) {
         setError("At most one posting can have an empty amount (auto-balanced).");
         setSaving(false);
         return;
       }
 
+      const toNum = (v: string) => parseFloat(v.replace(',', '.'));
       const postingInputs = filledPostings.map((p) => ({
         account: p.account,
-        amount: p.amount ? parseFloat(p.amount) : null,
+        amount: p.amount ? toNum(p.amount) : null,
         currency: p.currency || operatingCurrency,
-        cost: p.cost ? parseFloat(p.cost) : null,
+        cost: p.cost ? toNum(p.cost) : null,
         cost_currency: p.costCurrency || null,
-        price: p.price ? parseFloat(p.price) : null,
+        price: p.price ? toNum(p.price) : null,
         price_currency: p.priceCurrency || null,
       }));
 
@@ -223,11 +132,11 @@ export default function TransactionModal({ onMutated }: TransactionModalProps) {
         const result = await editTransaction({
           lineno: txn.lineno,
           date: parsedDate,
-          flag,
-          payee,
-          narration,
-          tags,
-          links,
+          flag: d.flag,
+          payee: d.payee,
+          narration: d.narration,
+          tags: d.tags,
+          links: d.links,
           postings: postingInputs,
         });
         if (!result.success) {
@@ -237,11 +146,11 @@ export default function TransactionModal({ onMutated }: TransactionModalProps) {
       } else {
         const result = await addTransaction({
           date: parsedDate,
-          flag,
-          payee,
-          narration,
-          tags,
-          links,
+          flag: d.flag,
+          payee: d.payee,
+          narration: d.narration,
+          tags: d.tags,
+          links: d.links,
           postings: postingInputs,
         });
         if (!result.success) {
@@ -266,15 +175,25 @@ export default function TransactionModal({ onMutated }: TransactionModalProps) {
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {
       closeTxnModal();
-    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleSave();
+    } else if (e.key === "Enter") {
+      if (mode === 'fast' && !e.metaKey && !e.ctrlKey) {
+        // Fast mode: plain Enter submits (unless dropdown is open — handled by FastInput)
+        // Only submit if target is the main input
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' && (e.target as HTMLInputElement).classList.contains('fast-input-text')) {
+          e.preventDefault();
+          handleSave();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        // Advanced mode: Cmd+Enter
+        e.preventDefault();
+        handleSave();
+      }
     }
   }
 
-  const datePlaceholder = getDatePlaceholder(operatingCurrency);
-  const accountNames = accountNamesQuery.data?.accounts || [];
-  const payeeList = payeesQuery.data?.payees || [];
+  const isMac = navigator.platform.includes("Mac");
+  const submitHint = mode === 'fast' ? 'Enter ↵' : `${isMac ? "Cmd" : "Ctrl"}+Enter`;
 
   return (
     <div className="modal-overlay" onMouseDown={closeTxnModal}>
@@ -289,259 +208,47 @@ export default function TransactionModal({ onMutated }: TransactionModalProps) {
         </div>
 
         <div className="modal-body">
-          {/* Row 1: Date, Flag, Payee, Narration */}
-          <div className="form-row">
-            <div className="form-field" style={{ flex: "0 0 130px" }}>
-              <label>Date</label>
-              <input
-                ref={dateRef}
-                type="text"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                onBlur={() => {
-                  const parsed = parseSmartDate(date);
-                  if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
-                    setDate(formatDateFull(parsed, operatingCurrency));
-                  }
-                }}
-                placeholder={datePlaceholder}
-              />
+          {/* Tab bar — only show for new transactions */}
+          {!isEditing && (
+            <div className="txn-modal-tabs">
+              <button
+                className={`txn-modal-tab${mode === 'fast' ? ' active' : ''}`}
+                onClick={() => handleTabSwitch('fast')}
+                disabled={mode !== 'fast' && !canSwitchToFast}
+              >
+                Fast
+              </button>
+              <button
+                className={`txn-modal-tab${mode === 'advanced' ? ' active' : ''}`}
+                onClick={() => handleTabSwitch('advanced')}
+              >
+                Advanced
+              </button>
             </div>
+          )}
 
-            <div className="form-field" style={{ flex: "0 0 50px" }}>
-              <label>Flag</label>
-              <select value={flag} onChange={(e) => setFlag(e.target.value)}>
-                <option value="*">*</option>
-                <option value="!">!</option>
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label>Payee</label>
-              <InlineAutocomplete
-                value={payee}
-                onChange={setPayee}
-                options={payeeList}
-                placeholder="Payee"
-              />
-            </div>
-
-            <div className="form-field" style={{ flex: 2 }}>
-              <label>Narration</label>
-              <input
-                type="text"
-                value={narration}
-                onChange={(e) => setNarration(e.target.value)}
-                placeholder="Description"
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Tags & Links */}
-          <div className="form-row">
-            <div className="form-field">
-              <label>Tags</label>
-              <div className="chips-input">
-                {tags.map((t) => (
-                  <span key={t} className="chip tag-chip">
-                    #{t}
-                    <button
-                      type="button"
-                      onClick={() => setTags(tags.filter((x) => x !== t))}
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={handleTagKeyDown}
-                  placeholder={tags.length === 0 ? "#tag" : ""}
-                  className="chip-text-input"
-                />
-              </div>
-            </div>
-
-            <div className="form-field">
-              <label>Links</label>
-              <div className="chips-input">
-                {links.map((l) => (
-                  <span key={l} className="chip link-chip">
-                    ^{l}
-                    <button
-                      type="button"
-                      onClick={() => setLinks(links.filter((x) => x !== l))}
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  value={linkInput}
-                  onChange={(e) => setLinkInput(e.target.value)}
-                  onKeyDown={handleLinkKeyDown}
-                  placeholder={links.length === 0 ? "^link" : ""}
-                  className="chip-text-input"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Postings */}
-          <div className="postings-section">
-            <h3>Postings</h3>
-
-            <div className="posting-header">
-              <span className="account-col">Account</span>
-              <span className="amount-col">Amount</span>
-              <span className="currency-col">Currency</span>
-              <span className="action-col"></span>
-            </div>
-
-            {postings.map((posting, index) => (
-              <div key={posting.id} className="posting-row">
-                <InlineAutocomplete
-                  value={posting.account}
-                  onChange={(v) => handlePostingChange(index, "account", v)}
-                  options={accountNames}
-                  placeholder="Account"
-                  className="account-input"
-                />
-                <input
-                  type="number"
-                  step="any"
-                  value={posting.amount}
-                  onChange={(e) =>
-                    handlePostingChange(index, "amount", e.target.value)
-                  }
-                  placeholder="Amount"
-                  className="amount-input"
-                />
-                <input
-                  type="text"
-                  value={posting.currency}
-                  onChange={(e) =>
-                    handlePostingChange(index, "currency", e.target.value)
-                  }
-                  className="currency-input"
-                />
-                <div className="posting-actions">
-                  {!posting.showCostPrice && posting.account && (
-                    <button
-                      type="button"
-                      className="cost-toggle"
-                      title="Add cost/price"
-                      onClick={() =>
-                        setPostings((prev) => {
-                          const updated = [...prev];
-                          updated[index] = {
-                            ...updated[index],
-                            showCostPrice: true,
-                          };
-                          return updated;
-                        })
-                      }
-                    >
-                      {}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="remove-btn"
-                    onClick={() => removePosting(index)}
-                    title="Remove posting"
-                  >
-                    &times;
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              className="btn-link add-posting-btn"
-              onClick={addPosting}
-            >
-              + Add Posting
-            </button>
-
-            {/* Show cost/price rows for postings that have it toggled */}
-            {postings.some((p) => p.showCostPrice) && (
-              <div className="cost-price-rows">
-                {postings.map(
-                  (posting, index) =>
-                    posting.showCostPrice && (
-                      <div key={`cp-${posting.id}`} className="cost-price-row">
-                        <span className="cost-price-label">
-                          {posting.account.split(":").pop() || `Row ${index + 1}`}:
-                        </span>
-                        <div className="cost-price-fields">
-                          <label>Cost</label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={posting.cost}
-                            onChange={(e) =>
-                              handlePostingChange(index, "cost", e.target.value)
-                            }
-                            placeholder="Cost"
-                            className="amount-input"
-                          />
-                          <input
-                            type="text"
-                            value={posting.costCurrency}
-                            onChange={(e) =>
-                              handlePostingChange(
-                                index,
-                                "costCurrency",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Ccy"
-                            className="currency-input"
-                          />
-                          <label>Price</label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={posting.price}
-                            onChange={(e) =>
-                              handlePostingChange(index, "price", e.target.value)
-                            }
-                            placeholder="Price"
-                            className="amount-input"
-                          />
-                          <input
-                            type="text"
-                            value={posting.priceCurrency}
-                            onChange={(e) =>
-                              handlePostingChange(
-                                index,
-                                "priceCurrency",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Ccy"
-                            className="currency-input"
-                          />
-                        </div>
-                      </div>
-                    )
-                )}
-              </div>
-            )}
-          </div>
+          {/* Mode content */}
+          {mode === 'fast' ? (
+            <FastInput
+              key={formKey}
+              draft={draft}
+              onDraftChange={handleDraftChange}
+              operatingCurrency={operatingCurrency}
+            />
+          ) : (
+            <AdvancedInput
+              key={formKey}
+              draft={draft}
+              onDraftChange={handleDraftChange}
+              operatingCurrency={operatingCurrency}
+              autoFocusFirstEmpty={initialMode === 'fast'}
+            />
+          )}
 
           {error && <div className="error-msg">{error}</div>}
 
           <div className="form-actions">
-            <span className="form-hint">
-              {navigator.platform.includes("Mac") ? "Cmd" : "Ctrl"}+Enter to
-              save
-            </span>
+            <span className="form-hint">{submitHint} to save</span>
             <label className="continue-check">
               <input
                 type="checkbox"

@@ -1,6 +1,8 @@
 option "title" "Test Ledger"
 option "operating_currency" "BRL"
 
+2024-01-01 custom "ledgr-option" "default-payment-account" "Assets:Checking"
+
 2024-01-01 open Assets:Checking        BRL
   ledgr-type: "cash"
 2024-01-01 open Assets:Savings         BRL
@@ -20,7 +22,7 @@ option "operating_currency" "BRL"
   Assets:Checking         8000.00 BRL
   Income:Salary
 
-2024-01-20 * "Supermarket" "Groceries"
+2024-01-20 * "Supermarket" "Groceries" #groceries
   Expenses:Food            350.00 BRL
   Assets:Checking
 
@@ -32,7 +34,7 @@ option "operating_currency" "BRL"
   Assets:Checking         8000.00 BRL
   Income:Salary
 
-2024-02-20 * "Restaurant" "Dinner"
+2024-02-20 * "Restaurant" "Dinner" #dining #eating-out
   Expenses:Food            120.00 BRL
   Liabilities:CreditCard
 
