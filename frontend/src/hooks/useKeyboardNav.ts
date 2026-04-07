@@ -14,24 +14,17 @@ export function useKeyboardNav() {
         return;
       }
 
-      // Opt+Cmd+N → Advanced mode (check before Opt+N to avoid false match)
-      if (e.altKey && e.metaKey && e.code === "KeyN") {
+      // Cmd+Shift+I → Advanced mode (check before Cmd+I)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyI") {
         e.preventDefault();
         useAppStore.getState().openTxnModal(undefined, 'advanced');
         return;
       }
 
-      // Opt+N → Fast mode (use e.code because macOS Option produces composed chars)
-      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyN") {
+      // Cmd+I → Fast mode
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === "KeyI") {
         e.preventDefault();
         useAppStore.getState().openTxnModal(undefined, 'fast');
-        return;
-      }
-
-      // Cmd+Shift+N: also open advanced mode (legacy shortcut)
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "n" || e.key === "N")) {
-        e.preventDefault();
-        useAppStore.getState().openTxnModal(undefined, 'advanced');
         return;
       }
 
