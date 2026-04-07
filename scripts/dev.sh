@@ -36,5 +36,8 @@ echo "  API docs: http://localhost:8080/docs"
 echo ""
 echo "Press Ctrl+C to stop"
 
+# Open browser after a short delay for servers to start
+(sleep 0.5 && open http://localhost:5173) &
+
 trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT
 wait
