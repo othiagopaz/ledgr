@@ -6,6 +6,7 @@ import {
   updateAccount,
   closeAccount,
   addTransaction,
+  setDefaultPaymentAccount,
 } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { today, parseSmartDate } from "../utils/dateUtils";
@@ -91,6 +92,16 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
   );
   const [balanceCounterpart, setBalanceCounterpart] = useState(
     "Equity:OpeningBalances"
+  );
+
+  // ── Default payment account ──────────────────────────────────────────────
+
+  const currentDefault = useAppStore((s) => s.defaultPaymentAccount);
+  const accountName = isEditing ? account!.name : name;
+  const accountRoot = accountName.split(":")[0];
+  const showDefaultOption = isEditing && (accountRoot === "Assets" || accountRoot === "Liabilities");
+  const [isDefault, setIsDefault] = useState(
+    isEditing ? account!.name === currentDefault : false
   );
 
   // ── Close account section (edit only) ────────────────────────────────────
@@ -229,6 +240,18 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
               { account: counterpart, amount: null, currency },
             ],
           });
+        }
+      }
+
+      // Handle default payment account toggle
+      if (showDefaultOption) {
+        const wasDefault = account!.name === currentDefault;
+        if (isDefault && !wasDefault) {
+          const opts = await setDefaultPaymentAccount(account!.name);
+          useAppStore.getState().setDefaultPaymentAccount(opts.default_payment_account);
+        } else if (!isDefault && wasDefault) {
+          const opts = await setDefaultPaymentAccount(null);
+          useAppStore.getState().setDefaultPaymentAccount(opts.default_payment_account);
         }
       }
 
@@ -476,6 +499,21 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Default payment account (edit mode, Assets/Liabilities only) */}
+          {showDefaultOption && (
+            <div className="acct-section">
+              <label className="default-account-check">
+                <input
+                  type="checkbox"
+                  checked={isDefault}
+                  onChange={(e) => setIsDefault(e.target.checked)}
+                />
+                Default payment account
+                <span className="acct-optional"> — used by fast input for the &gt; shortcut</span>
+              </label>
             </div>
           )}
 

@@ -158,6 +158,25 @@ export async function fetchPayees(): Promise<{ payees: string[] }> {
   return get("/api/payees");
 }
 
+export async function fetchTags(): Promise<{ tags: string[] }> {
+  return get("/api/tags");
+}
+
+export async function setDefaultPaymentAccount(
+  account: string | null
+): Promise<OptionsResponse> {
+  const res = await fetch(BASE + "/api/options/default-payment-account", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ account }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function fetchErrors(): Promise<ErrorsResponse> {
   return get("/api/errors");
 }

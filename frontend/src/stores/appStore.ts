@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode, AccountNode, SeriesSummary } from '../types';
+import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode } from '../types';
 
 interface Tab {
   id: string;
@@ -24,8 +24,13 @@ interface AppState {
   // Transaction modal
   txnModalOpen: boolean;
   txnModalTransaction: Transaction | null;
-  openTxnModal: (txn?: Transaction) => void;
+  txnModalMode: TxnModalMode;
+  openTxnModal: (txn?: Transaction, mode?: TxnModalMode) => void;
   closeTxnModal: () => void;
+
+  // Default payment account (from ledgr-option)
+  defaultPaymentAccount: string | null;
+  setDefaultPaymentAccount: (account: string | null) => void;
 
   // Account modal
   acctModalOpen: boolean;
@@ -106,8 +111,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Transaction modal
   txnModalOpen: false,
   txnModalTransaction: null,
-  openTxnModal: (txn) => set({ txnModalOpen: true, txnModalTransaction: txn || null }),
+  txnModalMode: 'fast' as TxnModalMode,
+  openTxnModal: (txn, mode) => set({
+    txnModalOpen: true,
+    txnModalTransaction: txn || null,
+    txnModalMode: txn ? 'advanced' : (mode || 'fast'),
+  }),
   closeTxnModal: () => set({ txnModalOpen: false, txnModalTransaction: null }),
+
+  // Default payment account
+  defaultPaymentAccount: null,
+  setDefaultPaymentAccount: (account) => set({ defaultPaymentAccount: account }),
 
   // Account modal
   acctModalOpen: false,
