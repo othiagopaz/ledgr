@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchTransactions, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
+import { useFilterParams } from "../hooks/useFilterParams";
 import { formatDateShort, formatAmount, formatInstallmentBadge } from "../utils/format";
 
 interface AllTransactionsViewProps {
@@ -16,10 +17,11 @@ export default function AllTransactionsView({
   const [deletingLineno, setDeletingLineno] = useState<number | null>(null);
 
   const viewMode = useAppStore((s) => s.viewMode);
+  const filters = useFilterParams();
 
   const txnsQuery = useQuery({
-    queryKey: ["transactions", viewMode],
-    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode),
+    queryKey: ["transactions", viewMode, filters],
+    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode, filters),
   });
 
   const transactions = txnsQuery.data?.transactions || [];

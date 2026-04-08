@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { fetchIncomeExpenseSeries } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount } from "../../utils/format";
 import type { ViewMode } from "../../types";
 
@@ -24,13 +25,14 @@ export default function IncomeExpenseChart({ mini }: Props) {
   const [interval, setInterval] = useState("monthly");
   const currency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
+  const filters = useFilterParams();
 
   // When combined, fetch comparative to get actual + planned separately
   const backendMode: string = viewMode === "combined" ? "comparative" : "actual";
 
   const { data, isLoading } = useQuery({
-    queryKey: ["income-expense", interval, viewMode],
-    queryFn: () => fetchIncomeExpenseSeries(interval, backendMode as ViewMode),
+    queryKey: ["income-expense", interval, viewMode, filters],
+    queryFn: () => fetchIncomeExpenseSeries(interval, backendMode as ViewMode, filters),
   });
 
   const series = data?.series || [];

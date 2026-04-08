@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { fetchAccountBalanceSeries, fetchAccountNames } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount } from "../../utils/format";
 import { IntervalSelector } from "./IncomeExpenseChart";
 
@@ -19,6 +20,7 @@ export default function AccountBalanceChart() {
   const [account, setAccount] = useState("");
   const currency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
+  const filters = useFilterParams();
 
   const namesQuery = useQuery({
     queryKey: ["account-names"],
@@ -26,8 +28,8 @@ export default function AccountBalanceChart() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["account-balance", account, interval, viewMode],
-    queryFn: () => fetchAccountBalanceSeries(account, interval, viewMode),
+    queryKey: ["account-balance", account, interval, viewMode, filters],
+    queryFn: () => fetchAccountBalanceSeries(account, interval, viewMode, filters),
     enabled: !!account,
   });
 

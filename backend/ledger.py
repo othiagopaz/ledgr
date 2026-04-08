@@ -10,8 +10,12 @@ See AGENTS.md §5 for the full usage contract.
 
 from __future__ import annotations
 
+import datetime
+
 from beancount.core import data
+from beancount.ops.summarize import clamp_opt
 from fava.core import FavaLedger
+from fava.core.filters import AccountFilter, AdvancedFilter
 
 _ledger: FavaLedger | None = None
 
@@ -46,19 +50,61 @@ def get_ledger() -> FavaLedger:
 def get_filtered_entries(
     ledger: FavaLedger,
     view_mode: str = "combined",
+    *,
+    account: str | None = None,
+    from_date: datetime.date | None = None,
+    to_date: datetime.date | None = None,
+    tags: list[str] | None = None,
+    payee: str | None = None,
 ) -> list:
-    """Return ledger entries filtered by planned/actual view mode.
+    """Filter ledger entries.
 
-    view_mode:
-      - "combined"  → all entries (default, backward-compatible)
-      - "actual"    → only transactions with flag '*'; non-txn entries pass through
-      - "planned"   → only transactions with flag '!'; non-txn entries pass through
+    Applies filters in this order (matching Fava's FilteredLedger):
+      1. view_mode  — planned/actual flag filter (Ledgr-specific)
+      2. account    — Fava's AccountFilter (regex + has_component)
+      3. tags/payee — Fava's AdvancedFilter (parsed query syntax)
+      4. time       — clamp_opt() for correct opening balances
+
+    Step 1 is the only Ledgr-specific logic.  Steps 2-4 delegate
+    entirely to Fava/Beancount — no custom filtering code.
     """
-    if view_mode == "combined":
-        return ledger.all_entries
+    entries = ledger.all_entries
 
-    flag = "*" if view_mode == "actual" else "!"
-    return [
-        e for e in ledger.all_entries
-        if not isinstance(e, data.Transaction) or e.flag == flag
-    ]
+    # 1. View mode (planned/actual) — Ledgr-specific, no Fava equivalent
+    if view_mode != "combined":
+        flag = "*" if view_mode == "actual" else "!"
+        entries = [
+            e for e in entries
+            if not isinstance(e, data.Transaction) or e.flag == flag
+        ]
+
+    # 2. Account filter — Fava's AccountFilter (regex + has_component)
+    if account:
+        entries = AccountFilter(account).apply(entries)
+
+    # 3. Tags + payee — Fava's AdvancedFilter (query syntax parser)
+    filter_parts: list[str] = []
+    if tags:
+        filter_parts.extend(f"#{t}" for t in tags)
+    if payee:
+        filter_parts.append(f'payee:"{payee}"')
+    if filter_parts:
+        entries = AdvancedFilter(" ".join(filter_parts)).apply(entries)
+
+    # 4. Time filter (clamp_opt — Beancount native)
+    if from_date or to_date:
+        begin = from_date or datetime.date.min
+        if to_date:
+            end = to_date
+        else:
+            txn_dates = [
+                e.date for e in entries if isinstance(e, data.Transaction)
+            ]
+            end = (
+                max(txn_dates) + datetime.timedelta(days=1)
+                if txn_dates
+                else datetime.date.max
+            )
+        entries, _ = clamp_opt(entries, begin, end, ledger.options)
+
+    return entries

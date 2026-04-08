@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchBalanceSheet } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount } from "../../utils/format";
 import type { BalanceSheetNode, OtherCurrencyAmount } from "../../types";
 
@@ -16,15 +17,15 @@ function formatOtherCurrencies(items?: OtherCurrencyAmount[]): string {
 }
 
 export default function BalanceSheet() {
-  const [asOfDate, setAsOfDate] = useState("");
   const [expandAll, setExpandAll] = useState(false);
   const [expandKey, setExpandKey] = useState(0);
   const currency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
+  const filters = useFilterParams();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["balance-sheet", asOfDate, viewMode],
-    queryFn: () => fetchBalanceSheet(asOfDate || undefined, viewMode),
+    queryKey: ["balance-sheet", viewMode, filters],
+    queryFn: () => fetchBalanceSheet(viewMode, filters),
   });
 
   if (isLoading) return <div className="report-loading">Loading...</div>;
@@ -45,20 +46,6 @@ export default function BalanceSheet() {
   return (
     <div className="report-statement">
       <div className="report-chart-controls">
-        <label className="report-date-label">
-          As of:
-          <input
-            type="date"
-            className="report-date-input"
-            value={asOfDate}
-            onChange={(e) => setAsOfDate(e.target.value)}
-          />
-        </label>
-        {asOfDate && (
-          <button className="interval-btn" onClick={() => setAsOfDate("")}>
-            Latest
-          </button>
-        )}
         <button className="interval-btn" onClick={toggleExpandAll}>
           {expandAll ? "Collapse All" : "Expand All"}
         </button>

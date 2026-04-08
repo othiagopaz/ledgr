@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode } from '../types';
+import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode, PeriodPreset, FilterState } from '../types';
 
 interface Tab {
   id: string;
@@ -57,6 +57,18 @@ interface AppState {
   viewMode: ViewMode;
   toggleViewMode: () => void;
   setViewMode: (mode: ViewMode) => void;
+
+  // Global filters
+  periodPreset: PeriodPreset | null;
+  fromDate: string | null;
+  toDate: string | null;
+  account: string | null;
+  tags: string[];
+  payee: string | null;
+  setFilter: (patch: Partial<FilterState>) => void;
+  clearFilters: () => void;
+  clearFilter: (key: keyof FilterState) => void;
+  hasActiveFilters: () => boolean;
 
   // Config
   operatingCurrency: string;
@@ -154,6 +166,57 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: s.viewMode === 'combined' ? 'actual' : 'combined',
     })),
   setViewMode: (mode) => set({ viewMode: mode }),
+
+  // Global filters — default = all null/empty = no filters = "All time"
+  periodPreset: null,
+  fromDate: null,
+  toDate: null,
+  account: null,
+  tags: [],
+  payee: null,
+
+  setFilter: (patch) => set((s) => {
+    const next = { ...patch };
+    // When setting a preset, clear custom dates
+    if ('periodPreset' in next && next.periodPreset !== null) {
+      next.fromDate = null;
+      next.toDate = null;
+    }
+    // When setting custom dates, clear preset
+    if (('fromDate' in next || 'toDate' in next) && !('periodPreset' in next)) {
+      next.periodPreset = null;
+    }
+    return {
+      periodPreset: next.periodPreset !== undefined ? next.periodPreset : s.periodPreset,
+      fromDate: next.fromDate !== undefined ? next.fromDate : s.fromDate,
+      toDate: next.toDate !== undefined ? next.toDate : s.toDate,
+      account: next.account !== undefined ? next.account : s.account,
+      tags: next.tags !== undefined ? next.tags : s.tags,
+      payee: next.payee !== undefined ? next.payee : s.payee,
+    };
+  }),
+
+  clearFilters: () => set({
+    periodPreset: null, fromDate: null, toDate: null,
+    account: null, tags: [], payee: null,
+  }),
+
+  clearFilter: (key) => {
+    if (key === 'tags') {
+      set({ tags: [] });
+    } else if (key === 'periodPreset') {
+      set({ periodPreset: null, fromDate: null, toDate: null });
+    } else if (key === 'fromDate' || key === 'toDate') {
+      set({ periodPreset: null, fromDate: null, toDate: null });
+    } else {
+      set({ [key]: null });
+    }
+  },
+
+  hasActiveFilters: () => {
+    const s = get();
+    return !!(s.periodPreset || s.fromDate || s.toDate || s.account || s.tags.length || s.payee);
+  },
 
   // Config
   operatingCurrency: 'USD',

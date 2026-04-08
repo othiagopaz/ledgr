@@ -128,6 +128,35 @@ export interface DraftPosting {
 // View mode
 export type ViewMode = 'actual' | 'combined';
 
+// Global filters
+
+export type PeriodPreset =
+  | 'today'
+  | 'this-week'
+  | 'this-month'
+  | 'this-year'
+  | 'last-30-days'
+  | 'last-12-months'
+  | 'ytd'
+  | 'all-time';
+
+export interface FilterState {
+  periodPreset: PeriodPreset | null;
+  fromDate: string | null;
+  toDate: string | null;
+  account: string | null;
+  tags: string[];
+  payee: string | null;
+}
+
+export interface GlobalFilters {
+  account?: string | null;
+  from_date?: string | null;
+  to_date?: string | null;
+  tags?: string[];
+  payee?: string | null;
+}
+
 // Report types
 
 export interface IncomeExpensePoint {

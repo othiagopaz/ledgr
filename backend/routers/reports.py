@@ -120,10 +120,8 @@ def _compute_net_worth(entries: list, interval: str, oc: str) -> list[dict]:
     ]
 
 
-def _compute_income_statement(entries: list, begin, end, options, interval: str, oc: str) -> dict[str, Any]:
-    clamped, _ = summarize.clamp_opt(entries, begin, end, options)
-
-    txns = [e for e in clamped if isinstance(e, data.Transaction)]
+def _compute_income_statement(entries: list, interval: str, oc: str) -> dict[str, Any]:
+    txns = [e for e in entries if isinstance(e, data.Transaction)]
     account_period: dict[str, dict[str, Decimal]] = {}
     account_period_other: dict[str, dict[str, dict[str, Decimal]]] = {}
     periods_set: set[str] = set()
@@ -207,13 +205,8 @@ def _compute_income_statement(entries: list, begin, end, options, interval: str,
     }
 
 
-def _compute_balance_sheet(entries: list, options, as_of_date: str | None, oc: str) -> dict[str, Any]:
+def _compute_balance_sheet(entries: list, options, oc: str) -> dict[str, Any]:
     closed = summarize.cap_opt(entries, options)
-
-    if as_of_date:
-        cutoff = datetime.date.fromisoformat(as_of_date)
-        closed = [e for e in closed if e.date <= cutoff]
-
     real_root = realization.realize(closed)
 
     def _build_section(root_type: str, negate: bool = False) -> tuple[list[dict], dict[str, dict[str, Decimal]]]:
@@ -296,64 +289,99 @@ def _compute_balance_sheet(entries: list, options, as_of_date: str | None, oc: s
 
 @router.get("/api/reports/income-expense")
 def get_income_expense(
+    account: str | None = Query(None),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
     interval: str = Query("monthly"),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined|comparative)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Monthly/quarterly/yearly income vs expense totals."""
     oc = ledger.options["operating_currency"][0]
+    fkw = dict(
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
     if view_mode == "comparative":
         return {
             "series": _compute_income_expense(
-                get_filtered_entries(ledger, "actual"), interval, oc
+                get_filtered_entries(ledger, "actual", **fkw), interval, oc
             ),
             "planned_series": _compute_income_expense(
-                get_filtered_entries(ledger, "planned"), interval, oc
+                get_filtered_entries(ledger, "planned", **fkw), interval, oc
             ),
         }
-    entries = get_filtered_entries(ledger, view_mode)
+    entries = get_filtered_entries(ledger, view_mode, **fkw)
     return {"series": _compute_income_expense(entries, interval, oc)}
 
 
 @router.get("/api/reports/account-balance")
 def get_account_balance(
     account: str = Query(...),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
     interval: str = Query("monthly"),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined|comparative)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Running balance of a specific account over time."""
+    fkw = dict(
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
     if view_mode == "comparative":
         return {
             "series": _compute_account_balance(
-                get_filtered_entries(ledger, "actual"), account, interval
+                get_filtered_entries(ledger, "actual", **fkw), account, interval
             ),
             "planned_series": _compute_account_balance(
-                get_filtered_entries(ledger, "planned"), account, interval
+                get_filtered_entries(ledger, "planned", **fkw), account, interval
             ),
         }
-    entries = get_filtered_entries(ledger, view_mode)
+    entries = get_filtered_entries(ledger, view_mode, **fkw)
     return {"series": _compute_account_balance(entries, account, interval)}
 
 
 @router.get("/api/reports/net-worth")
 def get_net_worth(
+    account: str | None = Query(None),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
     interval: str = Query("monthly"),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined|comparative)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Assets + Liabilities at each period end."""
     oc = ledger.options["operating_currency"][0]
+    fkw = dict(
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
     if view_mode == "comparative":
         return {
             "series": _compute_net_worth(
-                get_filtered_entries(ledger, "actual"), interval, oc
+                get_filtered_entries(ledger, "actual", **fkw), interval, oc
             ),
             "planned_series": _compute_net_worth(
-                get_filtered_entries(ledger, "planned"), interval, oc
+                get_filtered_entries(ledger, "planned", **fkw), interval, oc
             ),
         }
-    entries = get_filtered_entries(ledger, view_mode)
+    entries = get_filtered_entries(ledger, view_mode, **fkw)
     return {"series": _compute_net_worth(entries, interval, oc)}
 
 
@@ -364,8 +392,11 @@ def get_net_worth(
 
 @router.get("/api/reports/income-statement")
 def get_income_statement(
+    account: str | None = Query(None),
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
     interval: str = Query("monthly"),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
@@ -373,22 +404,15 @@ def get_income_statement(
     """Income statement with tree structure and period columns."""
     oc = ledger.options["operating_currency"][0]
 
-    # Determine date range from all entries (regardless of view_mode)
-    txn_dates = [
-        e.date for e in ledger.all_entries if isinstance(e, data.Transaction)
-    ]
-    if not txn_dates:
-        return {"income": [], "expenses": [], "periods": [], "net_income": {}}
-
-    begin = datetime.date.fromisoformat(from_date) if from_date else min(txn_dates)
-    end = datetime.date.fromisoformat(to_date) if to_date else None
-    if end is None:
-        end = max(txn_dates) + datetime.timedelta(days=1)
-    else:
-        end = end + datetime.timedelta(days=1)  # clamp_opt end is exclusive
-
-    entries = get_filtered_entries(ledger, view_mode)
-    return _compute_income_statement(entries, begin, end, ledger.options, interval, oc)
+    entries = get_filtered_entries(
+        ledger, view_mode,
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
+    return _compute_income_statement(entries, interval, oc)
 
 
 # ------------------------------------------------------------------
@@ -398,7 +422,11 @@ def get_income_statement(
 
 @router.get("/api/reports/balance-sheet")
 def get_balance_sheet(
-    as_of_date: str | None = Query(None),
+    account: str | None = Query(None),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
@@ -406,7 +434,16 @@ def get_balance_sheet(
 
     ``cap_opt`` closes Income/Expenses → Equity, guaranteeing the
     accounting equation: ``Assets + Liabilities + Equity == 0``.
+    When ``to_date`` is provided, ``clamp_opt()`` in
+    ``get_filtered_entries()`` handles the date cutoff.
     """
     oc = ledger.options["operating_currency"][0]
-    entries = get_filtered_entries(ledger, view_mode)
-    return _compute_balance_sheet(entries, ledger.options, as_of_date, oc)
+    entries = get_filtered_entries(
+        ledger, view_mode,
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
+    return _compute_balance_sheet(entries, ledger.options, oc)

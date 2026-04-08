@@ -16,6 +16,7 @@ from fava.core import FavaLedger
 
 from account_types import build_account_type_map
 from cashflow import classify_posting, compute_cashflow, date_to_period
+from ledger import get_filtered_entries
 
 
 # ------------------------------------------------------------------
@@ -285,12 +286,12 @@ class TestComputeCashflow:
         assert transfers["total"] != 0
 
     def test_date_filtering(self, cashflow_ledger: FavaLedger) -> None:
-        result = compute_cashflow(
-            cashflow_ledger.all_entries,
-            from_date="2024-02-01",
-            to_date="2024-02-28",
-            interval="monthly",
+        entries = get_filtered_entries(
+            cashflow_ledger,
+            from_date=datetime.date(2024, 2, 1),
+            to_date=datetime.date(2024, 3, 1),
         )
+        result = compute_cashflow(entries, interval="monthly")
         periods = result["periods"]
         assert all(p.startswith("2024-02") for p in periods)
 

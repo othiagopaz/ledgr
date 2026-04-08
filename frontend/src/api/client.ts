@@ -7,6 +7,7 @@ import type {
   ErrorsResponse,
   OptionsResponse,
   ViewMode,
+  GlobalFilters,
   AccountInput,
   AccountUpdateInput,
   CloseAccountInput,
@@ -28,9 +29,24 @@ async function get<T>(url: string): Promise<T> {
   return res.json();
 }
 
-export async function fetchAccounts(viewMode: ViewMode = "combined"): Promise<AccountsResponse> {
+function appendFilters(params: URLSearchParams, f?: GlobalFilters): void {
+  if (!f) return;
+  if (f.account) params.set("account", f.account);
+  if (f.from_date) params.set("from_date", f.from_date);
+  if (f.to_date) params.set("to_date", f.to_date);
+  if (f.tags?.length) {
+    for (const tag of f.tags) params.append("tags", tag);
+  }
+  if (f.payee) params.set("payee", f.payee);
+}
+
+export async function fetchAccounts(
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
+): Promise<AccountsResponse> {
   const params = new URLSearchParams();
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   const qs = params.toString();
   return get(`/api/accounts${qs ? "?" + qs : ""}`);
 }
@@ -39,13 +55,16 @@ export async function fetchTransactions(
   account?: string,
   fromDate?: string,
   toDate?: string,
-  viewMode: ViewMode = "combined"
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
 ): Promise<TransactionsResponse> {
   const params = new URLSearchParams();
+  // Legacy positional params — prefer GlobalFilters
   if (account) params.set("account", account);
   if (fromDate) params.set("from_date", fromDate);
   if (toDate) params.set("to_date", toDate);
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   const qs = params.toString();
   return get(`/api/transactions${qs ? "?" + qs : ""}`);
 }
@@ -209,66 +228,68 @@ import type {
 
 export async function fetchIncomeExpenseSeries(
   interval = "monthly",
-  viewMode: ViewMode = "combined"
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
 ): Promise<IncomeExpenseResponse> {
   const params = new URLSearchParams({ interval });
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   return get(`/api/reports/income-expense?${params}`);
 }
 
 export async function fetchAccountBalanceSeries(
   account: string,
   interval = "monthly",
-  viewMode: ViewMode = "combined"
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
 ): Promise<AccountBalanceResponse> {
   const params = new URLSearchParams({ account, interval });
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   return get(`/api/reports/account-balance?${params}`);
 }
 
 export async function fetchNetWorthSeries(
   interval = "monthly",
-  viewMode: ViewMode = "combined"
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
 ): Promise<NetWorthResponse> {
   const params = new URLSearchParams({ interval });
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   return get(`/api/reports/net-worth?${params}`);
 }
 
 export async function fetchIncomeStatement(
-  fromDate?: string,
-  toDate?: string,
   interval = "monthly",
-  viewMode: ViewMode = "combined"
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
 ): Promise<IncomeStatementResponse> {
   const params = new URLSearchParams({ interval });
-  if (fromDate) params.set("from_date", fromDate);
-  if (toDate) params.set("to_date", toDate);
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   return get(`/api/reports/income-statement?${params}`);
 }
 
 export async function fetchBalanceSheet(
-  asOfDate?: string,
-  viewMode: ViewMode = "combined"
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
 ): Promise<BalanceSheetResponse> {
   const params = new URLSearchParams();
-  if (asOfDate) params.set("as_of_date", asOfDate);
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   const qs = params.toString();
   return get(`/api/reports/balance-sheet${qs ? "?" + qs : ""}`);
 }
 
 export async function fetchCashFlow(
-  fromDate?: string,
-  toDate?: string,
   interval = "monthly",
-  viewMode: ViewMode = "combined"
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
 ): Promise<CashFlowResponse> {
   const params = new URLSearchParams({ interval });
-  if (fromDate) params.set("from_date", fromDate);
-  if (toDate) params.set("to_date", toDate);
   if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
   return get(`/api/reports/cashflow?${params}`);
 }
 

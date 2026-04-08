@@ -102,26 +102,26 @@ def get_transactions(
     account: str | None = Query(None),
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """List transactions, optionally filtered by account and date range."""
-    entries = get_filtered_entries(ledger, view_mode)
-    txns = [e for e in entries if isinstance(e, data.Transaction)]
-
-    if account:
-        txns = [
-            t for t in txns if any(p.account == account for p in t.postings)
-        ]
-
-    if from_date:
-        d = datetime.date.fromisoformat(from_date)
-        txns = [t for t in txns if t.date >= d]
-
-    if to_date:
-        d = datetime.date.fromisoformat(to_date)
-        txns = [t for t in txns if t.date <= d]
-
+    """List transactions, optionally filtered by account, date, tags, payee."""
+    entries = get_filtered_entries(
+        ledger, view_mode,
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
+    # Exclude synthetic entries from clamp_opt() (flag "S") — those are
+    # internal opening-balance entries, not real user transactions.
+    txns = [
+        e for e in entries
+        if isinstance(e, data.Transaction) and e.flag in ("*", "!")
+    ]
     result = [serialize_transaction(t) for t in txns]
     return {"transactions": result, "count": len(result)}
 
