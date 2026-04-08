@@ -7,7 +7,10 @@ Run with: cd backend && source .venv/bin/activate && uvicorn main:app --reload -
 import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 

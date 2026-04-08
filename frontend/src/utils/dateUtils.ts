@@ -1,7 +1,83 @@
 import { useAppStore } from "../stores/appStore";
+import type { FilterState } from "../types";
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Format a Date as YYYY-MM-DD. */
+function iso(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Resolve filter state to concrete from_date / to_date values.
+ *
+ * Presets resolve at call time (so "This month" always reflects now).
+ * Returns exclusive end dates matching clamp_opt() semantics:
+ * to_date is the day AFTER the last desired day.
+ */
+export function resolvePeriodDates(
+  state: Pick<FilterState, 'periodPreset' | 'fromDate' | 'toDate'>,
+): { from_date: string | null; to_date: string | null } {
+  // Custom range — return as-is (frontend stores exclusive end dates)
+  if (state.fromDate || state.toDate) {
+    return { from_date: state.fromDate, to_date: state.toDate };
+  }
+
+  if (!state.periodPreset || state.periodPreset === 'all-time') {
+    return { from_date: null, to_date: null };
+  }
+
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0-indexed
+
+  switch (state.periodPreset) {
+    case 'today':
+      return {
+        from_date: iso(now),
+        to_date: iso(addDays(now, 1)),
+      };
+    case 'this-week': {
+      const day = now.getDay(); // 0=Sun
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      const nextMonday = addDays(monday, 7);
+      return { from_date: iso(monday), to_date: iso(nextMonday) };
+    }
+    case 'this-month':
+      return {
+        from_date: iso(new Date(y, m, 1)),
+        to_date: iso(new Date(y, m + 1, 1)),
+      };
+    case 'this-year':
+      return {
+        from_date: iso(new Date(y, 0, 1)),
+        to_date: iso(new Date(y + 1, 0, 1)),
+      };
+    case 'last-30-days':
+      return {
+        from_date: iso(addDays(now, -29)),
+        to_date: iso(addDays(now, 1)),
+      };
+    case 'last-12-months':
+      return {
+        from_date: iso(new Date(y, m - 11, 1)),
+        to_date: iso(new Date(y, m + 1, 1)),
+      };
+    case 'ytd':
+      return {
+        from_date: iso(new Date(y, 0, 1)),
+        to_date: iso(addDays(now, 1)),
+      };
+  }
+}
+
+function addDays(d: Date, n: number): Date {
+  const result = new Date(d);
+  result.setDate(result.getDate() + n);
+  return result;
 }
 
 export function parseSmartDate(input: string): string {

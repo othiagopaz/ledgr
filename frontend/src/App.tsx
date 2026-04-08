@@ -12,12 +12,14 @@ import TransactionModal from "./components/TransactionModal";
 import AccountModal from "./components/AccountModal";
 import SeriesModal from "./components/SeriesModal";
 import PlannedToggle from "./components/PlannedToggle";
+import FilterBar from "./components/FilterBar";
 import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
 import CommandPalette from "./components/CommandPalette";
 import { LedgrLockup } from "./components/LedgrSymbol";
 import { useAppStore } from "./stores/appStore";
 import { useKeyboardNav } from "./hooks/useKeyboardNav";
+import { useFilterParams } from "./hooks/useFilterParams";
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -70,14 +72,16 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const filters = useFilterParams();
+
   const accountsQuery = useQuery({
-    queryKey: ["accounts", viewMode],
-    queryFn: () => fetchAccounts(viewMode),
+    queryKey: ["accounts", viewMode, filters],
+    queryFn: () => fetchAccounts(viewMode, filters),
   });
 
   const txnsQuery = useQuery({
-    queryKey: ["transactions", selectedAccount, viewMode],
-    queryFn: () => fetchTransactions(selectedAccount || undefined, undefined, undefined, viewMode),
+    queryKey: ["transactions", selectedAccount, viewMode, filters],
+    queryFn: () => fetchTransactions(selectedAccount || undefined, undefined, undefined, viewMode, filters),
     enabled: !!selectedAccount,
   });
 
@@ -163,6 +167,7 @@ export default function App() {
 
         <div className="main-content">
           <TabBar />
+          <FilterBar />
           <div className="register-content">
             {renderMainContent()}
           </div>

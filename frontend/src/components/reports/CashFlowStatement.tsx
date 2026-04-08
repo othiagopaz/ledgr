@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCashFlow } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount } from "../../utils/format";
 import { IntervalSelector } from "./IncomeExpenseChart";
 import type { CashFlowSection, OtherCurrencyAmount } from "../../types";
@@ -22,10 +23,11 @@ export default function CashFlowStatement() {
   const [expandKey, setExpandKey] = useState(0);
   const currency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
+  const filters = useFilterParams();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["cashflow", interval, viewMode],
-    queryFn: () => fetchCashFlow(undefined, undefined, interval, viewMode),
+    queryKey: ["cashflow", interval, viewMode, filters],
+    queryFn: () => fetchCashFlow(interval, viewMode, filters),
   });
 
   if (isLoading) return <div className="report-loading">Loading...</div>;
