@@ -295,7 +295,7 @@ With type and color locked, `BRANDBOOK-03-visual-system-part-2.md` picks up:
 - Icon specifications (stroke, size, family — Lucide-aligned)
 - The wordmark and symbol
 
-The symbol will come with 2–3 proposed directions to choose from, each built from a single geometric primitive, each under five elements, each designed to work down to 16×16 pixels — in the spirit of the Linear dot and the Vercel triangle you pointed to.
+The symbol will come with 2–3 proposed directions to choose from, each built from a small number of geometric primitives (≤ six), each designed to work down to 16×16 pixels — in the spirit of the Linear dot and the Vercel triangle you pointed to.
 
 ---
 
