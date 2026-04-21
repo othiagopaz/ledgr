@@ -1,187 +1,114 @@
-# Ledgr
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/ledgr-symbol-dark.svg">
+    <img src="./assets/ledgr-symbol.svg" width="64" height="64" alt="Ledgr">
+  </picture>
+</p>
 
-**Your finances deserve real accounting — not a spreadsheet cosplaying as one.**
+<h1 align="center">Ledgr</h1>
 
-Ledgr is a personal finance app powered by [double-entry accounting](https://en.wikipedia.org/wiki/Double-entry_bookkeeping) via [Beancount](https://beancount.github.io/docs/), wrapped in a modern React interface. Think of it as the three financial statements that every corporation has — Income Statement, Balance Sheet, and Cash Flow Statement — but for _you_.
+<p align="center">
+  <em>The end of the 70-tab spreadsheet.</em>
+</p>
 
-Your entire financial life lives in a single `.beancount` plain-text file. Git-friendly, human-readable, yours forever.
+<p align="center">
+  Double-entry personal finance, built on the accounting engine
+  professionals trust.
+</p>
 
----
-
-## Why Ledgr?
-
-Most personal finance apps track where your money _went_. Ledgr tracks where your money **is**, where it **came from**, and where it's **going** — the same way a CFO would, just without the corporate jargon.
-
-Under the hood, Beancount (10+ years of battle-tested accounting logic) and Fava (5+ years as a reference interface) do the heavy lifting. Ledgr doesn't reinvent the wheel — it puts a better dashboard on it.
-
----
-
-## Features
-
-- **Income Statement** — Revenue vs. expenses over any time period
-- **Balance Sheet** — Assets, liabilities, and equity at a glance (with the accounting equation enforced: `A = L + E`)
-- **Cash Flow Statement** — Operating, investing, and financing activities broken down by period
-- **Net Worth tracking** — Historical net worth over time
-- **Transaction management** — Full CRUD with smart suggestions based on payee history
-- **Account explorer** — Hierarchical account tree with real-time balances
-- **Plain-text data** — Your `.beancount` file is the single source of truth. No vendor lock-in, no proprietary database
+<p align="center">
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-0E2247?style=flat-square"></a>
+  <a href="https://github.com/thiagopaz/ledgr/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/thiagopaz/ledgr?style=flat-square&color=0E2247"></a>
+  <a href="https://github.com/thiagopaz/ledgr/releases"><img alt="Release" src="https://img.shields.io/github/v/release/thiagopaz/ledgr?style=flat-square&color=0E2247"></a>
+</p>
 
 ---
 
-## Tech Stack
+Ledgr is what personal finance software should have been from the start.
+It treats your money with the seriousness of a professional accountant,
+because the engine under it — [Beancount](https://github.com/beancount/beancount) —
+is the one professionals use. Unlike consumer apps, it does not hide
+complexity. Unlike ERPs, it does not drown in it. Unlike spreadsheets,
+it cannot silently break.
 
-| Layer      | Technology                                   |
-| ---------- | -------------------------------------------- |
-| Data       | `.beancount` file (plain text, Git-friendly) |
-| Accounting | Beancount + Fava (Python)                    |
-| Backend    | FastAPI (Python 3.12+)                       |
-| Frontend   | React 18 + TypeScript + Vite                 |
-| Tests      | pytest (backend) + vitest (frontend)         |
+## Who Ledgr is for
 
----
+Ledgr is for people who manage their own capital with the discipline
+of a professional. You understand (or want to understand) double-entry
+accounting. You hold assets in multiple currencies. You want your books
+reconciled to the cent, not to the round number.
 
-## Getting Started
+If you are here for an app that tracks your streaming subscriptions
+and sends you encouragement on Sundays: this is not that app.
 
-### Prerequisites
+## What you get
 
-- Python 3.12+
-- Node.js 20+
-- npm
+- **Real double-entry accounting.** Not simulated. Every transaction has two sides, and the books balance or they don't.
+- **Three statements, for a person.** Income Statement, Balance Sheet, Cash Flow — the same instruments a CFO uses, applied to your life.
+- **Multi-currency, multi-asset.** BRL, USD, investments, commodities — modeled correctly, never averaged into a single fiction.
+- **Plain-text data.** Your ledger is a `.beancount` file you own. Git-friendly, human-readable, portable out on a whim.
+- **Keyboard-first.** Every action in one or two keystrokes. The mouse is supported, never required.
 
-### Setup
+## Install
+
+Prerequisites: Python 3.12+, Node.js 20+, and `bison` ≥ 3.8 (Beancount
+builds its parser from source — `brew install bison` on macOS).
 
 ```bash
-# Clone the repo
-git clone https://github.com/your-org/ledgr.git
+git clone https://github.com/thiagopaz/ledgr.git
 cd ledgr
-
-# Run the setup script (creates venv, installs deps, generates example data)
 ./scripts/setup.sh
+./scripts/dev.sh
 ```
 
-### Development
+`setup.sh` creates the Python venv, installs dependencies, and seeds an
+example ledger. `dev.sh` starts the backend on `:8080` and the frontend
+on `:5173`. Point `dev.sh` at your own file when you have one:
 
 ```bash
-# Start both backend and frontend in dev mode
-./scripts/dev.sh
-
-# Or use a custom beancount file
 ./scripts/dev.sh path/to/your-ledger.beancount
 ```
 
-Once running:
+## Quick start
 
-| Service  | URL                        |
-| -------- | -------------------------- |
-| Frontend | http://localhost:5173      |
-| Backend  | http://localhost:8080      |
-| API Docs | http://localhost:8080/docs |
+A Ledgr ledger is a plain-text file. A minimal one:
 
----
+```beancount
+2026-01-01 open Assets:Bank:Checking BRL
+2026-01-01 open Income:Salary         BRL
+2026-01-01 open Expenses:Food         BRL
 
-## Project Structure
+2026-01-05 * "Acme Corp" "Monthly salary"
+  Assets:Bank:Checking   5000.00 BRL
+  Income:Salary         -5000.00 BRL
 
-```
-ledgr/
-├── backend/
-│   ├── main.py              # FastAPI app entry point
-│   ├── ledger.py            # FavaLedger singleton
-│   ├── serializers.py       # Beancount types → JSON
-│   ├── cashflow.py          # Cash Flow Statement logic
-│   ├── routers/
-│   │   ├── accounts.py      # GET /api/accounts, /api/account-names, /api/payees
-│   │   ├── transactions.py  # GET/POST/PUT/DELETE /api/transactions
-│   │   ├── reports.py       # Income Statement, Balance Sheet, time series
-│   │   └── cashflow.py      # GET /api/reports/cashflow
-│   └── tests/
-├── frontend/
-│   ├── src/
-│   │   ├── api/             # Typed fetch wrappers
-│   │   ├── components/      # React components
-│   │   ├── pages/           # Page-level views
-│   │   └── types/           # TypeScript types mirroring backend schemas
-│   └── tests/
-├── data/                    # Beancount files (generated or yours)
-└── scripts/
-    ├── setup.sh             # One-time project setup
-    └── dev.sh               # Start development servers
+2026-01-08 * "Oxxo" "Groceries"
+  Expenses:Food             82.50 BRL
+  Assets:Bank:Checking     -82.50 BRL
 ```
 
----
+Save it, point `dev.sh` at it, and Ledgr reads it. Every transaction
+shows up in the register, rolls up into the account tree, and cascades
+into the three statements. The file stays the source of truth; Ledgr is
+a window onto it.
 
-## API Overview
+## Documentation
 
-| Endpoint                        | Method | Description                      |
-| ------------------------------- | ------ | -------------------------------- |
-| `/api/accounts`                 | GET    | Account tree with balances       |
-| `/api/account-names`            | GET    | All account names (autocomplete) |
-| `/api/payees`                   | GET    | All payees (autocomplete)        |
-| `/api/transactions`             | GET    | List transactions (filterable)   |
-| `/api/transactions`             | POST   | Add a new transaction            |
-| `/api/transactions`             | PUT    | Edit an existing transaction     |
-| `/api/transactions/{lineno}`    | DELETE | Delete a transaction             |
-| `/api/reports/income-statement` | GET    | Income Statement                 |
-| `/api/reports/balance-sheet`    | GET    | Balance Sheet                    |
-| `/api/reports/cashflow`         | GET    | Cash Flow Statement              |
-| `/api/reports/income-expense`   | GET    | Income vs expense time series    |
-| `/api/reports/net-worth`        | GET    | Net worth over time              |
-| `/api/reports/account-balance`  | GET    | Single account balance over time |
-| `/api/suggestions`              | GET    | Smart payee-based suggestions    |
-| `/api/options`                  | GET    | Ledger options (currency, title) |
-| `/api/errors`                   | GET    | Beancount parse errors           |
+Full documentation lives in [`/docs`](./docs) — architecture,
+conventions, the brand book, and the principles that govern what Ledgr
+does and, more importantly, does not do. Start with
+[`docs/index.md`](./docs/index.md).
 
-Full interactive documentation available at `/docs` when the backend is running.
+## Acknowledgments
 
----
-
-## Running Tests
-
-```bash
-# Backend
-cd backend
-source .venv/bin/activate
-pytest
-
-# Frontend
-cd frontend
-npm test
-```
-
----
-
-## Environment Variables
-
-| Variable         | Default                  | Description                    |
-| ---------------- | ------------------------ | ------------------------------ |
-| `BEANCOUNT_FILE` | `data/example.beancount` | Path to your `.beancount` file |
-
----
-
-## Design Philosophy
-
-Ledgr follows one golden rule:
-
-> **Beancount and Fava do the accounting. Ledgr presents it.**
-
-If Beancount or Fava already computes something — balances, account trees, income statements — Ledgr delegates to them. The only custom accounting logic in the entire codebase is the **Cash Flow Statement**, since Fava doesn't provide one natively.
-
-This keeps the codebase thin, correct, and maintainable. Standing on the shoulders of giants beats rebuilding the giant from scratch.
-
----
-
-## Contributing
-
-1. Fork the repo
-2. Create your feature branch (`git checkout -b feature/my-feature`)
-3. Make sure tests pass (`pytest` + `npm test`)
-4. Commit your changes (`git commit -m 'Add my feature'`)
-5. Push to the branch (`git push origin feature/my-feature`)
-6. Open a Pull Request
-
-Before submitting, check the [AGENTS.md](./AGENTS.md) file for code conventions, architecture rules, and the PR checklist.
-
----
+Ledgr stands on [Beancount](https://github.com/beancount/beancount) and
+[Fava](https://github.com/beancount/fava). They are not dependencies in
+the token sense — they are the engine Ledgr wraps. Every accounting
+correctness guarantee Ledgr makes traces back to them. A decade of
+battle-tested double-entry logic is why Ledgr gets to be thin,
+opinionated, and correct.
 
 ## License
 
-This project is licensed under the Apache License 2.0 — see the [LICENSE](./LICENSE) file for details.
+GNU AGPL-3.0 — see [LICENSE](./LICENSE). The code is open, the ledger
+file is yours, and any hosted fork of Ledgr stays open too. Fair deal.
