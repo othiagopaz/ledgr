@@ -15,6 +15,7 @@ import PlannedToggle from "./components/PlannedToggle";
 import TabBar from "./components/TabBar";
 import StatusBar from "./components/StatusBar";
 import CommandPalette from "./components/CommandPalette";
+import { LedgrLockup } from "./components/LedgrSymbol";
 import { useAppStore } from "./stores/appStore";
 import { useKeyboardNav } from "./hooks/useKeyboardNav";
 
@@ -143,7 +144,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="app-header">
-        <h1>Ledgr</h1>
+        <LedgrLockup size={16} />
         <PlannedToggle />
       </div>
 
