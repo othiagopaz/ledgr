@@ -4,14 +4,14 @@
     {
       "name": "backend",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd backend && source .venv/bin/activate && uvicorn main:app --reload --port 8080"],
-      "port": 8080
+      "runtimeArgs": ["-c", "cd backend && source /Users/thiagopaz/Repositories/ledgr/backend/.venv/bin/activate && uvicorn main:app --reload --port 8099"],
+      "port": 8099
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
-      "port": 5173
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd frontend && VITE_API_PORT=8099 npm run dev -- --port 5199 --strictPort"],
+      "port": 5199
     }
   ]
 }

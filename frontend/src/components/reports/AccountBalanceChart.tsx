@@ -91,10 +91,10 @@ export default function AccountBalanceChart() {
               type="monotone"
               dataKey="balance"
               name="Balance"
-              stroke="var(--accent)"
-              strokeWidth={2}
-              dot={{ r: 3, fill: "var(--accent)" }}
-              activeDot={{ r: 5 }}
+              stroke="var(--midnight-800)"
+              strokeWidth={1.5}
+              dot={{ r: 2.5, fill: "var(--midnight-800)" }}
+              activeDot={{ r: 4 }}
             />
           </LineChart>
         </ResponsiveContainer>

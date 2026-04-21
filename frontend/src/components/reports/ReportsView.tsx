@@ -5,35 +5,28 @@ import AccountBalanceChart from "./AccountBalanceChart";
 import IncomeStatement from "./IncomeStatement";
 import BalanceSheet from "./BalanceSheet";
 import CashFlowStatement from "./CashFlowStatement";
+import PageHeader from "../PageHeader";
 
 type ReportTab = "charts" | "income-statement" | "cash-flow" | "balance-sheet";
+
+const REPORT_TABS = [
+  { key: "charts", label: "Charts" },
+  { key: "income-statement", label: "Income Statement" },
+  { key: "cash-flow", label: "Cash Flow" },
+  { key: "balance-sheet", label: "Balance Sheet" },
+] as const satisfies readonly { key: ReportTab; label: string }[];
 
 export default function ReportsView() {
   const [activeTab, setActiveTab] = useState<ReportTab>("charts");
 
   return (
     <div className="reports-view">
-      <div className="series-view-header">
-        <h2>Reports</h2>
-      </div>
-      <div className="reports-nav" style={{ marginTop: 12 }}>
-        {(
-          [
-            ["charts", "Charts"],
-            ["income-statement", "Income Statement"],
-            ["cash-flow", "Cash Flow"],
-            ["balance-sheet", "Balance Sheet"],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            className={`reports-nav-btn ${activeTab === key ? "active" : ""}`}
-            onClick={() => setActiveTab(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <PageHeader<ReportTab>
+        title="Reports"
+        tabs={REPORT_TABS}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       <div className="reports-content">
         {activeTab === "charts" && (

@@ -114,34 +114,34 @@ export default function IncomeExpenseChart({ mini }: Props) {
           <Bar
             dataKey="income"
             name="Income"
-            fill="var(--amount-positive)"
+            fill="var(--midnight-800)"
             stackId="a"
-            radius={[3, 3, 0, 0]}
+            radius={[2, 2, 0, 0]}
           />
           <Bar
             dataKey="expenses"
             name="Expenses"
-            fill="var(--amount-negative)"
+            fill="var(--midnight-300)"
             stackId="a"
-            radius={[0, 0, 3, 3]}
+            radius={[0, 0, 2, 2]}
           />
           {showPlanned && (
             <>
               <Bar
                 dataKey="planned_income"
                 name="Planned Income"
-                fill="var(--amount-positive)"
+                fill="var(--midnight-800)"
                 opacity={0.35}
                 stackId="a"
-                radius={[3, 3, 0, 0]}
+                radius={[2, 2, 0, 0]}
               />
               <Bar
                 dataKey="planned_expenses"
                 name="Planned Expenses"
-                fill="var(--amount-negative)"
+                fill="var(--midnight-300)"
                 opacity={0.35}
                 stackId="a"
-                radius={[0, 0, 3, 3]}
+                radius={[0, 0, 2, 2]}
               />
             </>
           )}

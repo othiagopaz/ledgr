@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchAccounts } from "../api/client";
 import AccountTree from "./AccountTree";
+import PageHeader from "./PageHeader";
 import { useAppStore } from "../stores/appStore";
 import type { AccountNode } from "../types";
 
@@ -31,16 +32,18 @@ export default function AccountsView({ onSelectAccount }: AccountsViewProps) {
 
   return (
     <div className="accounts-view">
-      <div className="accounts-view-header">
-        <h2>Accounts</h2>
-        <button
-          className="header-btn"
-          onClick={() => openAcctModal()}
-          title="New account (A)"
-        >
-          + New Account
-        </button>
-      </div>
+      <PageHeader
+        title="Accounts"
+        action={
+          <button
+            className="btn btn-primary"
+            onClick={() => openAcctModal()}
+            title="New account (A)"
+          >
+            + New Account
+          </button>
+        }
+      />
       <div className="accounts-view-tree">
         {accountsQuery.isLoading ? (
           <div className="dashboard-empty">Loading accounts…</div>
