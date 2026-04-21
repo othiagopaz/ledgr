@@ -4,7 +4,7 @@
     {
       "name": "backend",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd backend && source .venv/bin/activate && uvicorn main:app --reload --port 8080"],
+      "runtimeArgs": ["-c", "cd backend && source /Users/thiagopaz/Repositories/ledgr/backend/.venv/bin/activate && uvicorn main:app --reload --port 8080"],
       "port": 8080
     },
     {
