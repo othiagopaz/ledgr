@@ -5,10 +5,12 @@ last_updated: 2026-04-21
 
 # Ledgr · Visual system · Part 2: Grid, iconography, logo
 
-> Chapter 3 of the brandbook, Part 2 of 2. Version 0.2 (revised per founder review, 2026-04-21).
+> Chapter 3 of the brandbook, Part 2 of 2. Version 0.3 (revised per founder review, 2026-04-21).
 > This half completes the visual system. It specifies the spacing grid, the iconography rules, and the logo — wordmark and symbol.
 >
 > **Changes in v0.2:** symbol direction chosen — three parallel horizontal bars (the identity glyph) is canonical. The two-bar equals, dual-column, and asymmetric-sum alternatives are moved to §3.3 as documented decisions. Construction specs and production deliverables now describe a single committed mark.
+>
+> **Changes in v0.3:** symbol replaced. The **L-mark with a focus cell** ("L2" direction) supersedes the three-bar `≡` glyph. The new mark centers the operator's stance — an active cursor in a structured grid — rather than the abstract equality claim. The `≡` exploration is recorded in §3.3 alongside the earlier rejected alternatives. Construction specs now describe the L2 mark; the master is now a pixel-snapped 16×16 that scales up cleanly.
 >
 > Read this alongside Part 1 (typography + color). The tokens defined here reference the tokens from Part 1.
 
@@ -149,57 +151,55 @@ Construction notes:
 
 ### 3.2 The symbol
 
-**Three parallel horizontal bars — the identity glyph (`≡`).**
+**The L-mark with a focus cell.**
+
+![Ledgr symbol](assets/ledgr-symbol.svg)
 
 #### What it means
 
-In mathematics, `=` means equal; `≡` means *identically* equal — equal by structure, by definition, inevitably. In code, `===` is strict equality: no coercion, no approximation, exactly the same.
+The symbol is a compressed ledger page. Three readings stack on top of each other, each consistent with the next:
 
-For Ledgr, this distinction is load-bearing. Double-entry accounting does not *result* in balanced books — it *guarantees* them. You cannot enter data in a way that breaks the accounting equation, because the equation is the form of the entry. That is `≡`, not `=`.
+1. **L** for Ledgr — the wordmark's initial, taken as the identity mark. The bottom-left corner formed by the vertical stem and the horizontal baseline is the whole letter, built as a frame rather than a stroke.
+2. **Rows inside a frame** — the two horizontal bars evoke journal lines, the stacked entries of a ledger page. The second row is deliberately shorter than the first; the page is being written *right now*, not already full.
+3. **The focus cell** — the small block at the right edge is the active selection in a structured grid. It is the cursor. It says *someone is here, editing, intentionally.* It is the operator's stance from [`foundation.md`](foundation.md) made visible — the same satisfaction an engineer gets from a clean diff or a passing test.
 
-The symbol says the same thing the product does: *your books are not balanced by luck or calculation. They are balanced by structure.*
+The focus cell is the load-bearing element. Without it, the mark is a static page. With it, the mark is *a person working on their books.*
 
-The mark carries secondary readings that are consistent with the first: it evokes the ruled lines of a ledger page, the stacked entries of a journal, the rhythm of recording transactions. Every reading points the same direction.
+The mark carries a secondary reading that reinforces the first: a ruled page with a highlighted cell is, literally, a spreadsheet cell under selection. Ledgr is not a spreadsheet — but it is what a spreadsheet would be if it were built with accounting as its spine. The focus cell claims that lineage without apologizing for it.
 
-#### Master construction (64×64)
+#### Master construction (16×16, canonical)
 
-The canonical asset is a 64×64 SVG with three solid rectangles filled in `--midnight-800`:
+The canonical asset is a pixel-snapped 16×16 SVG with five filled rectangles. All larger renders derive proportionally from this master.
 
 ```svg
-<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <rect x="12" y="21" width="40" height="5" rx="1.5" fill="#0E2247"/>
-  <rect x="12" y="29" width="40" height="5" rx="1.5" fill="#0E2247"/>
-  <rect x="12" y="37" width="40" height="5" rx="1.5" fill="#0E2247"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"
+     role="img" aria-label="Ledgr symbol — L + focus cell">
+  <title>Ledgr · L2 · L + focus cell</title>
+  <rect x="2"    y="2"    width="2.25" height="12"   fill="currentColor" rx="0.3"/>
+  <rect x="2"    y="11.75" width="12"  height="2.25" fill="currentColor" rx="0.3"/>
+  <rect x="5.75" y="3.75"  width="8"   height="1.5"  fill="currentColor" rx="0.3"/>
+  <rect x="5.75" y="7"     width="5.5" height="1.5"  fill="currentColor" rx="0.3"/>
+  <rect x="12"   y="6.4"   width="2"   height="2.75" fill="currentColor" rx="0.4"/>
 </svg>
 ```
 
-- Three equal bars: width 40, height 5, corner radius 1.5
-- Three-unit gaps between bars
-- Twelve-unit outer padding on left and right
-- Vertically balanced in the frame
-- Solid fill; no stroke, no gradient, no texture
+- Five elements total: L-vertical, L-baseline, top row, middle row (shorter), focus cell.
+- `fill="currentColor"` lets the mark inherit its context (dark mode, hover, button state) automatically.
+- The focus cell sits on the right edge of the middle row, where a live selection would naturally land after editing the next entry.
+- No stroke. No gradient. No texture. Flat by rule and by principle.
 
-#### Favicon construction (16×16, hand-tuned)
+#### Scaling up
 
-A separate 16×16 master is produced for pixel-snapping at the smallest render size:
-
-```svg
-<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-  <rect x="3" y="4.75" width="10" height="1.5" rx="0.5" fill="#0E2247"/>
-  <rect x="3" y="7.25" width="10" height="1.5" rx="0.5" fill="#0E2247"/>
-  <rect x="3" y="9.75" width="10" height="1.5" rx="0.5" fill="#0E2247"/>
-</svg>
-```
-
-This guarantees that at 16×16 (favicon, browser tab, tiny UI chrome), the three bars render with equal visual weight rather than blurring at sub-pixel boundaries. A naïve downscale of the 64×64 master produces uneven rasterization; the hand-tuned version prevents that.
+Larger renders (32, 64, 128, 256, 512, 1024) derive from this master by proportional scaling. The 16×16 is the unit of truth: it should scale cleanly to any power-of-two size without re-tuning. If a particular size develops optical issues, note it here as a known exception rather than introducing a second master.
 
 ### 3.3 Alternatives considered and rejected
 
-During exploration, three other directions were evaluated and rejected. They are recorded here so the reasoning is not lost to future amendments.
+Four other directions were evaluated and ultimately passed over. They are recorded here so the reasoning is not lost to future amendments.
 
 | Direction | Why rejected |
 |---|---|
-| **Two parallel bars — the equals (`=`)** | A strong candidate. Rejected because `=` is too universal to be distinctive as a brand asset. Works as a symbol; does not break through as a brand. The three-bar glyph makes a stronger claim (structural balance, not merely computed balance) and rewards a second look. |
+| **Three parallel bars — the identity glyph (`≡`)** | Briefly canonical in v0.2. Strong meaning (structural identity, `===`) and a clean geometry, but the silhouette is indistinguishable from the hamburger-menu icon in every small-surface context — favicon, app icon, GitHub avatar, the top-left product header. That collision forced the symbol to lean on the wordmark to disambiguate, which contradicts §3.4's requirement that the symbol stand alone. The L-mark carries the same ledger-lines reading without the collision, and adds the operator's cursor — a claim the `≡` mark could not make. |
+| **Two parallel bars — the equals (`=`)** | A strong early candidate. Rejected because `=` is too universal to be distinctive as a brand asset. Works as a symbol; does not break through as a brand. |
 | **Dual — paired vertical columns** | Conceptually rich (double-entry as architecture), but reads as a pause button out of context. Required explanation to land its meaning. |
 | **Total — asymmetric sum-underline** | Carried completion and closure nicely at large sizes, but the asymmetry compressed to visual noise at 16×16 — it failed the favicon test. |
 
@@ -236,11 +236,15 @@ The symbol ships as a complete asset set:
 
 Claude Design takes this spec, refines any optical adjustments needed (particularly at small pixel sizes), and produces the complete export set.
 
-### 3.7 Usage guidance and a note on ambiguity
+### 3.7 Usage guidance
 
-The three-bar glyph shares silhouette with the hamburger menu icon. This is acknowledged and accepted: the logo almost always appears paired with the "Ledgr" wordmark in contexts where ambiguity could arise, and in contexts where it stands alone (favicon, app icon, GitHub avatar), the user is already oriented to parse the glyph as a brand rather than as an interaction.
+The L-mark was chosen in part to avoid the hamburger-menu silhouette collision that retired the three-bar glyph — the L + focus cell reads as a bounded page, not as a stack of strokes. It is safe to use alone in the top-left product-header position, in favicons, and in any tight UI chrome without requiring the wordmark as a disambiguator.
 
-When the symbol does appear alone in a top-left product-header position — the zone where hamburger menus canonically live — it must be paired with the wordmark. No exceptions.
+A few guardrails remain:
+
+- **Do not recolor the focus cell independently.** The focus cell must share the mark's color. Highlighting it in an accent color turns a glyph into a diagram and breaks the identity read.
+- **Do not rotate or mirror.** The L is directional. A flipped or rotated L reads as a different letter (`⌐`, `⌙`) and the focus cell loses its right-edge position.
+- **Minimum clean size: 16×16.** At 16×16 (the favicon baseline), the focus cell renders cleanly at 2px. Between 12px and 16px the L and rows still read, but the focus cell sub-pixels into the baseline and the operator cue is lost. The symbol still serves as the fallback below the 11px wordmark minimum from §3.1 — just know that the small-size render is structural, not expressive.
 
 ---
 
