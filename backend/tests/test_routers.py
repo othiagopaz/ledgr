@@ -200,6 +200,44 @@ class TestTransactionsRouter:
             assert txn["date"] >= "2024-02-01"
             assert txn["date"] <= "2024-02-28"
 
+    def test_opening_balance_for_account_date_window(
+        self, client: TestClient
+    ) -> None:
+        """Filtering Assets:Checking to Feb should report a pre-period
+        opening balance of 12650 (Jan: +5000 +8000 -350)."""
+        r = client.get(
+            "/api/transactions",
+            params={
+                "account": "Assets:Checking",
+                "from_date": "2024-02-01",
+                "to_date": "2024-02-28",
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["opening_balance"] == "12650.00"
+
+    def test_opening_balance_zero_without_account(
+        self, client: TestClient
+    ) -> None:
+        """No account filter → no opening balance (returns "0")."""
+        r = client.get(
+            "/api/transactions",
+            params={"from_date": "2024-02-01", "to_date": "2024-02-28"},
+        )
+        assert r.status_code == 200
+        assert r.json()["opening_balance"] == "0"
+
+    def test_opening_balance_zero_without_date(
+        self, client: TestClient
+    ) -> None:
+        """Account filter without date → no pre-period, opening balance 0."""
+        r = client.get(
+            "/api/transactions", params={"account": "Assets:Checking"}
+        )
+        assert r.status_code == 200
+        assert r.json()["opening_balance"] == "0"
+
     def test_add_transaction(self, client: TestClient) -> None:
         r = client.post(
             "/api/transactions",

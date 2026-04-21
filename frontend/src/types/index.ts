@@ -49,6 +49,7 @@ export interface AccountsResponse {
 export interface TransactionsResponse {
   transactions: Transaction[];
   count: number;
+  opening_balance: string;
 }
 
 export interface PostingInput {

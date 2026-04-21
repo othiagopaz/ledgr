@@ -128,6 +128,7 @@ export default function App() {
             <AccountRegister
               account={selectedAccount}
               transactions={txnsQuery.data.transactions}
+              openingBalance={txnsQuery.data.opening_balance}
               onMutated={handleMutated}
             />
           );
@@ -167,7 +168,7 @@ export default function App() {
 
         <div className="main-content">
           <TabBar />
-          <FilterBar />
+          {activeTab?.type !== "accounts" && <FilterBar />}
           <div className="register-content">
             {renderMainContent()}
           </div>
@@ -177,6 +178,7 @@ export default function App() {
       <StatusBar
         account={selectedAccount || null}
         transactions={txnsQuery.data?.transactions || []}
+        openingBalance={txnsQuery.data?.opening_balance}
       />
 
       {commandPaletteOpen && <CommandPalette />}

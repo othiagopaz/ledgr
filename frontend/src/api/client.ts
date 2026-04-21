@@ -295,8 +295,15 @@ export async function fetchCashFlow(
 
 // Series
 
-export async function fetchSeries(): Promise<SeriesListResponse> {
-  return get("/api/series");
+export async function fetchSeries(
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
+): Promise<SeriesListResponse> {
+  const params = new URLSearchParams();
+  if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
+  const qs = params.toString();
+  return get(`/api/series${qs ? "?" + qs : ""}`);
 }
 
 export async function createSeries(

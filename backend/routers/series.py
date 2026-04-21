@@ -10,13 +10,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Literal
 
 from beancount.core import data
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fava.beans.funcs import hash_entry
 from fava.core import FavaLedger
 from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
-from ledger import get_ledger
+from ledger import get_filtered_entries, get_ledger
 from series import (
     generate_series_id,
     generate_series_transactions,
@@ -258,12 +258,31 @@ def create_series(
 
 @router.get("/api/series")
 def list_series(
+    account: str | None = Query(None),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
+    view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """List all series, grouped by series ID."""
-    # Collect all series IDs
+    """List series, grouped by series ID, honouring the global filters.
+
+    Any transactions from clamp_opt's synthetic "S" entries are ignored —
+    they don't carry ``ledgr-series`` metadata and would never group, but
+    dropping them keeps the loop clean.
+    """
+    entries = get_filtered_entries(
+        ledger, view_mode,
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
+
     series_map: dict[str, list[data.Transaction]] = {}
-    for entry in ledger.all_entries:
+    for entry in entries:
         if not isinstance(entry, data.Transaction):
             continue
         sid = entry.meta.get("ledgr-series")
@@ -273,7 +292,6 @@ def list_series(
     summaries = [
         _summarize_series(sid, txns) for sid, txns in series_map.items()
     ]
-    # Sort by first_date descending
     summaries.sort(key=lambda s: s.get("first_date", ""), reverse=True)
 
     return {"series": summaries}

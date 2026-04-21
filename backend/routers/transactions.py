@@ -116,6 +116,18 @@ def get_transactions(
         tags=tags or None,
         payee=payee,
     )
+    # clamp_opt emits synthetic "S" (Summarize) entries at begin-1 that
+    # carry the pre-period balance of every real account. When the caller
+    # asks for a specific account+date window, sum the "S" postings on
+    # that account so the frontend can seed the running balance correctly.
+    opening_balance = Decimal("0")
+    if account and (from_date or to_date):
+        for e in entries:
+            if isinstance(e, data.Transaction) and e.flag == "S":
+                for p in e.postings:
+                    if p.account == account and p.units:
+                        opening_balance += p.units.number
+
     # Exclude synthetic entries from clamp_opt() (flag "S") — those are
     # internal opening-balance entries, not real user transactions.
     txns = [
@@ -123,7 +135,11 @@ def get_transactions(
         if isinstance(e, data.Transaction) and e.flag in ("*", "!")
     ]
     result = [serialize_transaction(t) for t in txns]
-    return {"transactions": result, "count": len(result)}
+    return {
+        "transactions": result,
+        "count": len(result),
+        "opening_balance": str(opening_balance),
+    }
 
 
 @router.post("/api/transactions")

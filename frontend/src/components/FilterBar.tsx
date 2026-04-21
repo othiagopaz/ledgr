@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../stores/appStore';
 import { fetchAccountNames, fetchTags, fetchPayees } from '../api/client';
-import { resolvePeriodDates } from '../utils/dateUtils';
+import { resolvePeriodDates, shiftPeriod } from '../utils/dateUtils';
 import { CalendarIcon, AccountIcon, TagIcon, UserIcon, XIcon } from './icons';
 import type { PeriodPreset } from '../types';
 
@@ -297,7 +297,19 @@ export default function FilterBar() {
 
   return (
     <div className="filter-bar" id="filter-bar">
-      <div className="filter-btn-group">
+      <div className="filter-btn-group filter-period-group">
+        {periodActive && (
+          <button
+            className="filter-nav-btn"
+            title="Previous period"
+            onClick={() => {
+              const patch = shiftPeriod({ periodPreset, fromDate, toDate }, -1);
+              if (patch) setFilter(patch);
+            }}
+          >
+            ‹
+          </button>
+        )}
         <FilterButton
           icon={<CalendarIcon />}
           label="Period"
@@ -306,6 +318,18 @@ export default function FilterBar() {
           onClick={() => toggleDropdown('period')}
           onClear={() => clearFilter('periodPreset')}
         />
+        {periodActive && (
+          <button
+            className="filter-nav-btn"
+            title="Next period"
+            onClick={() => {
+              const patch = shiftPeriod({ periodPreset, fromDate, toDate }, 1);
+              if (patch) setFilter(patch);
+            }}
+          >
+            ›
+          </button>
+        )}
         <PeriodDropdown
           open={openDropdown === 'period'}
           onClose={() => setOpenDropdown(null)}
