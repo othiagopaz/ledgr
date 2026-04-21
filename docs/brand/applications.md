@@ -92,7 +92,7 @@ and sends you encouragement on Sundays: this is not that app.
 - **Multi-currency, multi-asset.** BRL, USD, investments, commodities — modeled correctly, never averaged.
 - **Plain-text data.** Your ledger is a `.beancount` file you own. You can walk away any time.
 - **Keyboard-first.** Every action in one or two keystrokes. The mouse is supported, never required.
-- **Open source.** MIT licensed. The engine is open source. The whole thing is yours.
+- **Open source, copyleft.** GNU AGPL-3.0. The engine is open source, the app is open source, and any hosted fork is too.
 
 ## Install
 
@@ -115,7 +115,7 @@ correctness guarantee Ledgr makes traces back to them.
 
 ## License
 
-MIT. The files are yours, the code is yours, the ledger is yours.
+GNU AGPL-3.0 — see [LICENSE](./LICENSE). The code is open, the ledger file is yours, and any hosted fork of Ledgr stays open too. Fair deal.
 ```
 
 Shields.io badges use `color=0E2247` so they match the midnight accent. Keep it to three badges maximum — more is corporate theater.
