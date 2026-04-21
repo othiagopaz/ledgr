@@ -4,6 +4,7 @@ import { fetchSeries, fetchTransactions, editTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatDateFull, formatAmount, formatInstallmentBadge } from "../utils/format";
 import type { Transaction, SeriesSummary } from "../types";
+import PageHeader from "./PageHeader";
 
 type Filter = 'all' | 'recurring' | 'installment' | 'pending';
 
@@ -13,6 +14,11 @@ const FILTER_LABELS: Record<Filter, string> = {
   installment: 'Installments',
   pending: 'Pending',
 };
+
+const FILTER_TABS = (Object.keys(FILTER_LABELS) as Filter[]).map((key) => ({
+  key,
+  label: FILTER_LABELS[key],
+}));
 
 function SeriesTypeIcon({ type }: { type: 'recurring' | 'installment' }) {
   return (
@@ -316,29 +322,24 @@ export default function SeriesView() {
 
   return (
     <div className="reports-view">
-      {/* Header */}
-      <div className="series-view-header">
-        <h2>Series &amp; Scheduled</h2>
-        <button
-          className="btn btn-primary"
-          onClick={() => openSeriesModal(undefined, filter === 'recurring' || filter === 'installment' ? filter : undefined)}
-        >
-          + New Series
-        </button>
-      </div>
-
-      {/* Filter tabs — same pattern as Reports */}
-      <div className="reports-nav" style={{ marginTop: 12 }}>
-        {(Object.keys(FILTER_LABELS) as Filter[]).map((f) => (
+      <PageHeader<Filter>
+        title="Series & Scheduled"
+        action={
           <button
-            key={f}
-            className={`reports-nav-btn${filter === f ? ' active' : ''}`}
-            onClick={() => { setFilter(f); setSelectedLinenos(new Set()); setSelectedRowIndex(null); }}
+            className="btn btn-primary"
+            onClick={() => openSeriesModal(undefined, filter === 'recurring' || filter === 'installment' ? filter : undefined)}
           >
-            {FILTER_LABELS[f]}
+            + New Series
           </button>
-        ))}
-      </div>
+        }
+        tabs={FILTER_TABS}
+        activeTab={filter}
+        onTabChange={(f) => {
+          setFilter(f);
+          setSelectedLinenos(new Set());
+          setSelectedRowIndex(null);
+        }}
+      />
 
       {isLoading && <div className="report-loading">Loading…</div>}
 

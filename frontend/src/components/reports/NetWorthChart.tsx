@@ -113,20 +113,20 @@ export default function NetWorthChart({ mini }: Props) {
             type="monotone"
             dataKey="assets"
             name="Assets"
-            stroke="var(--amount-positive)"
-            fill="var(--amount-positive)"
-            fillOpacity={0.15}
-            strokeWidth={2}
+            stroke="var(--midnight-600)"
+            fill="var(--midnight-600)"
+            fillOpacity={0.12}
+            strokeWidth={1.5}
           />
           {showPlanned && (
             <Area
               type="monotone"
               dataKey="combined_net_worth"
               name="Net Worth (with Planned)"
-              stroke="var(--accent)"
-              fill="var(--accent)"
+              stroke="var(--midnight-800)"
+              fill="var(--midnight-800)"
               fillOpacity={0.05}
-              strokeWidth={2}
+              strokeWidth={1.5}
               strokeDasharray="5 5"
             />
           )}
@@ -134,19 +134,19 @@ export default function NetWorthChart({ mini }: Props) {
             type="monotone"
             dataKey="net_worth"
             name="Net Worth"
-            stroke="var(--accent)"
-            fill="var(--accent)"
-            fillOpacity={0.1}
-            strokeWidth={2}
+            stroke="var(--midnight-800)"
+            fill="var(--midnight-800)"
+            fillOpacity={0.15}
+            strokeWidth={1.5}
           />
           <Area
             type="monotone"
             dataKey="liabilities"
             name="Liabilities"
-            stroke="var(--amount-negative)"
-            fill="var(--amount-negative)"
+            stroke="var(--midnight-300)"
+            fill="var(--midnight-300)"
             fillOpacity={0.1}
-            strokeWidth={2}
+            strokeWidth={1.5}
           />
         </AreaChart>
       </ResponsiveContainer>
