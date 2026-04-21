@@ -1293,8 +1293,8 @@ body {
   font-size: 22px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  color: var(--color-text-primary);
   letter-spacing: -0.01em;
+  /* Color comes from .positive / .negative / inherited primary text */
 }
 
 .dashboard-section { margin-bottom: 32px; }
@@ -1586,8 +1586,6 @@ body {
 
 .report-section {
   margin-bottom: 32px;
-  border-top: 2px solid var(--color-text-primary);
-  padding-top: 8px;
 }
 .report-section-title {
   font-size: 11px;
