@@ -13,3 +13,7 @@ backend/__pycache__/*
 data/financeiro.beancount
 PLAN-multicurrency-statements.md
 .gitignore
+
+# Editor / tooling
+.obsidian/
+.claude/worktrees/
