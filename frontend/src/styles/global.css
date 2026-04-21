@@ -2256,6 +2256,35 @@ body {
   position: relative;
 }
 
+.filter-period-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.filter-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filter-nav-btn:hover {
+  background: var(--bg-row-hover);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
 .filter-btn {
   display: inline-flex;
   align-items: center;
