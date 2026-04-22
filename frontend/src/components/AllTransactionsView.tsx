@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchTransactions, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { useFilterParams } from "../hooks/useFilterParams";
-import { formatDateShort, formatAmount, formatInstallmentBadge } from "../utils/format";
+import { formatDateShort, formatAmount, formatInstallmentBadge, amountSignClass } from "../utils/format";
 
 interface AllTransactionsViewProps {
   onMutated: () => void;
@@ -51,14 +51,17 @@ export default function AllTransactionsView({
 
   function summarizeAmount(
     postings: { amount: string | null; currency: string | null }[]
-  ): string {
-    // Show the first posting with a positive amount, or "Split" for complex
-    if (postings.length > 2) return "Split";
+  ): { text: string; cls: string } {
+    if (postings.length > 2) return { text: "Split", cls: "" };
     const first = postings[0];
     if (first?.amount) {
-      return formatAmount(parseFloat(first.amount), first.currency || operatingCurrency);
+      const n = parseFloat(first.amount);
+      return {
+        text: formatAmount(n, first.currency || operatingCurrency),
+        cls: amountSignClass(n),
+      };
     }
-    return "";
+    return { text: "", cls: "" };
   }
 
   return (
@@ -149,7 +152,10 @@ export default function AllTransactionsView({
                     </span>
                   ))}
                 </td>
-                <td className="num amount">{summarizeAmount(txn.postings)}</td>
+                {(() => {
+                  const s = summarizeAmount(txn.postings);
+                  return <td className={`num amount ${s.cls}`}>{s.text}</td>;
+                })()}
                 <td className="actions">
                   {deletingLineno === txn.lineno ? (
                     <>

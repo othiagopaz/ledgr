@@ -1762,6 +1762,13 @@ body {
   border-bottom: 0;
   color: var(--color-text-primary);
 }
+/* Sign-colouring wins inside subtotal / grand-total rows. */
+.report-table-subtotal td.positive,
+.report-table-grand-total td.positive { color: var(--amount-positive); }
+.report-table-subtotal td.negative,
+.report-table-grand-total td.negative { color: var(--amount-negative); }
+.report-table-subtotal td.amount-zero,
+.report-table-grand-total td.amount-zero { color: var(--color-text-tertiary); }
 
 .dashboard-link-btn {
   font-size: 12px;

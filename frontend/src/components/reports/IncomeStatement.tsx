@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchIncomeStatement } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { useFilterParams } from "../../hooks/useFilterParams";
-import { formatAmount } from "../../utils/format";
+import { formatAmount, amountSignClass } from "../../utils/format";
 import { IntervalSelector } from "./IncomeExpenseChart";
 import type { AccountReportNode, OtherCurrencyAmount } from "../../types";
 
@@ -89,54 +89,32 @@ export default function IncomeStatement() {
               <td colSpan={colCount}>Income</td>
             </tr>
             {income.map((node) => (
-              <ReportTreeRows key={node.name} node={node} periods={periods} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} />
+              <ReportTreeRows key={node.name} node={node} periods={periods} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} signFactor={1} />
             ))}
-            <tr className="report-table-subtotal">
-              <td>Total Income</td>
-              {periods.map((p) => (
-                <td key={p} className="report-table-num positive">
-                  {formatAmount(
-                    income.reduce((sum, n) => sum + (n.totals[p] || 0), 0),
-                    currency
-                  )}
-                </td>
-              ))}
-              <td className="report-table-num report-table-total positive">
-                {formatAmount(income.reduce((sum, n) => sum + n.total, 0), currency)}
-              </td>
-              {showOther && (
-                <td className="report-table-num report-table-other other-currencies">
-                  {formatOtherCurrencies(aggregateOtherTotals(income))}
-                </td>
-              )}
-            </tr>
+            <SubtotalRow
+              label="Total Income"
+              nodes={income}
+              periods={periods}
+              currency={currency}
+              signFactor={1}
+              showOther={showOther}
+            />
 
             {/* Expenses section */}
             <tr className="report-table-section-header">
               <td colSpan={colCount}>Expenses</td>
             </tr>
             {expenses.map((node) => (
-              <ReportTreeRows key={node.name} node={node} periods={periods} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} />
+              <ReportTreeRows key={node.name} node={node} periods={periods} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} signFactor={-1} />
             ))}
-            <tr className="report-table-subtotal">
-              <td>Total Expenses</td>
-              {periods.map((p) => (
-                <td key={p} className="report-table-num negative">
-                  {formatAmount(
-                    expenses.reduce((sum, n) => sum + (n.totals[p] || 0), 0),
-                    currency
-                  )}
-                </td>
-              ))}
-              <td className="report-table-num report-table-total negative">
-                {formatAmount(expenses.reduce((sum, n) => sum + n.total, 0), currency)}
-              </td>
-              {showOther && (
-                <td className="report-table-num report-table-other other-currencies">
-                  {formatOtherCurrencies(aggregateOtherTotals(expenses))}
-                </td>
-              )}
-            </tr>
+            <SubtotalRow
+              label="Total Expenses"
+              nodes={expenses}
+              periods={periods}
+              currency={currency}
+              signFactor={-1}
+              showOther={showOther}
+            />
 
             {/* Net Income */}
             <tr className="report-table-grand-total">
@@ -149,12 +127,14 @@ export default function IncomeStatement() {
                   </td>
                 );
               })}
-              <td className="report-table-num report-table-total">
-                {formatAmount(
-                  Object.values(net_income).reduce((a, b) => a + b, 0),
-                  currency
-                )}
-              </td>
+              {(() => {
+                const niTotal = Object.values(net_income).reduce((a, b) => a + b, 0);
+                return (
+                  <td className={`report-table-num report-table-total ${amountSignClass(niTotal)}`}>
+                    {formatAmount(niTotal, currency)}
+                  </td>
+                );
+              })()}
               {showOther && (
                 <td className="report-table-num report-table-other other-currencies">
                   {formatOtherCurrencies(other_net_income)}
@@ -168,6 +148,45 @@ export default function IncomeStatement() {
   );
 }
 
+function SubtotalRow({
+  label,
+  nodes,
+  periods,
+  currency,
+  signFactor,
+  showOther,
+}: {
+  label: string;
+  nodes: AccountReportNode[];
+  periods: string[];
+  currency: string;
+  signFactor: 1 | -1;
+  showOther: boolean;
+}) {
+  const totalSum = nodes.reduce((sum, n) => sum + n.total, 0) * signFactor;
+  return (
+    <tr className="report-table-subtotal">
+      <td>{label}</td>
+      {periods.map((p) => {
+        const v = nodes.reduce((sum, n) => sum + (n.totals[p] || 0), 0) * signFactor;
+        return (
+          <td key={p} className={`report-table-num ${amountSignClass(v)}`}>
+            {formatAmount(v, currency)}
+          </td>
+        );
+      })}
+      <td className={`report-table-num report-table-total ${amountSignClass(totalSum)}`}>
+        {formatAmount(totalSum, currency)}
+      </td>
+      {showOther && (
+        <td className="report-table-num report-table-other other-currencies">
+          {formatOtherCurrencies(aggregateOtherTotals(nodes))}
+        </td>
+      )}
+    </tr>
+  );
+}
+
 function ReportTreeRows({
   node,
   periods,
@@ -175,6 +194,7 @@ function ReportTreeRows({
   depth,
   showOther,
   defaultExpanded,
+  signFactor,
 }: {
   node: AccountReportNode;
   periods: string[];
@@ -182,6 +202,7 @@ function ReportTreeRows({
   depth: number;
   showOther: boolean;
   defaultExpanded: boolean;
+  signFactor: 1 | -1;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const hasChildren = node.children.length > 0;
@@ -202,14 +223,25 @@ function ReportTreeRows({
           )}
           {shortName}
         </td>
-        {periods.map((p) => (
-          <td key={p} className="report-table-num">
-            {node.totals[p] ? formatAmount(node.totals[p], currency) : "—"}
-          </td>
-        ))}
-        <td className="report-table-num report-table-total">
-          {node.total ? formatAmount(node.total, currency) : "—"}
-        </td>
+        {periods.map((p) => {
+          const raw = node.totals[p];
+          if (!raw) return <td key={p} className="report-table-num">—</td>;
+          const v = raw * signFactor;
+          return (
+            <td key={p} className={`report-table-num ${amountSignClass(v)}`}>
+              {formatAmount(v, currency)}
+            </td>
+          );
+        })}
+        {(() => {
+          if (!node.total) return <td className="report-table-num report-table-total">—</td>;
+          const v = node.total * signFactor;
+          return (
+            <td className={`report-table-num report-table-total ${amountSignClass(v)}`}>
+              {formatAmount(v, currency)}
+            </td>
+          );
+        })()}
         {showOther && (
           <td className="report-table-num report-table-other other-currencies">
             {formatOtherCurrencies(node.other_total)}
@@ -226,6 +258,7 @@ function ReportTreeRows({
             depth={depth + 1}
             showOther={showOther}
             defaultExpanded={defaultExpanded}
+            signFactor={signFactor}
           />
         ))}
     </>

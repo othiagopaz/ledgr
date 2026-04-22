@@ -1,6 +1,6 @@
 import type { Transaction } from "../types";
 import { useAppStore } from "../stores/appStore";
-import { formatAmount } from "../utils/format";
+import { formatAmount, amountSignClass } from "../utils/format";
 
 interface StatusBarProps {
   account: string | null;
@@ -64,16 +64,24 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
       <div className="status-group">
         <span className="status-item">
           <span className="status-dot dot-confirmed" />
-          {clearedCount} cleared: {formatAmount(clearedSum, operatingCurrency)}
+          {clearedCount} cleared:{" "}
+          <span className={amountSignClass(clearedSum)}>
+            {formatAmount(clearedSum, operatingCurrency)}
+          </span>
         </span>
         <span className="status-item">
           <span className="status-dot dot-pending" />
           {projectedCount} projected:{" "}
-          {formatAmount(projectedSum, operatingCurrency)}
+          <span className={amountSignClass(projectedSum)}>
+            {formatAmount(projectedSum, operatingCurrency)}
+          </span>
         </span>
         <span>|</span>
         <span>
-          Balance: {formatAmount(totalBalance, operatingCurrency)}
+          Balance:{" "}
+          <span className={amountSignClass(totalBalance)}>
+            {formatAmount(totalBalance, operatingCurrency)}
+          </span>
         </span>
         <span>|</span>
         <span>{transactions.length} txns</span>
