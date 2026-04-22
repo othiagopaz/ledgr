@@ -96,6 +96,46 @@ export default function CommandPalette() {
     },
   });
 
+  items.push({
+    id: "action:clear-filters",
+    label: "Clear All Filters",
+    group: "Actions",
+    action: () => {
+      useAppStore.getState().clearFilters();
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
+    id: "action:filter-this-month",
+    label: "Filter: This Month",
+    group: "Actions",
+    action: () => {
+      useAppStore.getState().setFilter({ periodPreset: 'this-month' });
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
+    id: "action:filter-this-year",
+    label: "Filter: This Year",
+    group: "Actions",
+    action: () => {
+      useAppStore.getState().setFilter({ periodPreset: 'this-year' });
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  items.push({
+    id: "action:filter-ytd",
+    label: "Filter: Year to Date",
+    group: "Actions",
+    action: () => {
+      useAppStore.getState().setFilter({ periodPreset: 'ytd' });
+      setCommandPaletteOpen(false);
+    },
+  });
+
   // Views
   items.push({
     id: "view:series",

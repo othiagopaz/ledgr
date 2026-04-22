@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { AccountNode, Balance } from "../types";
 import { useAppStore } from "../stores/appStore";
-import { formatAmount } from "../utils/format";
+import { formatAmount, amountSignClass } from "../utils/format";
 
 interface Props {
   accounts: AccountNode[];
@@ -30,7 +30,7 @@ function BalanceDisplay({ balances }: { balances: Balance[] }) {
     const [currency, number] = entries[0];
     const formatted = formatAmount(number, operatingCurrency);
     return (
-      <span className={`acct-bal ${number < 0 ? "negative" : ""}`}>
+      <span className={`acct-bal ${amountSignClass(number)}`}>
         {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
       </span>
     );
@@ -41,7 +41,7 @@ function BalanceDisplay({ balances }: { balances: Balance[] }) {
       {entries.map(([currency, number]) => {
         const formatted = formatAmount(number, operatingCurrency);
         return (
-          <span key={currency} className="acct-bal-line">
+          <span key={currency} className={`acct-bal-line ${amountSignClass(number)}`}>
             {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
           </span>
         );

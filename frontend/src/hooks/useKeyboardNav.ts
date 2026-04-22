@@ -50,6 +50,15 @@ export function useKeyboardNav() {
         return;
       }
 
+      // /: focus filter bar
+      if (e.key === "/") {
+        e.preventDefault();
+        const filterBar = document.getElementById("filter-bar");
+        const firstBtn = filterBar?.querySelector<HTMLButtonElement>(".filter-btn");
+        firstBtn?.focus();
+        return;
+      }
+
       // Escape: close command palette
       if (e.key === "Escape") {
         const store = useAppStore.getState();

@@ -37,11 +37,23 @@ router = APIRouter()
 
 @router.get("/api/accounts")
 def get_accounts(
+    account: str | None = Query(None),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    tags: list[str] = Query([]),
+    payee: str | None = Query(None),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Account tree with balances, enriched with Open directive metadata."""
-    entries = get_filtered_entries(ledger, view_mode)
+    entries = get_filtered_entries(
+        ledger, view_mode,
+        account=account,
+        from_date=datetime.date.fromisoformat(from_date) if from_date else None,
+        to_date=datetime.date.fromisoformat(to_date) if to_date else None,
+        tags=tags or None,
+        payee=payee,
+    )
 
     # Build opens map once — threaded through recursive serialization
     opens_map = {

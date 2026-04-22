@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAccountNames, fetchPayees, fetchTags, fetchSuggestions } from "../api/client";
 import { useAppStore } from "../stores/appStore";
-import { parseInput, type ActiveTrigger } from "../utils/fastInputParser";
+import { parseInput } from "../utils/fastInputParser";
 import type { TransactionDraft, DraftPosting } from "../types";
 
 interface Pill {
@@ -20,7 +20,7 @@ interface FastInputProps {
 
 let nextPostingId = 100;
 
-export default function FastInput({ draft, onDraftChange, operatingCurrency }: FastInputProps) {
+export default function FastInput({ onDraftChange, operatingCurrency }: FastInputProps) {
   const defaultPaymentAccount = useAppStore((s) => s.defaultPaymentAccount);
 
   const [inputValue, setInputValue] = useState("");

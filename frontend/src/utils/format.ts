@@ -28,6 +28,17 @@ export function getLocale(currency: string): string {
   return CURRENCY_LOCALE[currency] || 'en-US';
 }
 
+/**
+ * Map a numeric amount to the CSS class that colours it by sign:
+ * positive → green, negative → red, zero → muted. Per the directional
+ * sign-colouring convention in docs/brand/principles.md §4.
+ */
+export function amountSignClass(value: number): 'positive' | 'negative' | 'amount-zero' {
+  if (value > 0) return 'positive';
+  if (value < 0) return 'negative';
+  return 'amount-zero';
+}
+
 export function formatAmount(value: number, currency: string): string {
   const locale = getLocale(currency);
   return value.toLocaleString(locale, {

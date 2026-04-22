@@ -8,6 +8,7 @@ import InlineEditor from "./InlineEditor";
 interface Props {
   account: string;
   transactions: Transaction[];
+  openingBalance?: string;
   onMutated: () => void;
 }
 
@@ -45,7 +46,7 @@ function formatCostBasis(posting: ReturnType<typeof getAccountPosting>, currency
   return null;
 }
 
-export default function AccountRegister({ account, transactions, onMutated }: Props) {
+export default function AccountRegister({ account, transactions, openingBalance, onMutated }: Props) {
   const [deletingLineno, setDeletingLineno] = useState<number | null>(null);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
@@ -76,7 +77,7 @@ export default function AccountRegister({ account, transactions, onMutated }: Pr
     (a, b) => a.date.localeCompare(b.date)
   );
 
-  let runningBalance = 0;
+  let runningBalance = openingBalance ? parseFloat(openingBalance) : 0;
   const rows = sorted.map((txn) => {
     const posting = getAccountPosting(txn, account);
     const amount = posting?.amount ? parseFloat(posting.amount) : 0;
