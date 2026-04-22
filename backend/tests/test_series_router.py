@@ -116,6 +116,50 @@ class TestListSeries:
         body = r.json()
         assert body["series"] == []
 
+    def test_filter_by_date_hides_out_of_range_series(
+        self, series_client: TestClient
+    ) -> None:
+        """Fixture installments run 2025-01-15..2025-03-15; narrowing to
+        April should return nothing since no txn falls in that window."""
+        r = series_client.get(
+            "/api/series",
+            params={"from_date": "2025-04-15", "to_date": "2025-05-15"},
+        )
+        assert r.status_code == 200
+        assert r.json()["series"] == []
+
+    def test_filter_by_account_keeps_matching_series(
+        self, series_client: TestClient
+    ) -> None:
+        """Only TV installment and split combo touch Expenses:Electronics /
+        Expenses:Food — Netflix doesn't, so filtering by
+        Assets:Bank:Checking should exclude the TV installment."""
+        r = series_client.get(
+            "/api/series", params={"account": "Assets:Bank:Checking"}
+        )
+        assert r.status_code == 200
+        ids = {s["series_id"] for s in r.json()["series"]}
+        assert "tv-fixture001" not in ids
+        assert "netflix-fix002" in ids
+        assert "split-fix003" in ids
+
+    def test_filter_by_date_narrows_counts(
+        self, series_client: TestClient
+    ) -> None:
+        """Restrict to Jan 2025 — Netflix should surface with only its
+        single January txn counted."""
+        r = series_client.get(
+            "/api/series",
+            params={"from_date": "2025-01-01", "to_date": "2025-02-01"},
+        )
+        assert r.status_code == 200
+        netflix = next(
+            s for s in r.json()["series"] if s["series_id"] == "netflix-fix002"
+        )
+        assert netflix["total"] == 1
+        assert netflix["confirmed"] == 1
+        assert netflix["pending"] == 0
+
 
 # ------------------------------------------------------------------
 # POST /api/series — installment

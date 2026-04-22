@@ -26,7 +26,7 @@ option "operating_currency" "BRL"
   Expenses:Food            350.00 BRL
   Assets:Checking
 
-2024-02-01 * "Landlord" "February Rent"
+2024-02-01 * "Landlord" "February Rent" #housing
   Expenses:Rent           2500.00 BRL
   Assets:Checking
 
@@ -54,6 +54,6 @@ option "operating_currency" "BRL"
   Assets:Checking          2000.00 BRL
   Income:Salary           -2000.00 BRL
 
-2024-04-15 ! "Landlord" "Projected rent"
+2024-04-15 ! "Landlord" "Projected rent" #housing
   Expenses:Rent            2500.00 BRL
   Assets:Checking         -2500.00 BRL

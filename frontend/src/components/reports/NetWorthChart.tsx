@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { fetchNetWorthSeries } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
+import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount } from "../../utils/format";
 import { IntervalSelector } from "./IncomeExpenseChart";
 import type { ViewMode } from "../../types";
@@ -24,12 +25,13 @@ export default function NetWorthChart({ mini }: Props) {
   const [interval, setInterval] = useState("monthly");
   const currency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
+  const filters = useFilterParams();
 
   const backendMode: string = viewMode === "combined" ? "comparative" : "actual";
 
   const { data, isLoading } = useQuery({
-    queryKey: ["net-worth", interval, viewMode],
-    queryFn: () => fetchNetWorthSeries(interval, backendMode as ViewMode),
+    queryKey: ["net-worth", interval, viewMode, filters],
+    queryFn: () => fetchNetWorthSeries(interval, backendMode as ViewMode, filters),
   });
 
   const series = data?.series || [];

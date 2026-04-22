@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSeries, fetchTransactions, editTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
+import { useFilterParams } from "../hooks/useFilterParams";
 import { formatDateFull, formatAmount, formatInstallmentBadge } from "../utils/format";
 import type { Transaction, SeriesSummary } from "../types";
 import PageHeader from "./PageHeader";
@@ -125,14 +126,16 @@ export default function SeriesView() {
     requestAnimationFrame(() => tableRef.current?.focus({ preventScroll: true }));
   }, [filter]);
 
+  const filters = useFilterParams();
+
   const seriesQuery = useQuery({
-    queryKey: ["series"],
-    queryFn: () => fetchSeries(),
+    queryKey: ["series", viewMode, filters],
+    queryFn: () => fetchSeries(viewMode, filters),
   });
 
   const txnsQuery = useQuery({
-    queryKey: ["transactions", undefined, viewMode],
-    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode),
+    queryKey: ["transactions", undefined, viewMode, filters],
+    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode, filters),
   });
 
   const allSeries = seriesQuery.data?.series || [];

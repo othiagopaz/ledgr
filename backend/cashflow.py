@@ -114,8 +114,6 @@ def classify_posting(
 
 def compute_cashflow(
     entries: list,
-    from_date: str | None = None,
-    to_date: str | None = None,
     interval: str = "monthly",
     operating_currency: str | None = None,
     type_map: dict[str, str] | None = None,
@@ -125,6 +123,10 @@ def compute_cashflow(
     Only transactions that touch a **cash** account (ledgr-type ``"cash"``)
     are included. Each cash posting is classified using the ledgr-type-based
     logic in ``classify_posting``.
+
+    Entries are expected to arrive pre-filtered (by ``get_filtered_entries()``).
+    Synthetic entries from ``clamp_opt()`` (flag ``"S"``) are excluded — they
+    represent opening balances, not real cash movements.
 
     When ``operating_currency`` is provided, only postings in that currency
     are included in the main totals.  Non-OC postings are collected into
@@ -138,14 +140,10 @@ def compute_cashflow(
         type_map = build_account_type_map(entries)
 
     oc = operating_currency
-    txns = [e for e in entries if isinstance(e, data.Transaction)]
-
-    if from_date:
-        d = datetime.date.fromisoformat(from_date)
-        txns = [t for t in txns if t.date >= d]
-    if to_date:
-        d = datetime.date.fromisoformat(to_date)
-        txns = [t for t in txns if t.date <= d]
+    txns = [
+        e for e in entries
+        if isinstance(e, data.Transaction) and e.flag in ("*", "!")
+    ]
 
     # Collect all cashflow items (OC and other separately)
     items: list[dict[str, Any]] = []

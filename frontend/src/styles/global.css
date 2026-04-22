@@ -1762,6 +1762,13 @@ body {
   border-bottom: 0;
   color: var(--color-text-primary);
 }
+/* Sign-colouring wins inside subtotal / grand-total rows. */
+.report-table-subtotal td.positive,
+.report-table-grand-total td.positive { color: var(--amount-positive); }
+.report-table-subtotal td.negative,
+.report-table-grand-total td.negative { color: var(--amount-negative); }
+.report-table-subtotal td.amount-zero,
+.report-table-grand-total td.amount-zero { color: var(--color-text-tertiary); }
 
 .dashboard-link-btn {
   font-size: 12px;
@@ -2237,4 +2244,295 @@ body {
   padding: 2px 5px;
   border-radius: 3px;
   white-space: nowrap;
+}
+
+/* ---- Filter Bar ---- */
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-primary);
+  min-height: 40px;
+  flex-shrink: 0;
+}
+
+.filter-btn-group {
+  position: relative;
+}
+
+.filter-period-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.filter-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filter-nav-btn:hover {
+  background: var(--bg-row-hover);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.filter-btn:hover {
+  background: var(--bg-row-hover);
+  border-color: var(--text-muted);
+}
+
+.filter-btn-active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-btn-active:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.filter-btn-label {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filter-btn-clear {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  padding: 1px;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.filter-btn-clear:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.filter-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.filter-clear-all {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+.filter-clear-all:hover {
+  color: var(--amount-negative);
+}
+
+.filter-date-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Filter Dropdown */
+
+.filter-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 240px;
+  max-height: 320px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-search-input {
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+}
+
+.filter-dropdown-list {
+  overflow-y: auto;
+  max-height: 260px;
+  padding: 4px;
+}
+
+.filter-list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: left;
+}
+
+.filter-list-item:hover {
+  background: var(--bg-row-hover);
+}
+
+.filter-list-item.active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.filter-check {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.filter-check.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.filter-dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Period dropdown specifics */
+
+.filter-dropdown-presets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 6px;
+}
+
+.filter-preset-btn {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  text-align: left;
+}
+
+.filter-preset-btn:hover {
+  background: var(--bg-row-hover);
+}
+
+.filter-preset-btn.active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.filter-dropdown-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 2px 6px;
+}
+
+.filter-dropdown-custom {
+  padding: 8px 10px;
+}
+
+.filter-dropdown-custom label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.filter-custom-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-custom-inputs input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.filter-custom-inputs span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.filter-apply-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-apply-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }

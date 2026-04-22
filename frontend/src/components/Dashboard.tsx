@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchAccounts, fetchTransactions, fetchOptions } from "../api/client";
 import { useAppStore } from "../stores/appStore";
+import { useFilterParams } from "../hooks/useFilterParams";
 import { formatAmount, formatDateShort } from "../utils/format";
 import type { AccountNode, Transaction, ViewMode } from "../types";
 import IncomeExpenseChart from "./reports/IncomeExpenseChart";
@@ -113,16 +114,17 @@ interface DashboardProps {
 export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardProps) {
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
+  const filters = useFilterParams();
 
   // Always fetch combined for the main indicators
   const accountsQuery = useQuery({
-    queryKey: ["accounts", viewMode],
+    queryKey: ["accounts", viewMode, filters],
     queryFn: () => fetchAccounts(viewMode),
   });
 
   // Fetch planned-only data to compute the planned portion subtitle
   const plannedAccountsQuery = useQuery({
-    queryKey: ["accounts", "planned-for-delta"],
+    queryKey: ["accounts", "planned-for-delta", filters],
     queryFn: () => fetchAccounts("planned" as ViewMode),
     enabled: viewMode === "combined",
   });
@@ -133,7 +135,7 @@ export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardP
   });
 
   const txnsQuery = useQuery({
-    queryKey: ["transactions", viewMode],
+    queryKey: ["transactions", viewMode, filters],
     queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode),
   });
 

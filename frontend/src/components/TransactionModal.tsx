@@ -2,10 +2,9 @@ import { useState, useCallback, useRef } from "react";
 import { useAppStore } from "../stores/appStore";
 import { addTransaction, editTransaction } from "../api/client";
 import { parseSmartDate } from "../utils/dateUtils";
-import { formatDateFull } from "../utils/format";
 import FastInput from "./FastInput";
 import AdvancedInput from "./AdvancedInput";
-import type { TransactionDraft, DraftPosting, TxnModalMode } from "../types";
+import type { TransactionDraft, TxnModalMode } from "../types";
 
 interface TransactionModalProps {
   onMutated: () => void;
