@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchCashFlow } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { useFilterParams } from "../../hooks/useFilterParams";
-import { formatAmount } from "../../utils/format";
+import { formatAmount, amountSignClass } from "../../utils/format";
 import { IntervalSelector } from "./IncomeExpenseChart";
 import type { CashFlowSection, OtherCurrencyAmount } from "../../types";
 
@@ -132,12 +132,14 @@ export default function CashFlowStatement() {
                   </td>
                 );
               })}
-              <td className="report-table-num report-table-total">
-                {formatAmount(
-                  Object.values(net_cashflow).reduce((a, b) => a + b, 0),
-                  currency
-                )}
-              </td>
+              {(() => {
+                const ncfTotal = Object.values(net_cashflow).reduce((a, b) => a + b, 0);
+                return (
+                  <td className={`report-table-num report-table-total ${amountSignClass(ncfTotal)}`}>
+                    {formatAmount(ncfTotal, currency)}
+                  </td>
+                );
+              })()}
               {showOther && (
                 <td className="report-table-num report-table-other other-currencies">
                   {formatOtherCurrencies(other_net_cashflow)}
@@ -151,14 +153,22 @@ export default function CashFlowStatement() {
             </tr>
             <tr className="cashflow-balance-row">
               <td>Opening Cash Balance</td>
-              {periods.map((p) => (
-                <td key={p} className="report-table-num">
-                  {formatAmount(opening_balance[p] || 0, currency)}
-                </td>
-              ))}
-              <td className="report-table-num report-table-total">
-                {formatAmount(opening_balance[periods[0]] || 0, currency)}
-              </td>
+              {periods.map((p) => {
+                const val = opening_balance[p] || 0;
+                return (
+                  <td key={p} className={`report-table-num ${amountSignClass(val)}`}>
+                    {formatAmount(val, currency)}
+                  </td>
+                );
+              })}
+              {(() => {
+                const val = opening_balance[periods[0]] || 0;
+                return (
+                  <td className={`report-table-num report-table-total ${amountSignClass(val)}`}>
+                    {formatAmount(val, currency)}
+                  </td>
+                );
+              })()}
               {showOther && (
                 <td className="report-table-num report-table-other other-currencies">
                   {formatOtherCurrencies(other_opening_balance)}
@@ -167,17 +177,22 @@ export default function CashFlowStatement() {
             </tr>
             <tr className="cashflow-balance-row cashflow-closing">
               <td>Closing Cash Balance</td>
-              {periods.map((p) => (
-                <td key={p} className="report-table-num">
-                  {formatAmount(closing_balance[p] || 0, currency)}
-                </td>
-              ))}
-              <td className="report-table-num report-table-total">
-                {formatAmount(
-                  closing_balance[periods[periods.length - 1]] || 0,
-                  currency
-                )}
-              </td>
+              {periods.map((p) => {
+                const val = closing_balance[p] || 0;
+                return (
+                  <td key={p} className={`report-table-num ${amountSignClass(val)}`}>
+                    {formatAmount(val, currency)}
+                  </td>
+                );
+              })}
+              {(() => {
+                const val = closing_balance[periods[periods.length - 1]] || 0;
+                return (
+                  <td className={`report-table-num report-table-total ${amountSignClass(val)}`}>
+                    {formatAmount(val, currency)}
+                  </td>
+                );
+              })()}
               {showOther && (
                 <td className="report-table-num report-table-other other-currencies">
                   {formatOtherCurrencies(other_closing_balance)}
@@ -223,13 +238,13 @@ function CashFlowSectionRows({
               {item.name}
             </td>
             {periods.map((p) => (
-              <td key={p} className="report-table-num">
+              <td key={p} className={`report-table-num ${item.totals[p] != null ? amountSignClass(item.totals[p]) : ""}`}>
                 {item.totals[p] != null
                   ? formatAmount(item.totals[p], currency)
                   : "—"}
               </td>
             ))}
-            <td className="report-table-num report-table-total">
+            <td className={`report-table-num report-table-total ${item.total ? amountSignClass(item.total) : ""}`}>
               {item.total ? formatAmount(item.total, currency) : "—"}
             </td>
             {showOther && <td className="report-table-num report-table-other" />}

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchBalanceSheet } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { useFilterParams } from "../../hooks/useFilterParams";
-import { formatAmount } from "../../utils/format";
+import { formatAmount, amountSignClass } from "../../utils/format";
 import type { BalanceSheetNode, OtherCurrencyAmount } from "../../types";
 
 function formatOtherCurrencies(items?: OtherCurrencyAmount[]): string {
@@ -69,7 +69,7 @@ export default function BalanceSheet() {
             ))}
             <tr className="report-table-subtotal">
               <td>Total Assets</td>
-              <td className="report-table-num positive">
+              <td className={`report-table-num ${amountSignClass(totals.assets)}`}>
                 {formatAmount(totals.assets, currency)}
               </td>
               {showOther && (
@@ -88,7 +88,7 @@ export default function BalanceSheet() {
             ))}
             <tr className="report-table-subtotal">
               <td>Total Liabilities</td>
-              <td className="report-table-num negative">
+              <td className={`report-table-num ${amountSignClass(totals.liabilities)}`}>
                 {formatAmount(totals.liabilities, currency)}
               </td>
               {showOther && (
@@ -107,7 +107,7 @@ export default function BalanceSheet() {
             ))}
             <tr className="report-table-subtotal">
               <td>Total Equity</td>
-              <td className="report-table-num">
+              <td className={`report-table-num ${amountSignClass(totals.equity)}`}>
                 {formatAmount(totals.equity, currency)}
               </td>
               {showOther && (
@@ -120,7 +120,7 @@ export default function BalanceSheet() {
             {/* Grand total */}
             <tr className="report-table-grand-total">
               <td>Liabilities + Equity</td>
-              <td className="report-table-num">
+              <td className={`report-table-num ${amountSignClass(totals.liabilities + totals.equity)}`}>
                 {formatAmount(totals.liabilities + totals.equity, currency)}
               </td>
               {showOther && <td className="report-table-num report-table-other" />}
@@ -164,7 +164,7 @@ function BalanceTreeRows({
           )}
           {shortName}
         </td>
-        <td className="report-table-num">
+        <td className={`report-table-num ${node.balance ? amountSignClass(node.balance) : ""}`}>
           {node.balance ? formatAmount(node.balance, currency) : "—"}
         </td>
         {showOther && (

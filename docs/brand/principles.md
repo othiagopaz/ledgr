@@ -100,35 +100,36 @@ For any new numeric element, verify four things: (1) tabular figures applied; (2
 
 ---
 
-## 4. Color informs, structure explains
+## 4. Color informs direction and state
 
 ### The rule
 
-Color is reserved for **semantic state** — error, success, warning, info. Categories, hierarchies, and concepts are carried by typography, position, and label — never by hue alone.
+Color is reserved for two jobs: **financial direction** (positive → green, negative → red) and **UI state** (error, success, warning, info). Categories and hierarchies are carried by typography, position, and label — never by hue alone.
 
 ### Why
 
-If red means "expense" in one view, "overdue" in another, and "error" in a third, the user learns that red means nothing — just "something, somewhere." The signal collapses. Worse, color-blind users are excluded from the primary communication channel entirely.
+In a finance product, the sign of a number is the most consequential fact on the screen — users scan for it. Encoding it in hue (green up, red down) is the universal convention across banks, brokerages, and spreadsheets; withholding it costs a glance every time, because the reader has to re-parse a leading minus or re-read a column header to know if they're up or down. The convention is strong enough that it doesn't collide with "red = error": context (a table cell vs. a toast, an amount vs. a banner) disambiguates.
 
-Structure — grid position, labels, typography hierarchy — can carry infinite distinctions without ambiguity. Color cannot. So we reserve color for the narrow, unambiguous job of signaling state.
+What we still refuse is *category* color: painting "Assets" blue and "Liabilities" orange to label them. Labels carry categories; color carries direction and state.
 
-A worked example: in Ledgr's Income Statement, Revenue sits above Expenses, under a clear header, with consistent typography. You know it's revenue because of *where it is* and *what it's labeled* — not because it's green. Revenue in green plus Expenses in red would be redundant with the structure, and would steal color away from the job color actually does well (flagging an unreconciled entry or a warning state).
+Color-blind users remain a real constraint. The rule: where a signal is load-bearing (a critical status, a blocking warning), color must be paired with a shape, icon, or label. Sign-coloring on amounts is a reinforcement, never the sole channel — the minus sign and column position carry the same information.
 
 ### Therefore
 
-- Red / green / amber / blue reserved for error / success / warning / info. Nothing else.
-- Account categories (Assets, Liabilities, Equity, Income, Expenses) are distinguished by position and label — not by a color-coded sidebar.
-- Dashboards signal "good/bad" with color **plus** an icon or label. Color alone is never the signal.
-- Charts use a single restrained palette. Series are distinguished by legend and label placement, not by a rainbow.
+- **Textual amounts** with a sign are coloured — positive green, negative red — universally: registers, report tables, tallies, summaries, status bars, account trees.
+- Directional totals in report tables follow the same rule: Income Statement revenue rows green, expense rows red; Cash Flow inflows green, outflows red; Balance Sheet account rows coloured by balance sign.
+- **Charts are the exception.** Bars, lines, and areas stay in the restrained midnight ramp — the surrounding legend, axis labels, and tooltip numbers carry the direction. Painting series in red/green adds chart clutter without reinforcing information the viewer doesn't already have from position and legend, and breaks the calm of the dashboard.
+- Error / success / warning / info colours live in the semantic state tokens — and they're paired with an icon or label, never colour alone.
+- Account categories (Assets, Liabilities, Equity, Income, Expenses) are still distinguished by position and label — no color-coded sidebar, no rainbow taxonomy.
 - Hover, focus, and active states use subtle background/border changes, not hue shifts.
 
 ### Anti-pattern
 
-Income in green and Expenses in red, by default. A pie chart in six hues where each slice is already labeled. A color-coded account taxonomy ("Assets: blue, Liabilities: orange…"). Warning states that rely on color without an icon.
+A color-coded account taxonomy ("Assets: blue, Liabilities: orange…"). A pie chart in six hues where every slice is already labeled. Warning states that rely on colour without an icon. *Omitting* the red/green sign-coloring on textual amounts because "structure already carries it" — it doesn't, not fast enough, and users expect it. *Carrying* sign-coloring into chart series — the chart loses its restraint and the table downstream loses its relative impact.
 
 ### How to apply
 
-Audit a view: list every color on screen and the meaning it carries. If any color is carrying *category information* (not semantic state), the view fails this principle. The fix is not "different colors" — the fix is to let structure carry the category and retire the color.
+For any **textual** amount that can take either sign, apply `.positive` when the number > 0 and `.negative` when the number < 0 (`.amount-zero` exactly at zero). For **charts**, keep the midnight brand palette regardless of series direction; let the legend and axis do the labelling. For hierarchies, categories, and anything that isn't a signed amount or a UI state, typography and position do the work.
 
 ---
 
