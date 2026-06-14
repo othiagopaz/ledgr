@@ -2536,3 +2536,252 @@ body {
 .filter-apply-btn:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+
+/* ============================================================
+   Budget view
+   ============================================================ */
+
+.budget-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.budget-month-label {
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 120px;
+  text-align: center;
+}
+
+/* Budget view uses the full pane width (no 1100px report cap), so the
+   envelope columns never wrap (e.g. the "Set budget" action). */
+.budget-content {
+  max-width: none;
+}
+
+/* Minimized cash-flow summary — the ZBB target across all four columns. */
+.budget-summary {
+  margin-bottom: 24px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.budget-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.budget-summary-table th {
+  text-align: left;
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.budget-summary-table th.num { text-align: right; }
+.budget-summary-table td {
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.budget-summary-table td.num { text-align: right; }
+.budget-summary-label { font-weight: 500; }
+/* Subtotal rows in the bridge — Net Income and Net Cash Flow. */
+.budget-summary-net-income td {
+  font-weight: 600;
+  border-top: 1px solid var(--color-border-default);
+}
+.budget-summary-net-cash td {
+  padding: 9px 16px;
+  font-weight: 700;
+  border-top: 2px solid var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+.budget-summary-hint {
+  font-weight: 400;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-text-tertiary);
+}
+.budget-summary-caption {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-primary);
+}
+.budget-summary-ghosts {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-primary);
+}
+
+.budget-action-error {
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  background: var(--color-error-bg);
+  color: var(--color-error-fg);
+  font-size: 13px;
+}
+.budget-warnings {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.budget-warning {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+  font-size: 12px;
+}
+
+/* Sections & envelope table. */
+.budget-section { margin-bottom: 28px; }
+.budget-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.budget-table th {
+  text-align: left;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.budget-table th.num { text-align: right; }
+.budget-col-name { min-width: 160px; }
+.budget-col-bar { width: 28%; }
+.budget-col-allocated,
+.budget-col-realized,
+.budget-col-pending,
+.budget-col-free { width: 104px; white-space: nowrap; }
+
+.budget-envelope-row td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+.budget-envelope-name {
+  color: var(--color-text-primary);
+}
+.budget-col-allocated { cursor: pointer; }
+.budget-alloc-display { border-bottom: 1px dotted var(--color-border-strong); }
+.budget-col-allocated:hover .budget-alloc-display {
+  border-bottom-color: var(--color-accent);
+}
+.budget-alloc-input {
+  width: 80px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+  padding: 2px 4px;
+  border: 1px solid var(--bg-editor-border);
+  border-radius: 3px;
+  background: var(--bg-editor);
+  color: var(--color-text-primary);
+}
+.budget-empty-row td {
+  padding: 10px 12px;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  font-size: 12px;
+}
+.budget-subtotal-row td {
+  padding: 8px 12px;
+  font-weight: 600;
+  border-top: 1px solid var(--color-border-default);
+}
+
+/* Envelope bar — realized (solid) · pending (hatched) · free (track). */
+.envelope-bar {
+  position: relative;
+  height: 10px;
+  width: 100%;
+  background: var(--color-bg-tertiary);
+  border-radius: 5px;
+  overflow: hidden;
+  display: flex;
+}
+.envelope-bar-fill {
+  height: 100%;
+}
+.envelope-bar-fill.spend { background: var(--color-accent); }
+.envelope-bar-fill.income { background: var(--color-success-fg); }
+.envelope-bar-fill.over { background: var(--color-error-fg); }
+.envelope-bar-pace {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  background: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+/* Add-envelope row. */
+.budget-add-row td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.budget-add-trigger {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.budget-add-trigger:hover { color: var(--color-accent); }
+.budget-add-row-editing td { vertical-align: middle; }
+.budget-add-account-input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--bg-editor-border);
+  border-radius: 3px;
+  background: var(--bg-editor);
+  color: var(--color-text-primary);
+}
+.budget-add-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.budget-add-confirm,
+.budget-add-cancel {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+/* Ghost rows — unbudgeted accounts with activity. */
+.budget-envelope-ghost .budget-envelope-name,
+.budget-envelope-ghost .budget-col-realized,
+.budget-envelope-ghost .budget-col-pending,
+.budget-envelope-ghost .budget-col-free {
+  color: var(--color-text-tertiary);
+}
+.budget-ghost-tag {
+  margin-left: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: middle;
+}
+.budget-alloc-set {
+  color: var(--color-accent);
+  border-bottom: 1px dotted var(--color-accent);
+  cursor: pointer;
+}

@@ -87,3 +87,20 @@ def cashflow_ledger(cashflow_file: Path) -> FavaLedger:
     fava = FavaLedger(str(cashflow_file))
     fava.load_file()
     return fava
+
+
+@pytest.fixture()
+def budget_file(tmp_path: Path) -> Path:
+    """Copy the budget fixture into a temp directory."""
+    src = FIXTURES_DIR / "budget.beancount"
+    dst = tmp_path / "budget.beancount"
+    shutil.copy(src, dst)
+    return dst
+
+
+@pytest.fixture()
+def budget_ledger(budget_file: Path) -> FavaLedger:
+    """A FavaLedger instance loaded from the budget fixture."""
+    fava = FavaLedger(str(budget_file))
+    fava.load_file()
+    return fava
