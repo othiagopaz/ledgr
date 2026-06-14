@@ -1,0 +1,133 @@
+option "title" "Budget Test Ledger"
+option "operating_currency" "BRL"
+
+2024-01-01 open Assets:Bank:Checking        BRL
+  ledgr-type: "cash"
+2024-01-01 open Assets:Investments:Stocks    BRL
+  ledgr-type: "investment"
+2024-01-01 open Income:Salary                BRL
+2024-01-01 open Expenses:Food                BRL
+2024-01-01 open Expenses:Food:Restaurant     BRL
+2024-01-01 open Expenses:Rent                BRL
+2024-01-01 open Liabilities:CreditCard       BRL
+  ledgr-type: "credit-card"
+2024-01-01 open Liabilities:Loan              BRL
+  ledgr-type: "loan"
+; Parent loan account WITHOUT a ledgr-type; the typed child carries postings.
+2024-01-01 open Liabilities:Mortgage          BRL
+2024-01-01 open Liabilities:Mortgage:BankA    BRL
+  ledgr-type: "loan"
+2024-01-01 open Income:Interest              BRL
+2024-01-01 open Expenses:Subscriptions       BRL
+2024-01-01 open Equity:OpeningBalances       BRL
+
+; ── Budget directives for January 2024 ──────────────────────────
+; Income pool: 12000.  Expenses: 500 (Restaurant) + 3000 (Rent) = 3500.
+; Allocations: 2000 (investment) + 500 (debt paydown) = 2500.
+; Unallocated = 12000 - 3500 - 2500 = 6000.
+2024-01-01 custom "budget" Income:Salary             "monthly" 12000.00 BRL
+2024-01-01 custom "budget" Expenses:Food:Restaurant  "monthly"   500.00 BRL
+2024-01-01 custom "budget" Expenses:Rent             "monthly"  3000.00 BRL
+2024-01-01 custom "budget" Assets:Investments:Stocks "monthly"  2000.00 BRL
+2024-01-01 custom "budget" Liabilities:Loan          "monthly"   500.00 BRL
+
+; ── A directive in a *different* month (February) ───────────────
+2024-02-01 custom "budget" Expenses:Rent             "monthly"  3100.00 BRL
+
+; ── Transactions for January 2024 ──────────────────────────────
+
+; Salary deposit (confirmed): Income credit → realized income
+2024-01-05 * "Employer" "Salary"
+  Assets:Bank:Checking    12000.00 BRL
+  Income:Salary
+
+; Restaurant on credit card (confirmed): drains the Restaurant envelope
+; at purchase, regardless of payment instrument.
+2024-01-10 * "Bistro" "Dinner"
+  Expenses:Food:Restaurant   200.00 BRL
+  Liabilities:CreditCard
+
+; Restaurant, pending (planned): contributes to pending bucket only
+2024-01-20 ! "Cafe" "Planned lunch"
+  Expenses:Food:Restaurant   100.00 BRL
+  Liabilities:CreditCard
+
+; Rent (confirmed): cash → expense
+2024-01-25 * "Landlord" "Rent"
+  Expenses:Rent             3000.00 BRL
+  Assets:Bank:Checking
+
+; Investment contribution (confirmed): +2000 to Assets:Investments
+2024-01-15 * "Broker" "Monthly contribution"
+  Assets:Investments:Stocks  2000.00 BRL
+  Assets:Bank:Checking
+
+; Debt paydown (confirmed): +500 to Liabilities:Loan
+; (paying down the loan principal — drains the debt-paydown allocation envelope)
+2024-01-28 * "Loan Paydown"
+  Liabilities:Loan           500.00 BRL
+  Assets:Bank:Checking
+
+; ── Descendant-only spend to test subtree roll-up ──────────────
+; Expenses:Food (parent of Restaurant) gets a direct posting too.
+2024-01-12 * "Supermarket" "Groceries"
+  Expenses:Food              150.00 BRL
+  Assets:Bank:Checking
+
+; ── Sub-cent postings (July) to test subtotal rounding ─────────
+; Two Restaurant/Rent envelopes realize 33.333 and 33.334; the true
+; subtotal is 66.667 → 66.67, not 33.33 + 33.33 = 66.66.
+2024-07-01 custom "budget" Expenses:Food:Restaurant  "monthly" 100.00 BRL
+2024-07-01 custom "budget" Expenses:Rent             "monthly" 100.00 BRL
+2024-07-10 * "Bistro" "Sub-cent dinner"
+  Expenses:Food:Restaurant    33.333 BRL
+  Assets:Bank:Checking
+2024-07-11 * "Landlord" "Sub-cent rent"
+  Expenses:Rent               33.334 BRL
+  Assets:Bank:Checking
+
+; ── August 2024: v2 scenarios ──────────────────────────────────
+; Budget ONLY the investment allocation. Everything else is activity.
+2024-08-01 custom "budget" Assets:Investments:Stocks "monthly" 1000.00 BRL
+
+; Real contribution (cash → investment): COUNTS toward the allocation.
+2024-08-05 * "Broker" "Contribution"
+  Assets:Investments:Stocks   1000.00 BRL
+  Assets:Bank:Checking
+
+; Interest credited (Income → investment, NO cash leg): must NOT count.
+2024-08-20 * "Broker" "Interest"
+  Assets:Investments:Stocks    150.00 BRL
+  Income:Interest
+
+; Unbudgeted expense with a confirmed (*) charge → realized ghost.
+2024-08-12 * "Streaming" "Subscription"
+  Expenses:Subscriptions        49.90 BRL
+  Liabilities:CreditCard
+
+; Unbudgeted expense with a planned (!) installment → pending ghost
+; (only visible in combined mode).
+2024-08-25 ! "Store" "Installment 1/3"
+  Expenses:Subscriptions       100.00 BRL
+  Liabilities:CreditCard
+
+; ── October 2024: a legacy/hand-edited month with a now-excluded
+; credit-card budget directive alongside a valid expense one. The PUT path
+; would reject the credit-card line, but it can exist in the file; copy must
+; not carry it forward.
+2024-10-01 custom "budget" Expenses:Rent          "monthly" 3000.00 BRL
+2024-10-01 custom "budget" Liabilities:CreditCard "monthly"  999.00 BRL
+
+; ── December 2024: budget the UNTYPED parent loan account; the payment posts
+; to the typed child. The parent must render as an allocation (descendant-aware
+; type), with the child's 800 rolled up.
+2024-12-01 custom "budget" Liabilities:Mortgage "monthly" 800.00 BRL
+2024-12-10 * "Bank" "Mortgage Payment"
+  Liabilities:Mortgage:BankA   800.00 BRL
+  Assets:Bank:Checking
+
+; ── November 2024: a DUPLICATE budget directive for one account (a copy/
+; hand-edit artifact). Fava uses the last; an edit to the first would silently
+; no-op, so the write path must dedupe to a single directive. Both are 500.
+2024-11-01 custom "budget" Expenses:Rent "monthly" 500.00 BRL
+2024-11-01 custom "budget" Expenses:Rent "monthly" 500.00 BRL

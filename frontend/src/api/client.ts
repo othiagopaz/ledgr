@@ -19,6 +19,7 @@ import type {
   SeriesExtendIn,
   SeriesExtendResponse,
   SeriesCancelResponse,
+  BudgetResponse,
 } from "../types";
 
 const BASE = "";
@@ -338,5 +339,57 @@ export async function cancelSeries(
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+// Budget — owns its own month stepper; not coupled to global filters.
+
+export async function fetchBudget(
+  month: string,
+  viewMode: ViewMode = "combined",
+): Promise<BudgetResponse> {
+  const params = new URLSearchParams({ month });
+  if (viewMode !== "combined") params.set("view_mode", viewMode);
+  return get(`/api/budget?${params}`);
+}
+
+export async function setBudgetAllocation(
+  month: string,
+  account: string,
+  amount: string | null,
+  viewMode: ViewMode = "combined",
+): Promise<BudgetResponse> {
+  const params = new URLSearchParams();
+  if (viewMode !== "combined") params.set("view_mode", viewMode);
+  const qs = params.toString();
+  const res = await fetch(`/api/budget${qs ? "?" + qs : ""}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ month, account, amount }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function copyBudgetMonth(
+  fromMonth: string,
+  toMonth: string,
+  viewMode: ViewMode = "combined",
+): Promise<BudgetResponse> {
+  const params = new URLSearchParams();
+  if (viewMode !== "combined") params.set("view_mode", viewMode);
+  const qs = params.toString();
+  const res = await fetch(`/api/budget/copy${qs ? "?" + qs : ""}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from_month: fromMonth, to_month: toMonth }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  }
   return res.json();
 }

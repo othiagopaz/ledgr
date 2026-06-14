@@ -1,11 +1,31 @@
 ---
 type: log
-last_updated: 2026-04-21
+last_updated: 2026-06-15
 ---
 
 # Wiki Log
 
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
+
+---
+
+## 2026-06-15 — Budgets feature (full history consolidated)
+
+- [`features/budgets.md`](features/budgets.md) is the single source of truth for
+  the Budget feature; registered in [`index.md`](index.md). The throwaway
+  `plans/PLAN-budgets*.md` design docs were folded into it and deleted (the
+  index Plans section already documents that plans get deleted once their
+  learnings move to the wiki).
+- Scope captured there: zero-based envelopes over Fava `custom "budget"`
+  directives; the `P` planned/actual folding; ghost rows for unbudgeted activity
+  with effective-allocation closure and overlap dedupe; allocation envelopes
+  restricted to `investment`/`loan` (descendant-aware) and counting cash-leg
+  transfers only (interest excluded, mirroring the cashflow classifier); the
+  indirect-method cash bridge summary whose Net Cash Flow (Realized) ties to the
+  Cash Flow Statement; duplicate-directive dedupe on edit; and copy-overwrite.
+- Backend: `budgets.py` + `routers/budget.py`; `account_types.py` gained
+  `BUDGETABLE_ALLOCATION_TYPES`/`is_budgetable_allocation`. 3-statement frozen
+  zone untouched.
 
 ---
 

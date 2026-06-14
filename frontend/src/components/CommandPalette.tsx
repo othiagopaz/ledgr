@@ -24,7 +24,7 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { setCommandPaletteOpen, openTab, toggleTheme, openSeriesModal } = useAppStore();
+  const { setCommandPaletteOpen, openTab, toggleTheme, openSeriesModal, requestBudgetNav } = useAppStore();
 
   const accountNamesQuery = useQuery({
     queryKey: ["account-names"],
@@ -166,6 +166,39 @@ export default function CommandPalette() {
       setCommandPaletteOpen(false);
     },
   });
+
+  items.push({
+    id: "view:budget",
+    label: "Go to Budget",
+    group: "Views",
+    action: () => {
+      openTab({ id: "budget", type: "budget", label: "Budget" });
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  // Budget stepper actions — open the Budget tab, then fire the nav signal
+  // BudgetView consumes (it owns the month state).
+  function budgetAction(
+    id: string,
+    label: string,
+    nav: 'next-month' | 'prev-month' | 'copy-last-month' | 'add-envelope',
+  ) {
+    items.push({
+      id,
+      label,
+      group: "Budget",
+      action: () => {
+        openTab({ id: "budget", type: "budget", label: "Budget" });
+        requestBudgetNav(nav);
+        setCommandPaletteOpen(false);
+      },
+    });
+  }
+  budgetAction("budget:add-envelope", "Budget: Add Envelope", "add-envelope");
+  budgetAction("budget:next-month", "Budget: Next Month", "next-month");
+  budgetAction("budget:prev-month", "Budget: Previous Month", "prev-month");
+  budgetAction("budget:copy-last-month", "Budget: Copy From Last Month", "copy-last-month");
 
   items.push({
     id: "view:dashboard",
