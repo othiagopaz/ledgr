@@ -3,11 +3,21 @@ import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode, P
 
 interface Tab {
   id: string;
-  type: 'register' | 'report' | 'accounts' | 'dashboard' | 'series';
+  type: 'register' | 'report' | 'accounts' | 'dashboard' | 'series' | 'budget';
   account?: string;
   reportType?: string;
   label: string;
 }
+
+// Budget view navigation signal (Cmd+K → BudgetView). Mirrors the
+// newTxnRequestId signal pattern: a counter the palette bumps, carrying the
+// requested action; BudgetView consumes the latest one. See frontend guidelines
+// "Signal pattern".
+export type BudgetNavAction =
+  | 'next-month'
+  | 'prev-month'
+  | 'copy-last-month'
+  | 'add-envelope';
 
 interface AppState {
   // Tabs
@@ -20,6 +30,16 @@ interface AppState {
   // Signal: request opening a new transaction row (from Cmd+N, command palette)
   newTxnRequestId: number;
   requestNewTransaction: () => void;
+
+  // Signal: budget view navigation (from command palette). The consumed-id
+  // lives in the store (not a component ref) so it survives BudgetView
+  // unmount/remount — a fresh signal fires exactly once, a stale one never
+  // replays on remount.
+  budgetNavRequestId: number;
+  budgetNavConsumedId: number;
+  budgetNavAction: BudgetNavAction | null;
+  requestBudgetNav: (action: BudgetNavAction) => void;
+  consumeBudgetNav: () => void;
 
   // Transaction modal
   txnModalOpen: boolean;
@@ -119,6 +139,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   newTxnRequestId: 0,
   requestNewTransaction: () =>
     set((s) => ({ newTxnRequestId: s.newTxnRequestId + 1 })),
+
+  // Budget navigation signal
+  budgetNavRequestId: 0,
+  budgetNavConsumedId: 0,
+  budgetNavAction: null,
+  requestBudgetNav: (action) =>
+    set((s) => ({
+      budgetNavRequestId: s.budgetNavRequestId + 1,
+      budgetNavAction: action,
+    })),
+  consumeBudgetNav: () =>
+    set((s) => ({ budgetNavConsumedId: s.budgetNavRequestId })),
 
   // Transaction modal
   txnModalOpen: false,

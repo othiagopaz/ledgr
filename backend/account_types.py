@@ -32,6 +32,13 @@ INVESTMENT_TYPES: frozenset[str] = frozenset({"investment"})
 # Transactions between a cash account and a loan account = FINANCING.
 LOAN_TYPES: frozenset[str] = frozenset({"loan"})
 
+# Asset/Liability types that are valid Budget *allocation* envelopes — money
+# you deliberately set aside (investment contributions, debt paydown). Every
+# other Asset/Liability type (cash, receivable, prepaid, credit-card, payable)
+# is a financial movement / instrument, not an allocation target, and is kept
+# out of the Budget entirely. See docs/features/budgets.md.
+BUDGETABLE_ALLOCATION_TYPES: frozenset[str] = frozenset({"investment", "loan"})
+
 # All valid types for Assets accounts.
 VALID_ASSET_TYPES: frozenset[str] = frozenset({
     "cash", "receivable", "investment", "prepaid",
@@ -131,3 +138,29 @@ def is_investment_account(account: str, type_map: dict[str, str]) -> bool:
 def is_loan_account(account: str, type_map: dict[str, str]) -> bool:
     """Return True if account's ledgr-type is in LOAN_TYPES."""
     return type_map.get(account) in LOAN_TYPES
+
+
+def is_budgetable_allocation(account: str, type_map: dict[str, str]) -> bool:
+    """Return True if an Assets/Liabilities account is a valid Budget allocation.
+
+    Only ``investment`` and ``loan`` accounts qualify — every other
+    Asset/Liability type (cash, receivable, prepaid, credit-card, payable) is a
+    financial movement, not an allocation envelope, and is excluded from the
+    Budget. Income/Expenses accounts are not allocations and return False here
+    (they belong to their own sections).
+
+    The check is **descendant-aware**: a parent allocation account whose own
+    ``ledgr-type`` is absent still qualifies if any descendant is
+    ``investment``/``loan``-typed.  This mirrors the Cash Flow Statement, which
+    classifies by the typed posting account — so budgeting a parent like
+    ``Liabilities:Loans`` works when its child ``Liabilities:Loans:KA`` is a
+    loan (``sum_account_postings`` rolls the child's postings into the parent).
+    """
+    if type_map.get(account) in BUDGETABLE_ALLOCATION_TYPES:
+        return True
+    prefix = account + ":"
+    return any(
+        t in BUDGETABLE_ALLOCATION_TYPES
+        for a, t in type_map.items()
+        if a.startswith(prefix)
+    )

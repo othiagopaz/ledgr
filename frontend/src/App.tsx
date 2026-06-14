@@ -8,6 +8,7 @@ import AccountRegister from "./components/AccountRegister";
 import AllTransactionsView from "./components/AllTransactionsView";
 import ReportsView from "./components/reports/ReportsView";
 import SeriesView from "./components/SeriesView";
+import BudgetView from "./components/BudgetView";
 import TransactionModal from "./components/TransactionModal";
 import AccountModal from "./components/AccountModal";
 import SeriesModal from "./components/SeriesModal";
@@ -141,6 +142,9 @@ export default function App() {
       case "series":
         return <SeriesView />;
 
+      case "budget":
+        return <BudgetView />;
+
       default:
         return <AllTransactionsView onMutated={handleMutated} />;
     }
@@ -168,7 +172,7 @@ export default function App() {
 
         <div className="main-content">
           <TabBar />
-          {activeTab?.type !== "accounts" && <FilterBar />}
+          {activeTab?.type !== "accounts" && activeTab?.type !== "budget" && <FilterBar />}
           <div className="register-content">
             {renderMainContent()}
           </div>
