@@ -281,6 +281,73 @@ export interface CashFlowResponse {
   planned_net_cashflow?: Record<string, number>;
 }
 
+// Budget types
+
+export interface BudgetEnvelope {
+  account: string;
+  allocated: number;
+  realized: number;
+  pending: number;
+  free: number;
+  paced_allocation: number;
+  /** True when the account has activity but no budget directive (v2). */
+  is_ghost: boolean;
+}
+
+export interface BudgetSubtotal {
+  allocated: number;
+  realized: number;
+  pending: number;
+  free: number;
+}
+
+export interface BudgetSection {
+  key: 'income' | 'expenses' | 'allocations';
+  label: string;
+  subtotal: BudgetSubtotal;
+  envelopes: BudgetEnvelope[];
+}
+
+export interface BudgetPool {
+  income_allocated: number;
+  expense_allocated: number;
+  allocation_allocated: number;
+  unallocated: number;
+}
+
+/** One row in the indirect-method cash bridge (v4): three columns. */
+export interface BudgetBridgeLine {
+  allocated: number;
+  realized: number;
+  pending: number;
+}
+
+/**
+ * Indirect-method bridge from accrual Net Income to Net Cash Flow:
+ *   net_income − allocations − other_non_cash = net_cash_flow
+ *
+ * "Realized = now, Allocated = will-be": net_cash_flow.realized (combined) ties
+ * to the Cash Flow Statement; net_cash_flow.allocated is the projected cash if
+ * the plan plays out.
+ */
+export interface BudgetBridge {
+  net_income: BudgetBridgeLine;
+  allocations: BudgetBridgeLine;
+  other_non_cash: BudgetBridgeLine;
+  net_cash_flow: BudgetBridgeLine;
+}
+
+export interface BudgetResponse {
+  month: string;
+  operating_currency: string;
+  pool: BudgetPool;
+  sections: BudgetSection[];
+  bridge: BudgetBridge;
+  /** Count of unbudgeted accounts with activity surfaced as ghost rows (v2). */
+  ghost_count: number;
+  warnings: string[];
+}
+
 // Series types
 
 export interface PostingSpec {
