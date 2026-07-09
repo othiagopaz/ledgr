@@ -180,6 +180,7 @@ export default function BudgetView() {
             <BudgetSection
               key={section.key}
               section={section}
+              month={month}
               currency={currency}
               includePending={includePending}
               onSetAllocation={handleSetAllocation}

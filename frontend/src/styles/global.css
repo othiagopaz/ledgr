@@ -652,6 +652,108 @@ body {
 
 .form-row { display: flex; gap: 8px; margin-bottom: 10px; }
 
+/* Drill-down drawer (report cell / budget row → transactions) */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklab, var(--color-text-primary) 22%, transparent);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 90; /* below .modal-overlay (100) so a txn opened from here layers on top */
+}
+
+.drawer {
+  background: var(--color-bg-primary);
+  border-left: 1px solid var(--color-border-default);
+  width: 100%;
+  max-width: 720px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -24px 0 60px -24px rgba(5, 14, 31, 0.35);
+  animation: drawer-slide-in 0.16s ease-out;
+}
+
+@keyframes drawer-slide-in {
+  from { transform: translateX(24px); opacity: 0.6; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-default);
+  flex-shrink: 0;
+}
+
+.drawer-header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.drawer-account {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-period {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.drawer-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  padding: 0 4px;
+}
+
+.drawer-close:hover { color: var(--color-text-primary); }
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.drawer-total-row td {
+  border-top: 2px solid var(--color-border-default);
+  font-weight: 600;
+  position: sticky;
+  bottom: 0;
+  background: var(--color-bg-primary);
+}
+.drawer-total-label {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.drawer .transfer {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.text-muted { color: var(--text-muted); }
+
+/* Clickable report/budget cells that drill into the transaction drawer */
+.report-table-drill { cursor: pointer; }
+.report-table-drill:hover {
+  background: color-mix(in oklab, var(--color-accent, var(--color-text-primary)) 10%, transparent);
+  text-decoration: underline;
+}
+
+.budget-envelope-drill { cursor: pointer; }
+.budget-envelope-drill:hover { text-decoration: underline; }
+
 .form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 
 .form-field label {
@@ -1207,19 +1309,6 @@ body {
   flex: 1;
 }
 
-/* All Transactions View */
-.all-transactions { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-.all-transactions-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border-default);
-}
-.all-transactions-header h2 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-.all-transactions .register { flex: 1; }
-.all-transactions .row { transition: background 0.1s; }
-.all-transactions .row:hover { background: var(--color-bg-secondary); }
 
 .accounts-summary {
   font-family: var(--font-mono);
@@ -1836,6 +1925,23 @@ body {
 }
 
 /* Series inline badges — desaturated */
+/* Payee cell: keep the series badge on one line with the payee text, and
+   truncate an over-long payee with an ellipsis instead of wrapping it under
+   the badge. */
+.payee-cell {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+}
+.payee-cell .series-inline-badge { flex-shrink: 0; }
+.payee-cell .payee {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .series-inline-badge {
   display: inline-flex;
   align-items: center;

@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatAmount, amountSignClass } from '../../utils/format';
+import { periodToDateRange } from '../../utils/dateUtils';
+import { useAppStore } from '../../stores/appStore';
 import type { BudgetEnvelope } from '../../types';
 import EnvelopeBar from './EnvelopeBar';
 
 interface BudgetEnvelopeRowProps {
   envelope: BudgetEnvelope;
   sectionKey: 'income' | 'expenses' | 'allocations';
+  /** Budget month as "YYYY-MM" — used for the drill-down date range. */
+  month: string;
   currency: string;
   includePending: boolean;
   /** Commit a new allocation (or null/empty to clear). */
@@ -21,6 +25,7 @@ function shortAccount(account: string): string {
 export default function BudgetEnvelopeRow({
   envelope,
   sectionKey,
+  month,
   currency,
   includePending,
   onSetAllocation,
@@ -29,6 +34,17 @@ export default function BudgetEnvelopeRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const openDrill = useAppStore((s) => s.openDrill);
+
+  function openTransactions() {
+    const { from_date, to_date } = periodToDateRange(month);
+    openDrill({
+      account: envelope.account,
+      fromDate: from_date,
+      toDate: to_date,
+      label: `${shortAccount(envelope.account)} · ${month}`,
+    });
+  }
 
   useEffect(() => {
     if (editing) {
@@ -71,7 +87,11 @@ export default function BudgetEnvelopeRow({
 
   return (
     <tr className={`budget-envelope-row${isGhost ? ' budget-envelope-ghost' : ''}`}>
-      <td className="budget-envelope-name" title={envelope.account}>
+      <td
+        className="budget-envelope-name budget-envelope-drill"
+        title="View transactions"
+        onClick={openTransactions}
+      >
         {shortAccount(envelope.account)}
         {isGhost && (
           <span className="budget-ghost-tag" title="Has activity but no budget">

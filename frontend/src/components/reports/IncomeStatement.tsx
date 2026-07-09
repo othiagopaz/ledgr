@@ -4,6 +4,7 @@ import { fetchIncomeStatement } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount, amountSignClass } from "../../utils/format";
+import { periodToDateRange } from "../../utils/dateUtils";
 import { IntervalSelector } from "./IncomeExpenseChart";
 import type { AccountReportNode, OtherCurrencyAmount } from "../../types";
 
@@ -205,6 +206,7 @@ function ReportTreeRows({
   signFactor: 1 | -1;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const openDrill = useAppStore((s) => s.openDrill);
   const hasChildren = node.children.length > 0;
   const shortName = node.name.split(":").pop() || node.name;
 
@@ -228,7 +230,21 @@ function ReportTreeRows({
           if (!raw) return <td key={p} className="report-table-num">—</td>;
           const v = raw * signFactor;
           return (
-            <td key={p} className={`report-table-num ${amountSignClass(v)}`}>
+            <td
+              key={p}
+              className={`report-table-num report-table-drill ${amountSignClass(v)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                const { from_date, to_date } = periodToDateRange(p);
+                openDrill({
+                  account: node.name,
+                  fromDate: from_date,
+                  toDate: to_date,
+                  label: `${shortName} · ${p}`,
+                });
+              }}
+              title="View transactions"
+            >
               {formatAmount(v, currency)}
             </td>
           );
