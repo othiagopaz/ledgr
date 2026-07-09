@@ -5,11 +5,11 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
 import AccountsView from "./components/AccountsView";
 import AccountRegister from "./components/AccountRegister";
-import AllTransactionsView from "./components/AllTransactionsView";
 import ReportsView from "./components/reports/ReportsView";
 import SeriesView from "./components/SeriesView";
 import BudgetView from "./components/BudgetView";
 import TransactionModal from "./components/TransactionModal";
+import TransactionDrawer from "./components/TransactionDrawer";
 import AccountModal from "./components/AccountModal";
 import SeriesModal from "./components/SeriesModal";
 import PlannedToggle from "./components/PlannedToggle";
@@ -32,6 +32,8 @@ export default function App() {
   const txnModalOpen = useAppStore((s) => s.txnModalOpen);
   const acctModalOpen = useAppStore((s) => s.acctModalOpen);
   const seriesModalOpen = useAppStore((s) => s.seriesModalOpen);
+  const drillTarget = useAppStore((s) => s.drillTarget);
+  const closeDrill = useAppStore((s) => s.closeDrill);
   const viewMode = useAppStore((s) => s.viewMode);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -146,7 +148,7 @@ export default function App() {
         return <BudgetView />;
 
       default:
-        return <AllTransactionsView onMutated={handleMutated} />;
+        return <Dashboard onSelectAccount={handleSelectAccount} onOpenReports={handleOpenReports} />;
     }
   }
 
@@ -189,6 +191,7 @@ export default function App() {
       {txnModalOpen && <TransactionModal onMutated={handleMutated} />}
       {acctModalOpen && <AccountModal onMutated={handleMutated} />}
       {seriesModalOpen && <SeriesModal onMutated={handleMutated} />}
+      {drillTarget && <TransactionDrawer target={drillTarget} onClose={closeDrill} />}
     </div>
   );
 }

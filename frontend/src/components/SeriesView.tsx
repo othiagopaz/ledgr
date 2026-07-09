@@ -155,7 +155,9 @@ export default function SeriesView() {
       case 'pending':
         return [...seriesTxns.filter((t) => t.flag === '!'), ...pendingTxns];
       default:
-        return [...seriesTxns, ...pendingTxns];
+        // 'all' → every transaction in the ledger (the unified view), not just
+        // series/pending. The Series summary above still lists series only.
+        return allTxns;
     }
   })();
 
@@ -326,7 +328,7 @@ export default function SeriesView() {
   return (
     <div className="reports-view">
       <PageHeader<Filter>
-        title="Series & Scheduled"
+        title="Transactions & Schedule"
         action={
           <button
             className="btn btn-primary"
@@ -376,12 +378,12 @@ export default function SeriesView() {
             </div>
           )}
 
-          {filteredSeries.length === 0 && filter !== 'pending' && (
+          {filteredSeries.length === 0 && (filter === 'recurring' || filter === 'installment') && (
             <div className="series-empty-hint">
-              No {filter === 'all' ? '' : filter + ' '}series yet.{' '}
+              No {filter} series yet.{' '}
               <button
                 className="btn-link"
-                onClick={() => openSeriesModal(undefined, filter === 'recurring' || filter === 'installment' ? filter : undefined)}
+                onClick={() => openSeriesModal(undefined, filter)}
               >
                 Create one
               </button>

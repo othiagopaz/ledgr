@@ -29,7 +29,7 @@ export default function Sidebar({ errorCount }: SidebarProps) {
   }
 
   function openSeries() {
-    openTab({ id: "series", type: "series", label: "Series" });
+    openTab({ id: "series", type: "series", label: "Transactions & Schedule" });
   }
 
   function openBudget() {
@@ -64,7 +64,7 @@ export default function Sidebar({ errorCount }: SidebarProps) {
           className={`sidebar-nav-item${activeType === "series" ? " active" : ""}`}
           onClick={openSeries}
         >
-          Series
+          Transactions & Schedule
         </button>
 
         <button

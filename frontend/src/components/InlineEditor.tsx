@@ -47,12 +47,8 @@ export default function InlineEditor({
     }
     return formatDateFull(today(), operatingCurrency);
   });
-  const [payeeNarration, setPayeeNarration] = useState(() => {
-    if (!transaction) return "";
-    return [transaction.payee, transaction.narration]
-      .filter(Boolean)
-      .join(" — ");
-  });
+  const [payee, setPayee] = useState(transaction?.payee || "");
+  const [narration, setNarration] = useState(transaction?.narration || "");
   const [transfer, setTransfer] = useState(existingTransfer?.account || "");
   const [debit, setDebit] = useState(
     existingAmount > 0 ? String(existingAmount) : ""
@@ -64,6 +60,7 @@ export default function InlineEditor({
 
   const dateRef = useRef<HTMLInputElement>(null);
   const payeeRef = useRef<HTMLInputElement>(null);
+  const narrationRef = useRef<HTMLInputElement>(null);
   const transferRef = useRef<HTMLInputElement>(null);
   const reconcileRef = useRef<HTMLButtonElement>(null);
   const debitRef = useRef<HTMLInputElement>(null);
@@ -108,17 +105,6 @@ export default function InlineEditor({
     setSaving(true);
 
     const parsedDate = parseSmartDate(date);
-
-    // Parse payee — narration
-    let payee = "";
-    let narration = "";
-    if (payeeNarration.includes(" — ")) {
-      const parts = payeeNarration.split(" — ");
-      payee = parts[0].trim();
-      narration = parts.slice(1).join(" — ").trim();
-    } else {
-      narration = payeeNarration;
-    }
 
     // Build postings
     const debitAmount = debit ? parseFloat(debit) : 0;
@@ -218,16 +204,30 @@ export default function InlineEditor({
       </td>
       <td>
         <InlineAutocomplete
-          value={payeeNarration}
-          onChange={setPayeeNarration}
+          value={payee}
+          onChange={setPayee}
           onSelect={handlePayeeSelect}
           options={payeesQuery.data?.payees || []}
-          placeholder="Description"
+          placeholder="Payee"
           inputRef={payeeRef}
+          onKeyDown={(e) => {
+            handleGlobalKeyDown(e);
+            handleTab(e, narrationRef);
+          }}
+        />
+      </td>
+      <td>
+        <input
+          ref={narrationRef}
+          type="text"
+          value={narration}
+          onChange={(e) => setNarration(e.target.value)}
           onKeyDown={(e) => {
             handleGlobalKeyDown(e);
             handleTab(e, transferRef);
           }}
+          placeholder="Narration"
+          style={{ width: "100%" }}
         />
       </td>
       <td>

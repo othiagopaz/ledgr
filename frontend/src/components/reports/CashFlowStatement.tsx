@@ -4,6 +4,7 @@ import { fetchCashFlow } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount, amountSignClass } from "../../utils/format";
+import { periodToDateRange } from "../../utils/dateUtils";
 import { IntervalSelector } from "./IncomeExpenseChart";
 import type { CashFlowSection, OtherCurrencyAmount } from "../../types";
 
@@ -222,6 +223,7 @@ function CashFlowSectionRows({
   showOther: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const openDrill = useAppStore((s) => s.openDrill);
 
   return (
     <>
@@ -237,13 +239,29 @@ function CashFlowSectionRows({
             <td className="report-table-account" style={{ paddingLeft: 36 }}>
               {item.name}
             </td>
-            {periods.map((p) => (
-              <td key={p} className={`report-table-num ${item.totals[p] != null ? amountSignClass(item.totals[p]) : ""}`}>
-                {item.totals[p] != null
-                  ? formatAmount(item.totals[p], currency)
-                  : "—"}
-              </td>
-            ))}
+            {periods.map((p) => {
+              if (item.totals[p] == null) {
+                return <td key={p} className="report-table-num">—</td>;
+              }
+              return (
+                <td
+                  key={p}
+                  className={`report-table-num report-table-drill ${amountSignClass(item.totals[p])}`}
+                  onClick={() => {
+                    const { from_date, to_date } = periodToDateRange(p);
+                    openDrill({
+                      account: item.full_name,
+                      fromDate: from_date,
+                      toDate: to_date,
+                      label: `${item.name} · ${p}`,
+                    });
+                  }}
+                  title="View transactions"
+                >
+                  {formatAmount(item.totals[p], currency)}
+                </td>
+              );
+            })}
             <td className={`report-table-num report-table-total ${item.total ? amountSignClass(item.total) : ""}`}>
               {item.total ? formatAmount(item.total, currency) : "—"}
             </td>
