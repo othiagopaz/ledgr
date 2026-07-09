@@ -139,10 +139,10 @@ export default function CommandPalette() {
   // Views
   items.push({
     id: "view:series",
-    label: "View Series",
+    label: "View Transactions & Schedule",
     group: "Views",
     action: () => {
-      openTab({ id: "series", type: "series", label: "Series" });
+      openTab({ id: "series", type: "series", label: "Transactions & Schedule" });
       setCommandPaletteOpen(false);
     },
   });

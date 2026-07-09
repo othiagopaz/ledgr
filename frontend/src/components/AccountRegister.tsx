@@ -95,9 +95,14 @@ export default function AccountRegister({ account, transactions, openingBalance,
     registerRef.current?.focus();
   }, []);
 
-  // React to Cmd+N / command palette "New Transaction" signal
+  // React to Cmd+N / command palette "New Transaction" signal.
+  // Only act when the signal *increments* — tracking the last-seen id with a ref
+  // so an unrelated re-render (e.g. viewMode toggle refetch changing NEW_ROW_INDEX)
+  // does not re-open the editor after the user cancelled with Esc.
+  const lastNewTxnId = useRef(newTxnRequestId);
   useEffect(() => {
-    if (newTxnRequestId > 0) {
+    if (newTxnRequestId > 0 && newTxnRequestId !== lastNewTxnId.current) {
+      lastNewTxnId.current = newTxnRequestId;
       setSelectedRowIndex(NEW_ROW_INDEX);
       setEditingRowIndex(NEW_ROW_INDEX);
     }
@@ -236,7 +241,8 @@ export default function AccountRegister({ account, transactions, openingBalance,
         <thead>
           <tr>
             <th style={{ width: 90 }}>Date</th>
-            <th>Payee / Narration</th>
+            <th style={{ width: 160 }}>Payee</th>
+            <th>Narration</th>
             <th>Transfer</th>
             <th className="num" style={{ width: 28 }}>R</th>
             <th className="num" style={{ width: 100 }}>Debit</th>
@@ -273,9 +279,6 @@ export default function AccountRegister({ account, transactions, openingBalance,
             const debitVal = row.amount > 0 ? formatAmount(row.amount, operatingCurrency) : "";
             const creditVal = row.amount < 0 ? formatAmount(Math.abs(row.amount), operatingCurrency) : "";
             const bal = formatAmount(row.balance, operatingCurrency);
-            const description = [row.txn.payee, row.txn.narration]
-              .filter(Boolean)
-              .join(" — ");
             const costBasis = formatCostBasis(row.posting, operatingCurrency);
             const hasTags = row.txn.tags.length > 0;
             const hasLinks = row.txn.links.length > 0;
@@ -288,7 +291,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
                 onClick={() => enterEditMode(i)}
               >
                 <td>{formatDateFull(row.txn.date, operatingCurrency)}</td>
-                <td>
+                <td className="payee-cell">
                   {seriesType === 'recurring' && (
                     <span className="series-inline-badge series-inline-recurring" title="Recurring">Recurring</span>
                   )}
@@ -297,7 +300,14 @@ export default function AccountRegister({ account, transactions, openingBalance,
                       {seriesSeq != null && seriesTotal != null ? formatInstallmentBadge(seriesSeq, seriesTotal) : '#'}
                     </span>
                   )}
-                  <span>{description || "—"}</span>
+                  {row.txn.payee ? (
+                    <span className="payee" title={row.txn.payee}>{row.txn.payee}</span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
+                <td className="narration-cell">
+                  <span>{row.txn.narration || "—"}</span>
                   {costBasis && (
                     <span className="cost-basis">{costBasis}</span>
                   )}
@@ -378,7 +388,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
                   <td></td>
                   <td
                     className={`register-split-account${isCurrentAcct ? " register-split-current" : ""}`}
-                    colSpan={2}
+                    colSpan={3}
                   >
                     {shortAcct}
                   </td>
@@ -416,6 +426,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
                 {formatDateFull(new Date().toISOString().slice(0, 10), operatingCurrency)}
               </td>
               <td style={{ color: "var(--text-muted)", fontStyle: "italic" }}>New transaction…</td>
+              <td></td>
               <td></td>
               <td></td>
               <td></td>

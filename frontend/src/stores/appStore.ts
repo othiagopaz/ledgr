@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode, PeriodPreset, FilterState } from '../types';
+import type { DrillTarget } from '../components/TransactionDrawer';
 
 interface Tab {
   id: string;
@@ -47,6 +48,11 @@ interface AppState {
   txnModalMode: TxnModalMode;
   openTxnModal: (txn?: Transaction, mode?: TxnModalMode) => void;
   closeTxnModal: () => void;
+
+  // Drill-down drawer (report cell / budget row → transactions for account+period)
+  drillTarget: DrillTarget | null;
+  openDrill: (target: DrillTarget) => void;
+  closeDrill: () => void;
 
   // Default payment account (from ledgr-option)
   defaultPaymentAccount: string | null;
@@ -162,6 +168,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     txnModalMode: txn ? 'advanced' : (mode || 'fast'),
   }),
   closeTxnModal: () => set({ txnModalOpen: false, txnModalTransaction: null }),
+
+  drillTarget: null,
+  openDrill: (target) => set({ drillTarget: target }),
+  closeDrill: () => set({ drillTarget: null }),
 
   // Default payment account
   defaultPaymentAccount: null,

@@ -5,6 +5,8 @@ import AddEnvelopeRow from './AddEnvelopeRow';
 
 interface BudgetSectionProps {
   section: BudgetSectionData;
+  /** Budget month as "YYYY-MM" — used for drill-down date range. */
+  month: string;
   currency: string;
   includePending: boolean;
   onSetAllocation: (account: string, amount: string | null) => void;
@@ -17,6 +19,7 @@ interface BudgetSectionProps {
 
 export default function BudgetSection({
   section,
+  month,
   currency,
   includePending,
   onSetAllocation,
@@ -61,6 +64,7 @@ export default function BudgetSection({
               key={env.account}
               envelope={env}
               sectionKey={section.key}
+              month={month}
               currency={currency}
               includePending={includePending}
               onSetAllocation={onSetAllocation}
