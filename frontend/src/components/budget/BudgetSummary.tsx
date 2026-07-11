@@ -17,7 +17,7 @@ function sectionLine(sections: BudgetSection[], key: string): BudgetBridgeLine {
   };
 }
 
-const COLS = ['allocated', 'realized', 'pending'] as const;
+const COLS = ['allocated', 'realized'] as const;
 type Col = (typeof COLS)[number];
 
 /**
@@ -53,27 +53,33 @@ export default function BudgetSummary({
     line: BudgetBridgeLine;
     /** outflow rows display as negatives (Expenses, Allocations, Non-cash) */
     outflow?: boolean;
-    emphasis?: 'net-income' | 'net-cash';
-    /** quiet reconciliation line (the non-cash plug) */
+    emphasis?: 'net-cash';
+    /** quiet reconciliation line (the cash-timing plug) */
     reconcile?: boolean;
     /** hide the variance cell (not an actionable deviation) */
     noVariance?: boolean;
     hint?: string;
   };
 
+  // The budget is a cash plan: Income − Expenses − Allocations − Cash timing =
+  // Net cash flow (target 0). No accrual "Net income" line — every row already
+  // counts only what touches cash, except the deliberate accrual of Expenses
+  // (credit-card purchases), whose timing gap is the "Cash timing" line.
+  const hasTiming = Math.abs(bridge.other_non_cash.realized) >= 0.005;
   const rows: Row[] = [
     { label: 'Income', line: income },
     { label: 'Expenses', line: expenses, outflow: true },
-    { label: 'Net income', line: bridge.net_income, emphasis: 'net-income' },
     { label: 'Allocations', line: bridge.allocations, outflow: true },
-    {
-      label: 'Non-cash adjustment',
-      line: bridge.other_non_cash,
-      outflow: true,
-      reconcile: true,
-      noVariance: true,
-      hint: 'reconciles to Cash Flow',
-    },
+    ...(hasTiming
+      ? [{
+          label: 'Cash timing',
+          line: bridge.other_non_cash,
+          outflow: true,
+          reconcile: true,
+          noVariance: true,
+          hint: 'cards / bills — ties to Cash Flow',
+        } as Row]
+      : []),
     { label: 'Net cash flow', line: bridge.net_cash_flow, emphasis: 'net-cash' },
   ];
 
@@ -112,7 +118,6 @@ export default function BudgetSummary({
             <th className="num">
               Realized <span className="budget-summary-hint">now</span>
             </th>
-            <th className="num">Planned</th>
             <th className="num">
               Δ Variance <span className="budget-summary-hint">vs plan</span>
             </th>
@@ -135,9 +140,7 @@ export default function BudgetSummary({
                 </td>
                 {COLS.map((col) => (
                   <td key={col} className="num">
-                    {col === 'pending' && r.line.pending === 0
-                      ? '—'
-                      : cell(display(r, col))}
+                    {cell(display(r, col))}
                   </td>
                 ))}
                 <td className={`num ${r.noVariance ? '' : varianceClass(r, v)}`}>

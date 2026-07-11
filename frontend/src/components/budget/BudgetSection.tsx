@@ -49,14 +49,13 @@ export default function BudgetSection({
             <th className="budget-col-bar"></th>
             <th className="num budget-col-allocated">Allocated</th>
             <th className="num budget-col-realized">Realized</th>
-            <th className="num budget-col-pending">Pending</th>
             <th className="num budget-col-free">Variance</th>
           </tr>
         </thead>
         <tbody>
           {section.envelopes.length === 0 && (
             <tr className="budget-empty-row">
-              <td colSpan={6}>No envelopes budgeted in this section.</td>
+              <td colSpan={5}>No envelopes budgeted in this section.</td>
             </tr>
           )}
           {orderedEnvelopes.map((env) => (
@@ -89,11 +88,6 @@ export default function BudgetSection({
               </td>
               <td className={`num budget-col-realized ${amountSignClass(subtotal.realized)}`}>
                 {formatAmount(subtotal.realized, currency)}
-              </td>
-              <td className="num budget-col-pending">
-                {subtotal.pending !== 0
-                  ? formatAmount(subtotal.pending, currency)
-                  : '—'}
               </td>
               <td className={`num budget-col-free ${freeClass}`}>
                 {formatAmount(subtotal.free, currency)}
