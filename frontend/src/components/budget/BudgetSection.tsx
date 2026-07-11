@@ -50,7 +50,7 @@ export default function BudgetSection({
             <th className="num budget-col-allocated">Allocated</th>
             <th className="num budget-col-realized">Realized</th>
             <th className="num budget-col-pending">Pending</th>
-            <th className="num budget-col-free">Free</th>
+            <th className="num budget-col-free">Variance</th>
           </tr>
         </thead>
         <tbody>

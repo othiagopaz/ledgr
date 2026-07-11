@@ -119,11 +119,11 @@ accrual Net Income down to Net Cash Flow:
 − Expenses                     (accrual section subtotal)
 ═ Net income
 − Allocations                  (investment/loan envelopes, cash-leg)
-− Other non-cash adjustments   (reconciling plug)
+− Non-cash adjustment          (reconciling plug, quiet row)
 ═ Net cash flow
 ```
 
-Three columns, **"Allocated = will-be, Realized = now"**:
+Four columns, **"Allocated = will-be, Realized = now, Δ Variance = the gap"**:
 
 - **Realized** — actual cash this month. `net_cash_flow.realized` **equals the
   Cash Flow Statement's net** for the same month/view (the anchor; enforced by a
@@ -132,14 +132,36 @@ Three columns, **"Allocated = will-be, Realized = now"**:
   (budgeted income − budgeted expenses/allocations − actual non-cash). Uses the
   budgeted directive amounts as-is.
 - **Planned** — planned (`!`) activity (0 in combined, where it folds in).
+- **Δ Variance** — `Realized − Allocated` on the displayed (signed) values. This
+  is the deviation from the plan and the primary decision signal: on **Net cash
+  flow** it answers "did the month close at zero?" (target is 0, so any non-zero
+  is flagged) and tells you there is cash left to allocate or a shortfall to
+  cover; on each section it shows **where** the drift came from (e.g. an
+  over-budget expense ghost, or under-aported allocations), so the user knows
+  which line to adjust. Favourable/adverse colouring is directional; the
+  reconciliation row has no variance (it is not an actionable deviation).
 
-"**Other non-cash adjustments**" is the reconciling plug — every non-cash, non-
-P&L movement not already shown as an allocation envelope (reinvested interest,
+The envelope tables use the same word: their last column is **Variance**
+(= `allocated − consumed`, the per-account gap) — formerly labelled "Free".
+
+"**Non-cash adjustment**" is the reconciling plug — every non-cash, non-P&L
+movement not already shown as an allocation envelope (reinvested interest,
 pension deposits, receivables/payables Δ). It has no budget, so its Allocated
 mirrors its Realized. By the double-entry identity
 `Net Income − (all non-cash deltas) = Net Cash`, the Realized column ties
-exactly for any month. The cash anchor is `sum_cash_delta` — the sum of all
-`cash`-typed postings, the same quantity the Cash Flow Statement reports.
+exactly for any month, which is why the row is **kept** — it is what makes Net
+Cash Flow tie to the Cash Flow Statement. It is rendered as a quiet
+reconciliation line (not a budgeting decision) so it stops reading like an
+error. The cash anchor is `sum_cash_delta` — the sum of all `cash`-typed
+postings, the same quantity the Cash Flow Statement reports.
+
+Known rough edge (not yet addressed): reinvested income (an `Income:*` leg with
+no cash counter-leg, e.g. interest reinvested in place) surfaces **both** as an
+Income ghost row and inside this non-cash plug — the same amount shown twice
+with opposite signs. It is internally consistent (the plug subtracts back what
+Income added) but visually duplicated. Hiding cash-less Income ghosts would fix
+it, but must not also hide credit-card expense ghosts (those are accrual and
+wanted), so it is deferred.
 
 Why the two reports differ (and should): the Budget is **accrual**; the Cash
 Flow Statement is **cash-basis**. The bridge makes the difference explicit and

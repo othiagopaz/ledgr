@@ -2713,6 +2713,29 @@ body {
   letter-spacing: 0;
   color: var(--color-text-tertiary);
 }
+
+/* Non-cash reconciliation line — kept (it makes Net Cash Flow tie to the Cash
+   Flow Statement) but rendered quiet: it is not a budgeting decision. */
+.budget-summary-reconcile td {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* Variance column (Δ = Realized − Allocated). Favourable/adverse colour the
+   directional deviation; on the Net cash flow row ANY deviation is flagged
+   because the plan's target is zero. */
+.budget-var-favorable { color: var(--amount-positive); }
+.budget-var-adverse { color: var(--amount-negative); }
+.budget-var-zero { color: var(--color-text-tertiary); }
+.budget-var-deviation {
+  color: var(--amount-negative);
+  font-weight: 700;
+}
+.budget-summary-net-cash .budget-var-zero {
+  color: var(--amount-positive);
+  font-weight: 700;
+}
 .budget-summary-caption {
   padding: 6px 16px;
   font-size: 11px;
