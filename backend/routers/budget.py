@@ -164,11 +164,20 @@ def _build_budget_response(
 
         # Allocation envelopes count transfers in (cash-leg), not interest/gains
         # — mirrors the Cash Flow Statement's "investing" rule.
+        # Income and allocations both require a cash counter-leg — mirroring the
+        # Cash Flow Statement (which only sees transactions that touch a
+        # ledgr-type "cash" account). This keeps money that never becomes
+        # spendable cash out of the budget: an employer pension benefit
+        # (Income:Salary:Additional → Assets:Investments, no cash leg) or
+        # reinvested interest (Income:Interest → Assets:Investments) inflate the
+        # accrual Income Statement but never land in your bank, so budgeting
+        # against them is a lie. Expenses stay accrual (a credit-card purchase
+        # must drain its envelope at purchase, before the bill is paid).
         realized, pending = sum_account_postings(
             entries,
             account,
             oc,
-            require_cash_counterpart=(section == "allocations"),
+            require_cash_counterpart=(section in ("allocations", "income")),
             type_map=type_map,
         )
 
@@ -246,23 +255,30 @@ def _build_budget_response(
         pool_alloc["income"] - pool_alloc["expenses"] - pool_alloc["allocations"]
     )
 
-    # ── Indirect-method cash bridge ──────────────────────────────────────────
-    # A roll-up of the sections that ties Net Income down to Net Cash Flow,
-    # across three columns (Allocated / Realized / Planned):
+    # ── Cash bridge ──────────────────────────────────────────────────────────
+    # The budget is a CASH plan: every section already counts only what touches
+    # cash — Income requires a cash leg (a pension benefit / reinvested interest
+    # that goes straight to an investment never lands in your bank, so it is not
+    # budget income), Allocations are cash↔investment/loan both ways (a
+    # contribution out, a withdrawal back in to cover a shortfall), and the cash
+    # anchor is the same sum the Cash Flow Statement reports. So the roll-up is:
     #
-    #   Net Income − Allocations − Other non-cash adjustments = Net Cash Flow
+    #   Income − Expenses − Allocations − Cash timing = Net Cash Flow  (→ 0)
+    #
+    # The one deliberate accrual is Expenses: a credit-card purchase must drain
+    # its envelope at purchase, before the bill is paid. That creates a timing
+    # gap — consumed-on-accrual vs cash-out — which is exactly the "Cash timing"
+    # line (``other_non_cash`` in the payload, kept for compat). It is the honest
+    # price of budgeting the card: card purchases with no cash leg, minus card
+    # bill payments (cash leg, non-Expense counterpart), plus any receivable /
+    # payable Δ. When there is no open card activity it is 0 and disappears.
     #
     # Per column — "Realized = now, Allocated = will-be":
     #   • Realized  — actual cash this month; Net Cash Flow.realized == the Cash
     #     Flow Statement's net (the anchor).
     #   • Allocated — the projection: the cash you'll end with if the plan plays
-    #     out (budgeted income − budgeted expenses/allocations − actual non-cash).
+    #     out (budgeted income − budgeted expenses/allocations − actual timing).
     #   • Pending   — planned (!) activity (0 in combined, where it folds in).
-    #
-    # "Other non-cash adjustments" is the reconciling plug (reinvested interest,
-    # pension, receivables/payables Δ) — it has no budget, so its Allocated
-    # mirrors its Realized ("no plan; it just happened").  By the double-entry
-    # identity Net Cash Flow.realized equals the cash-account delta exactly.
     inc_raw = raw_subtotals["income"]
     exp_raw = raw_subtotals["expenses"]
     alloc_raw = raw_subtotals["allocations"]

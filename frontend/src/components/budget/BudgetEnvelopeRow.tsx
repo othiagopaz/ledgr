@@ -145,9 +145,6 @@ export default function BudgetEnvelopeRow({
       <td className={`num budget-col-realized ${amountSignClass(envelope.realized)}`}>
         {formatAmount(envelope.realized, currency)}
       </td>
-      <td className="num budget-col-pending">
-        {envelope.pending !== 0 ? formatAmount(envelope.pending, currency) : '—'}
-      </td>
       <td
         className={`num budget-col-free ${freeClass}`}
         title="Allocated − Realized. Negative = over plan; positive = under plan."
