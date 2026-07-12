@@ -116,9 +116,17 @@ export default function BudgetEnvelopeRow({
             className="num budget-alloc-input"
             type="number"
             step="0.01"
-            min="0"
+            // Allocations allow a negative budget: a planned withdrawal
+            // (investment → cash) that funds a shortfall. Income/Expenses stay
+            // non-negative.
+            min={sectionKey === 'allocations' ? undefined : '0'}
             value={draft}
             disabled={saving}
+            title={
+              sectionKey === 'allocations'
+                ? 'Positive = planned contribution; negative = planned withdrawal'
+                : undefined
+            }
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
@@ -145,10 +153,10 @@ export default function BudgetEnvelopeRow({
       <td className={`num budget-col-realized ${amountSignClass(envelope.realized)}`}>
         {formatAmount(envelope.realized, currency)}
       </td>
-      <td className="num budget-col-pending">
-        {envelope.pending !== 0 ? formatAmount(envelope.pending, currency) : '—'}
-      </td>
-      <td className={`num budget-col-free ${freeClass}`}>
+      <td
+        className={`num budget-col-free ${freeClass}`}
+        title="Allocated − Realized. Negative = over plan; positive = under plan."
+      >
         {formatAmount(envelope.free, currency)}
       </td>
     </tr>

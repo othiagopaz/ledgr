@@ -36,30 +36,50 @@ export default function EnvelopeBar({
 }: EnvelopeBarProps) {
   // In "actual + planned", planned is treated as done — fold it into the fill.
   const consumed = realized + (includePending ? pending : 0);
-  // Denominator: the larger of allocation or what's consumed, so overflow is
-  // visible within the same track width.
-  const denom = Math.max(allocated, consumed, 0.01);
 
-  const fillPct = Math.max(0, Math.min(100, (consumed / denom) * 100));
+  // The bar measures ONE thing everywhere: how much of the PLAN you executed,
+  // `|realized| / |allocated|`. It reads the same in every section and for both
+  // signs — a 100% bar means "did exactly what I planned":
+  //   • spend  1000 plan,  700 done → 70%
+  //   • income 3000 plan, 3000 got  → 100%
+  //   • contribution 6000 plan, 4000 in  → 67%
+  //   • withdrawal −26k plan, −26k out   → 100%
+  // Going past the plan overflows past 100% and flips to the alert colour
+  // (overspent / over-contributed / over-withdrew) — actionable in any section.
+  const allocatedMag = Math.abs(allocated);
+  const consumedMag = Math.abs(consumed);
 
-  // Overflow is only an alert for spending. For income, exceeding the target
-  // is good — it keeps the green 'income' fill (full bar = good).
-  const overflow = variant === 'spend' && consumed > allocated && allocated > 0;
+  // A negative allocation is a planned WITHDRAWAL (investment → cash) — money
+  // coming back in. It gets its own colour so it reads as cash-in, not out.
+  const isWithdrawal = allocated < 0;
+  // No plan (ghost): nothing to measure against — show a full neutral bar.
+  const noPlan = allocatedMag < 0.005;
+
+  const ratio = noPlan ? 1 : consumedMag / allocatedMag;
+  const fillPct = Math.max(0, Math.min(100, ratio * 100));
+  const overflow = ratio > 1.0001; // executed more than planned, any section
+
+  // Pace marker (spend only): where you "should" be by today, as a % of plan.
   const pacePct =
-    allocated > 0
-      ? Math.max(0, Math.min(100, (pacedAllocation / denom) * 100))
+    !isWithdrawal && allocatedMag > 0.005
+      ? Math.max(0, Math.min(100, (pacedAllocation / allocatedMag) * 100))
       : 0;
-  const showPace = variant === 'spend' && pacedAllocation > 0 && pacedAllocation < allocated;
+  const showPace =
+    variant === 'spend' && !isWithdrawal && pacedAllocation > 0 && pacedAllocation < allocatedMag;
 
-  const fillClass = overflow
-    ? 'envelope-bar-fill over'
-    : `envelope-bar-fill ${variant}`;
+  const fillClass = noPlan
+    ? 'envelope-bar-fill ghost'
+    : overflow
+      ? 'envelope-bar-fill over'
+      : isWithdrawal
+        ? 'envelope-bar-fill withdrawal'
+        : `envelope-bar-fill ${variant}`;
 
   return (
     <div
       className="envelope-bar"
       role="img"
-      aria-label={`${Math.round(fillPct)}% consumed`}
+      aria-label={`${Math.round(ratio * 100)}% of plan`}
     >
       <div className={fillClass} style={{ width: `${fillPct}%` }} />
       {showPace && (

@@ -1,7 +1,16 @@
+import { useState } from 'react';
 import { formatAmount, amountSignClass } from '../../utils/format';
-import type { BudgetSection as BudgetSectionData } from '../../types';
+import type { BudgetSection as BudgetSectionData, BudgetEnvelope } from '../../types';
 import BudgetEnvelopeRow from './BudgetEnvelopeRow';
 import AddEnvelopeRow from './AddEnvelopeRow';
+
+type SortKey = 'account' | 'allocated' | 'realized' | 'free';
+type SortDir = 'asc' | 'desc';
+
+function sortValue(env: BudgetEnvelope, key: SortKey): number | string {
+  if (key === 'account') return env.account.toLowerCase();
+  return env[key];
+}
 
 interface BudgetSectionProps {
   section: BudgetSectionData;
@@ -29,10 +38,40 @@ export default function BudgetSection({
 }: BudgetSectionProps) {
   const { subtotal } = section;
   const existingAccounts = new Set(section.envelopes.map((e) => e.account));
-  // Real budgeted envelopes first, ghost (unbudgeted-activity) rows after.
-  const orderedEnvelopes = [...section.envelopes].sort(
-    (a, b) => Number(a.is_ghost) - Number(b.is_ghost),
-  );
+
+  // Column sort (per section). Default (sortKey null): budgeted first, ghosts
+  // last — the original order. Clicking a header sorts by that column and
+  // toggles asc/desc; clicking a third time returns to the default.
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      setSortKey(null); // third click clears
+    }
+  }
+
+  const orderedEnvelopes = [...section.envelopes];
+  if (sortKey === null) {
+    orderedEnvelopes.sort((a, b) => Number(a.is_ghost) - Number(b.is_ghost));
+  } else {
+    orderedEnvelopes.sort((a, b) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  function sortIndicator(key: SortKey): string {
+    if (sortKey !== key) return '';
+    return sortDir === 'asc' ? ' ▲' : ' ▼';
+  }
   const freeClass =
     section.key === 'income'
       ? subtotal.free <= 0
@@ -45,18 +84,37 @@ export default function BudgetSection({
       <table className="budget-table">
         <thead>
           <tr>
-            <th className="budget-col-name">{section.label}</th>
+            <th
+              className="budget-col-name budget-col-sortable"
+              onClick={() => toggleSort('account')}
+            >
+              {section.label}{sortIndicator('account')}
+            </th>
             <th className="budget-col-bar"></th>
-            <th className="num budget-col-allocated">Allocated</th>
-            <th className="num budget-col-realized">Realized</th>
-            <th className="num budget-col-pending">Pending</th>
-            <th className="num budget-col-free">Free</th>
+            <th
+              className="num budget-col-allocated budget-col-sortable"
+              onClick={() => toggleSort('allocated')}
+            >
+              Allocated{sortIndicator('allocated')}
+            </th>
+            <th
+              className="num budget-col-realized budget-col-sortable"
+              onClick={() => toggleSort('realized')}
+            >
+              Realized{sortIndicator('realized')}
+            </th>
+            <th
+              className="num budget-col-free budget-col-sortable"
+              onClick={() => toggleSort('free')}
+            >
+              Variance{sortIndicator('free')}
+            </th>
           </tr>
         </thead>
         <tbody>
           {section.envelopes.length === 0 && (
             <tr className="budget-empty-row">
-              <td colSpan={6}>No envelopes budgeted in this section.</td>
+              <td colSpan={5}>No envelopes budgeted in this section.</td>
             </tr>
           )}
           {orderedEnvelopes.map((env) => (
@@ -89,11 +147,6 @@ export default function BudgetSection({
               </td>
               <td className={`num budget-col-realized ${amountSignClass(subtotal.realized)}`}>
                 {formatAmount(subtotal.realized, currency)}
-              </td>
-              <td className="num budget-col-pending">
-                {subtotal.pending !== 0
-                  ? formatAmount(subtotal.pending, currency)
-                  : '—'}
               </td>
               <td className={`num budget-col-free ${freeClass}`}>
                 {formatAmount(subtotal.free, currency)}

@@ -336,6 +336,18 @@ class TestGetBudget:
         assert salary["realized"] == 12000.00
         assert salary["free"] == 0.00
 
+    def test_income_requires_cash_leg(self, budget_client: TestClient) -> None:
+        # August: Income:Interest is reinvested (Income → investment, NO cash
+        # leg). Budget income counts only cash-touching receipts — mirroring the
+        # Cash Flow Statement — so reinvested interest is NOT budget income and
+        # earns no income row/subtotal. (A pension benefit that goes straight to
+        # an investment behaves identically.)
+        body = budget_client.get("/api/budget?month=2024-08").json()
+        income = _section(body, "income")
+        assert income["subtotal"]["realized"] == 0.00
+        accounts = [e["account"] for e in income["envelopes"]]
+        assert "Income:Interest" not in accounts
+
     def test_realized_pending_actual_mode_splits(
         self, budget_client: TestClient
     ) -> None:
@@ -430,18 +442,20 @@ class TestGhostRows:
 
     def test_ghost_count_reported(self, budget_client: TestClient) -> None:
         body = budget_client.get("/api/budget?month=2024-08").json()
-        # Two ghosts: Income:Interest and Expenses:Subscriptions.
-        assert body["ghost_count"] == 2
+        # One ghost: Expenses:Subscriptions (credit-card purchase, accrual).
+        # Income:Interest is reinvested (no cash leg) so it is NOT budget income
+        # — it mirrors the Cash Flow Statement, which never sees it.
+        assert body["ghost_count"] == 1
 
     def test_ghosts_feed_closure(self, budget_client: TestClient) -> None:
         body = budget_client.get("/api/budget?month=2024-08").json()
         pool = body["pool"]
-        # income ghost 150 (interest) - expenses ghost 149.90 (49.90+100)
-        #   - allocations 1000 (budgeted) = -999.90
-        assert pool["income_allocated"] == 150.00
+        # Reinvested interest (150, no cash leg) does NOT count as income.
+        # expenses ghost 149.90 (49.90+100) - allocations 1000 (budgeted).
+        assert pool["income_allocated"] == 0.00
         assert pool["expense_allocated"] == 149.90
         assert pool["allocation_allocated"] == 1000.00
-        assert pool["unallocated"] == -999.90
+        assert pool["unallocated"] == -1149.90
 
     def test_ghost_activity_follows_view_mode(
         self, budget_client: TestClient
@@ -670,6 +684,8 @@ class TestPutBudget:
         assert "Expenses:Rent" not in accounts
 
     def test_negative_amount_rejected(self, budget_client: TestClient) -> None:
+        # Expenses (and Income) stay non-negative — a planned negative expense
+        # is nonsensical.
         r = budget_client.put(
             "/api/budget",
             json={
@@ -679,6 +695,22 @@ class TestPutBudget:
             },
         )
         assert r.status_code == 400
+
+    def test_negative_allocation_accepted(self, budget_client: TestClient) -> None:
+        # Allocations MAY be negative: a planned withdrawal (investment → cash)
+        # that funds a shortfall — the mirror of a contribution.
+        r = budget_client.put(
+            "/api/budget",
+            json={
+                "month": "2024-03",
+                "account": "Assets:Investments:Stocks",
+                "amount": "-500",
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        env = _envelope(body, "allocations", "Assets:Investments:Stocks")
+        assert env["allocated"] == -500.00
 
     def test_equity_rejected(self, budget_client: TestClient) -> None:
         r = budget_client.put(

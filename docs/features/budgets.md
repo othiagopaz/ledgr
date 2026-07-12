@@ -96,50 +96,73 @@ whose own ledgr-type is absent is allowed when a descendant is `investment`/
 `Liabilities:Loans:KA` carries the postings (which roll up). This mirrors the
 Cash Flow Statement, which classifies by the typed posting account.
 
-## 4. Allocation envelopes count transfers in, not interest/gains
+## 4. The budget is a CASH plan — Income and Allocations require a cash leg
 
-An allocation posting counts toward `realized`/`pending` **only when its
-transaction has a cash counter-leg** (`sum_account_postings(...,
-require_cash_counterpart=True)`). This mirrors the Cash Flow Statement's
-"investing" rule: a contribution (`Assets:Cash → Assets:Investments`) counts;
-interest/dividends reinvested in place (`Income:Interest → Assets:Investments`,
-no cash leg) do **not** — they instead surface as income ghosts (§6).
-broker→broker transfers (no cash leg) are also excluded, consistent with the
-cashflow treating them as transfers. The cash-leg rule applies to the
-allocations section only — Expenses/Income use the raw sum (an expense is an
-expense regardless of funding).
+The budget plans **spendable cash**, so **Income and Allocations count a posting
+only when its transaction touches a `ledgr-type: "cash"` account**
+(`sum_account_postings(..., require_cash_counterpart=True)`) — the same rule the
+Cash Flow Statement uses.
 
-## 5. The summary — indirect-method cash bridge
+- **Income** — salary paid into the bank counts; money that never lands in your
+  bank does not. A pension benefit (`Income:Salary:Additional → Assets:Investments`,
+  no cash leg) or reinvested interest (`Income:Interest → Assets:Investments`)
+  inflates the accrual Income Statement but is **not budget income** — budgeting
+  against it would plan cash that never exists. It earns no income row.
+- **Allocations** — count cash↔investment/loan **both ways**: a contribution out
+  (`Assets:Cash → Assets:Investments`) and a withdrawal back in
+  (`Assets:Investments → Assets:Cash`, a negative allocation that funds a
+  shortfall). broker→broker transfers (no cash leg) are excluded.
+- **Expenses** — the one deliberate accrual: counted regardless of funding, so a
+  credit-card purchase drains its envelope at purchase, before the bill is paid.
+  This is what lets you budget card spend; its timing gap surfaces in §5.
 
-The top of the view is a small statement (`BudgetSummary`) that reconciles
-accrual Net Income down to Net Cash Flow:
+## 5. The summary — the cash bridge
+
+The top of the view is a small statement (`BudgetSummary`) built entirely on
+cash. Because every section already counts only what touches cash (§4), the
+roll-up needs no accrual "Net income" line and no non-cash plug — it is simply:
 
 ```
-  Income                       (accrual section subtotal)
-− Expenses                     (accrual section subtotal)
-═ Net income
-− Allocations                  (investment/loan envelopes, cash-leg)
-− Other non-cash adjustments   (reconciling plug)
-═ Net cash flow
+  Income                       (cash-touching receipts)
+− Expenses                     (accrual — incl. card purchases)
+− Allocations                  (contributions out − withdrawals in)
+− Cash timing                  (card/bill timing gap; 0 and hidden when none)
+═ Net cash flow                (target 0)
 ```
 
-Three columns, **"Allocated = will-be, Realized = now"**:
+Three columns, **"Allocated = will-be, Realized = now, Δ Variance = the gap"**:
 
 - **Realized** — actual cash this month. `net_cash_flow.realized` **equals the
   Cash Flow Statement's net** for the same month/view (the anchor; enforced by a
   test). Outflow rows render as negatives.
 - **Allocated** — the projection: the cash you'll end with if the plan plays out
-  (budgeted income − budgeted expenses/allocations − actual non-cash). Uses the
+  (budgeted income − budgeted expenses/allocations − actual timing). Uses the
   budgeted directive amounts as-is.
-- **Planned** — planned (`!`) activity (0 in combined, where it folds in).
+- **Δ Variance** — `Realized − Allocated` on the displayed (signed) values. This
+  is the deviation from the plan and the primary decision signal: on **Net cash
+  flow** it answers "did the month close at zero?" (target is 0, so any non-zero
+  is flagged) and tells you there is cash left to allocate or a shortfall to
+  cover; on each section it shows **where** the drift came from (an over-budget
+  expense, under-aported allocations, or budgeted income that never became cash —
+  e.g. a pension line that reads Allocated 3000 / Realized 0 / Variance −3000,
+  teaching you to drop that budget). Favourable/adverse colouring is directional.
 
-"**Other non-cash adjustments**" is the reconciling plug — every non-cash, non-
-P&L movement not already shown as an allocation envelope (reinvested interest,
-pension deposits, receivables/payables Δ). It has no budget, so its Allocated
-mirrors its Realized. By the double-entry identity
-`Net Income − (all non-cash deltas) = Net Cash`, the Realized column ties
-exactly for any month. The cash anchor is `sum_cash_delta` — the sum of all
-`cash`-typed postings, the same quantity the Cash Flow Statement reports.
+The **Planned** column was removed — the global `P` (Actual + Planned) toggle
+already folds planned activity into Realized, so a separate column was noise.
+
+The envelope tables use the same word: their last column is **Variance**
+(= `allocated − consumed`, the per-account gap) — formerly labelled "Free".
+
+"**Cash timing**" (`other_non_cash` in the payload, kept for compat) is the one
+reconciling line, and it exists only because Expenses are accrual: a card
+purchase drains its envelope now but the cash leaves when the bill is paid.
+So it is *card purchases with no cash leg, minus card bill payments (cash leg,
+non-Expense counterpart), plus any receivable/payable Δ* — the honest price of
+budgeting the card. When there is no open card activity it is 0 and the row is
+hidden. The cash anchor is `sum_cash_delta` — the sum of all `cash`-typed
+postings, the same quantity the Cash Flow Statement reports. By construction
+`Income − Expenses − Allocations − Cash timing = Net Cash Flow` ties to the
+Cash Flow Statement to the cent, without a general non-cash plug.
 
 Why the two reports differ (and should): the Budget is **accrual**; the Cash
 Flow Statement is **cash-basis**. The bridge makes the difference explicit and
