@@ -2791,6 +2791,8 @@ body {
   border-bottom: 1px solid var(--color-border-default);
 }
 .budget-table th.num { text-align: right; }
+.budget-col-sortable { cursor: pointer; user-select: none; }
+.budget-col-sortable:hover { color: var(--color-text-primary); }
 .budget-col-name { min-width: 160px; }
 .budget-col-bar { width: 28%; }
 .budget-col-allocated,
@@ -2850,6 +2852,10 @@ body {
 .envelope-bar-fill.spend { background: var(--color-accent); }
 .envelope-bar-fill.income { background: var(--color-success-fg); }
 .envelope-bar-fill.over { background: var(--color-error-fg); }
+/* Planned withdrawal (negative allocation): cash coming back in, not out. */
+.envelope-bar-fill.withdrawal { background: var(--color-info-fg); }
+/* No budget (ghost): activity with nothing to measure against — muted fill. */
+.envelope-bar-fill.ghost { background: var(--color-text-tertiary); opacity: 0.4; }
 .envelope-bar-pace {
   position: absolute;
   top: -1px;

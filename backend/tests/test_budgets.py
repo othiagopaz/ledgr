@@ -684,6 +684,8 @@ class TestPutBudget:
         assert "Expenses:Rent" not in accounts
 
     def test_negative_amount_rejected(self, budget_client: TestClient) -> None:
+        # Expenses (and Income) stay non-negative — a planned negative expense
+        # is nonsensical.
         r = budget_client.put(
             "/api/budget",
             json={
@@ -693,6 +695,22 @@ class TestPutBudget:
             },
         )
         assert r.status_code == 400
+
+    def test_negative_allocation_accepted(self, budget_client: TestClient) -> None:
+        # Allocations MAY be negative: a planned withdrawal (investment → cash)
+        # that funds a shortfall — the mirror of a contribution.
+        r = budget_client.put(
+            "/api/budget",
+            json={
+                "month": "2024-03",
+                "account": "Assets:Investments:Stocks",
+                "amount": "-500",
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        env = _envelope(body, "allocations", "Assets:Investments:Stocks")
+        assert env["allocated"] == -500.00
 
     def test_equity_rejected(self, budget_client: TestClient) -> None:
         r = budget_client.put(
