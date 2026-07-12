@@ -476,13 +476,19 @@ def set_budget(
             raise HTTPException(
                 status_code=400, detail=f"Invalid amount '{body.amount}'"
             )
-        if quantized < 0:
+        # Allocations may be negative — a negative allocation plans a WITHDRAWAL
+        # (investment → cash / loan drawdown), i.e. cash coming back in to fund a
+        # shortfall, the mirror of a contribution. Income and Expenses stay
+        # non-negative (a planned "negative income" is nonsensical; the section
+        # sign is applied by the closure, not the entered amount).
+        section = budgetable_section(body.account, type_map)
+        if quantized < 0 and section != "allocations":
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Budget allocation must be non-negative, got "
-                    f"'{body.amount}'. The section sign is applied by the "
-                    f"closure, not the entered amount."
+                    f"Budget allocation must be non-negative for "
+                    f"{section or 'this'} accounts, got '{body.amount}'. "
+                    f"Only Allocations may be negative (a planned withdrawal)."
                 ),
             )
         if quantized == 0:

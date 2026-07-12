@@ -116,9 +116,17 @@ export default function BudgetEnvelopeRow({
             className="num budget-alloc-input"
             type="number"
             step="0.01"
-            min="0"
+            // Allocations allow a negative budget: a planned withdrawal
+            // (investment → cash) that funds a shortfall. Income/Expenses stay
+            // non-negative.
+            min={sectionKey === 'allocations' ? undefined : '0'}
             value={draft}
             disabled={saving}
+            title={
+              sectionKey === 'allocations'
+                ? 'Positive = planned contribution; negative = planned withdrawal'
+                : undefined
+            }
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
