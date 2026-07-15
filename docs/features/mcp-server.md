@@ -65,8 +65,7 @@ a lone `to_date` (see [`pitfalls.md`](../pitfalls.md)).
 
 ## Planned vs actual — `view_mode`
 
-Every read tool (except `get_budget`, which already contrasts budgeted vs
-actual internally) takes `view_mode`:
+Every read tool takes `view_mode`:
 
 - `actual` — only confirmed transactions (flag `*`). "What really happened."
 - `planned` — only planned/pending (flag `!`). "What's forecast."
@@ -75,6 +74,10 @@ actual internally) takes `view_mode`:
 This mirrors the app's Planned toggle. The default is `combined`, so existing
 behavior is unchanged; the LLM picks `actual`/`planned` when the question calls
 for it. Invalid values fall back to `combined`.
+
+`get_budget` is included: `view_mode` materially changes it — in `actual`,
+each envelope's consumed amount and the net-cash-flow bridge count only
+confirmed transactions; `combined`/`planned` fold in pending ones.
 
 ## Tools
 
@@ -93,7 +96,7 @@ for it. Invalid values fall back to `combined`.
 | `get_budget` | `GET /api/budget` |
 
 Period tools take `month="YYYY-MM"` (recommended) or `from_date`/`to_date`.
-All read tools except `get_budget` take `view_mode` (actual/planned/combined).
+All read tools take `view_mode` (actual/planned/combined), `get_budget` included.
 
 ## Wiring into Claude Code
 

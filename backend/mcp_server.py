@@ -522,13 +522,20 @@ def account_balance(
 
 
 @mcp.tool()
-def get_budget(month: str) -> dict[str, Any]:
+def get_budget(month: str, view_mode: str = "combined") -> dict[str, Any]:
     """Budget for a month: allocations vs actuals per envelope (ZBB).
 
     ``month`` is ``YYYY-MM``. Returns the budget pool, per-section envelopes
     with budgeted vs actual amounts, and zero-based-budget closure.
+
+    ``view_mode`` is actual | planned | combined (see module notes) and
+    materially changes the numbers: in "actual" each envelope's consumed
+    amount and the net-cash-flow bridge count only confirmed transactions,
+    while "combined" (default) also folds in planned/pending ones.
     """
-    return _get("/api/budget", {"month": month})
+    return _get("/api/budget", {
+        "month": month, "view_mode": _view_mode(view_mode),
+    })
 
 
 if __name__ == "__main__":
