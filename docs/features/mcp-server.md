@@ -63,6 +63,19 @@ it. Explicit `from_date`/`to_date` still work, documented as exclusive-end.
 `balance_sheet` also sends a far-past `from_date` because the endpoint 500s on
 a lone `to_date` (see [`pitfalls.md`](../pitfalls.md)).
 
+## Planned vs actual — `view_mode`
+
+Every read tool (except `get_budget`, which already contrasts budgeted vs
+actual internally) takes `view_mode`:
+
+- `actual` — only confirmed transactions (flag `*`). "What really happened."
+- `planned` — only planned/pending (flag `!`). "What's forecast."
+- `combined` — both (**default**). Matches the app with the Planned toggle ON.
+
+This mirrors the app's Planned toggle. The default is `combined`, so existing
+behavior is unchanged; the LLM picks `actual`/`planned` when the question calls
+for it. Invalid values fall back to `combined`.
+
 ## Tools
 
 | Tool | Endpoint |
@@ -80,6 +93,7 @@ a lone `to_date` (see [`pitfalls.md`](../pitfalls.md)).
 | `get_budget` | `GET /api/budget` |
 
 Period tools take `month="YYYY-MM"` (recommended) or `from_date`/`to_date`.
+All read tools except `get_budget` take `view_mode` (actual/planned/combined).
 
 ## Wiring into Claude Code
 

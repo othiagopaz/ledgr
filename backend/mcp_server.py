@@ -327,6 +327,21 @@ def suggest_posting(payee: str) -> dict[str, Any]:
 # It resolves to the exact date range the Ledgr app uses (exclusive end date),
 # so the numbers match the app's reports. Using from_date/to_date="YYYY-07-01"
 # .."YYYY-07-31" instead silently drops transactions on the last day.
+#
+# view_mode — the planned/actual toggle, mirroring the app's "Planned" switch:
+#   "actual"   — only confirmed transactions (flag "*"). "What really happened."
+#   "planned"  — only planned/pending transactions (flag "!"). "What's forecast."
+#   "combined" — both together (default). This is what the app shows with the
+#                Planned toggle ON, and the default all these tools use.
+# Choose "actual" when the user asks what really moved; "planned" for forecast
+# only; "combined" for the full picture.
+
+_VIEW_MODES = ("actual", "planned", "combined")
+
+
+def _view_mode(value: str) -> str:
+    """Validate view_mode, defaulting silently to combined on anything odd."""
+    return value if value in _VIEW_MODES else "combined"
 
 
 @mcp.tool()
@@ -335,6 +350,7 @@ def income_statement(
     from_date: str | None = None,
     to_date: str | None = None,
     interval: str = "monthly",
+    view_mode: str = "combined",
 ) -> dict[str, Any]:
     """Income Statement (P&L) for a period: income and expenses as a tree.
 
@@ -342,10 +358,12 @@ def income_statement(
     app exactly). Or an explicit range via ``from_date``/``to_date`` (ISO
     ``YYYY-MM-DD``); note ``to_date`` is EXCLUSIVE. ``interval`` is
     monthly | quarterly | yearly and controls the period columns.
+    ``view_mode`` is actual | planned | combined (see module notes).
     """
     fd, td = _period(month, from_date, to_date)
     return _get("/api/reports/income-statement", {
         "from_date": fd, "to_date": td, "interval": interval,
+        "view_mode": _view_mode(view_mode),
     })
 
 
@@ -353,18 +371,22 @@ def income_statement(
 def balance_sheet(
     month: str | None = None,
     to_date: str | None = None,
+    view_mode: str = "combined",
 ) -> dict[str, Any]:
     """Balance Sheet as of a date: Assets, Liabilities, Equity.
 
     Pass ``month="YYYY-MM"`` for the end of that month, or an explicit
     ``to_date`` (ISO ``YYYY-MM-DD``, EXCLUSIVE). Income and Expenses are
     closed into Equity so Assets + Liabilities + Equity == 0.
+    ``view_mode`` is actual | planned | combined (see module notes).
     """
     if month:
         _, to_date = _month_range(month)
     # A snapshot is cumulative, so no lower bound — the endpoint treats a
     # lone ``to_date`` as an open lower bound.
-    return _get("/api/reports/balance-sheet", {"to_date": to_date})
+    return _get("/api/reports/balance-sheet", {
+        "to_date": to_date, "view_mode": _view_mode(view_mode),
+    })
 
 
 @mcp.tool()
@@ -373,6 +395,7 @@ def cashflow(
     from_date: str | None = None,
     to_date: str | None = None,
     interval: str = "monthly",
+    view_mode: str = "combined",
 ) -> dict[str, Any]:
     """Cash Flow Statement for a period (operating / investing / financing).
 
@@ -380,11 +403,13 @@ def cashflow(
     app's Net Cash Flow exactly). Or an explicit range via ``from_date``/
     ``to_date`` (ISO ``YYYY-MM-DD``); note ``to_date`` is EXCLUSIVE, so for
     "all of July" use to_date of the 1st of August. ``interval`` monthly |
-    quarterly | yearly.
+    quarterly | yearly. ``view_mode`` is actual | planned | combined (see
+    module notes).
     """
     fd, td = _period(month, from_date, to_date)
     return _get("/api/reports/cashflow", {
         "from_date": fd, "to_date": td, "interval": interval,
+        "view_mode": _view_mode(view_mode),
     })
 
 
@@ -394,16 +419,19 @@ def income_vs_expense(
     from_date: str | None = None,
     to_date: str | None = None,
     interval: str = "monthly",
+    view_mode: str = "combined",
 ) -> dict[str, Any]:
     """Total income vs total expense per period — the quick 'am I saving?' view.
 
     Pass ``month="YYYY-MM"`` for a single month (recommended), or an explicit
     range via ``from_date``/``to_date`` (ISO ``YYYY-MM-DD``, ``to_date``
-    EXCLUSIVE). ``interval`` monthly | quarterly | yearly.
+    EXCLUSIVE). ``interval`` monthly | quarterly | yearly. ``view_mode`` is
+    actual | planned | combined (see module notes).
     """
     fd, td = _period(month, from_date, to_date)
     return _get("/api/reports/income-expense", {
         "from_date": fd, "to_date": td, "interval": interval,
+        "view_mode": _view_mode(view_mode),
     })
 
 
@@ -413,17 +441,19 @@ def net_worth(
     from_date: str | None = None,
     to_date: str | None = None,
     interval: str = "monthly",
+    view_mode: str = "combined",
 ) -> dict[str, Any]:
     """Net worth (Assets + Liabilities) at each period end.
 
     Pass ``month="YYYY-MM"`` for a single month, or a range via
     ``from_date``/``to_date`` (ISO ``YYYY-MM-DD``, ``to_date`` EXCLUSIVE).
     Omit everything for the full history. ``interval`` monthly | quarterly |
-    yearly.
+    yearly. ``view_mode`` is actual | planned | combined (see module notes).
     """
     fd, td = _period(month, from_date, to_date)
     return _get("/api/reports/net-worth", {
         "from_date": fd, "to_date": td, "interval": interval,
+        "view_mode": _view_mode(view_mode),
     })
 
 
@@ -439,23 +469,31 @@ def list_transactions(
     to_date: str | None = None,
     tags: list[str] | None = None,
     payee: str | None = None,
+    view_mode: str = "combined",
 ) -> dict[str, Any]:
     """List transactions, optionally filtered.
 
     All filters are optional and combine: ``account`` (regex / account name),
-    ``from_date``/``to_date`` (ISO ``YYYY-MM-DD``), ``tags``, ``payee``.
-    Returns ``{transactions, count, opening_balance}``.
+    ``from_date``/``to_date`` (ISO ``YYYY-MM-DD``, ``to_date`` EXCLUSIVE),
+    ``tags``, ``payee``. ``view_mode`` is actual | planned | combined —
+    use "actual" to list only confirmed transactions, "planned" for only
+    pending/forecast ones. Returns ``{transactions, count, opening_balance}``;
+    each transaction's ``flag`` is "*" (actual) or "!" (planned).
     """
     return _get("/api/transactions", {
         "account": account, "from_date": from_date, "to_date": to_date,
-        "tags": tags, "payee": payee,
+        "tags": tags, "payee": payee, "view_mode": _view_mode(view_mode),
     })
 
 
 @mcp.tool()
-def list_accounts() -> dict[str, Any]:
-    """List all accounts with their current balances and metadata."""
-    return _get("/api/accounts")
+def list_accounts(view_mode: str = "combined") -> dict[str, Any]:
+    """List all accounts with their current balances and metadata.
+
+    ``view_mode`` is actual | planned | combined — "actual" balances count
+    only confirmed transactions, "combined" (default) includes planned ones.
+    """
+    return _get("/api/accounts", {"view_mode": _view_mode(view_mode)})
 
 
 @mcp.tool()
@@ -464,15 +502,17 @@ def account_balance(
     from_date: str | None = None,
     to_date: str | None = None,
     interval: str = "monthly",
+    view_mode: str = "combined",
 ) -> dict[str, Any]:
     """Running balance of one account over time.
 
     ``account`` is required (e.g. ``Assets:Bank:Checking``). Dates ISO
-    ``YYYY-MM-DD``; ``interval`` monthly | quarterly | yearly.
+    ``YYYY-MM-DD`` (``to_date`` EXCLUSIVE); ``interval`` monthly | quarterly |
+    yearly. ``view_mode`` is actual | planned | combined (see module notes).
     """
     return _get("/api/reports/account-balance", {
         "account": account, "from_date": from_date, "to_date": to_date,
-        "interval": interval,
+        "interval": interval, "view_mode": _view_mode(view_mode),
     })
 
 
