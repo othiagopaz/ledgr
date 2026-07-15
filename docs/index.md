@@ -61,6 +61,7 @@ Cross-cutting features that touch backend + frontend.
 | [`features/planned-toggle.md`](features/planned-toggle.md) | `view_mode` contract, actual vs combined rendering |
 | [`features/series.md`](features/series.md) | Recurring and installment transactions |
 | [`features/budgets.md`](features/budgets.md) | Zero-based monthly envelopes over Fava budget directives |
+| [`features/mcp-server.md`](features/mcp-server.md) | MCP tools for driving Ledgr from an LLM; reuse-or-spawn backend |
 
 ## Brand
 

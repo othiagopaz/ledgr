@@ -1,6 +1,6 @@
 ---
 type: log
-last_updated: 2026-06-15
+last_updated: 2026-07-15
 ---
 
 # Wiki Log
@@ -8,6 +8,12 @@ last_updated: 2026-06-15
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
+
+## 2026-07-15 — MCP server
+
+- Added [`features/mcp-server.md`](features/mcp-server.md): `backend/mcp_server.py` exposes Ledgr to an LLM as MCP tools (record, reports, query, budget), as a thin HTTP client over the backend with a reuse-or-spawn lifecycle.
+- Added `GET /health` to `backend/main.py` for the MCP liveness probe.
+- Recorded a backend pitfall: `POST /api/transactions` writes unbalanced transactions without validation (MCP has a defensive guard meanwhile).
 
 ## 2026-06-15 — Budgets feature (full history consolidated)
 

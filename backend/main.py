@@ -31,6 +31,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ledgr", lifespan=lifespan)
 
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Liveness probe — used by the MCP server to detect a running backend."""
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
