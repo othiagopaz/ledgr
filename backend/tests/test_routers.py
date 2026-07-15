@@ -256,6 +256,80 @@ class TestTransactionsRouter:
         assert body["success"] is True
         assert body["transaction"]["narration"] == "Test Add"
 
+    def test_add_unbalanced_transaction_rejected_and_not_written(
+        self, client: TestClient
+    ) -> None:
+        """A fully-specified transaction that does not balance must be
+        rejected and must NOT be appended to the .beancount file."""
+        r_before = client.get("/api/transactions")
+        count_before = r_before.json()["count"]
+
+        r = client.post(
+            "/api/transactions",
+            json={
+                "date": "2024-04-01",
+                "payee": "Bad",
+                "narration": "Unbalanced",
+                "postings": [
+                    {"account": "Expenses:Food", "amount": 10, "currency": "BRL"},
+                    {"account": "Assets:Checking", "amount": -5, "currency": "BRL"},
+                ],
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["success"] is False
+        assert body["errors"]
+        assert any("balance" in e.lower() for e in body["errors"])
+
+        # Nothing was written: the transaction count is unchanged and the
+        # ledger loads without the "Unbalanced" narration.
+        r_after = client.get("/api/transactions")
+        assert r_after.json()["count"] == count_before
+        assert all(
+            t["narration"] != "Unbalanced"
+            for t in r_after.json()["transactions"]
+        )
+
+    def test_add_balanced_transaction_still_succeeds(
+        self, client: TestClient
+    ) -> None:
+        """A balanced fully-specified transaction is written normally."""
+        r = client.post(
+            "/api/transactions",
+            json={
+                "date": "2024-04-01",
+                "payee": "Good",
+                "narration": "Balanced",
+                "postings": [
+                    {"account": "Expenses:Food", "amount": 50, "currency": "BRL"},
+                    {"account": "Assets:Checking", "amount": -50, "currency": "BRL"},
+                ],
+            },
+        )
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
+    def test_add_single_elided_posting_auto_balances(
+        self, client: TestClient
+    ) -> None:
+        """A posting with an elided amount is legitimately auto-balanced by
+        Beancount and must not be rejected by the balance check."""
+        r = client.post(
+            "/api/transactions",
+            json={
+                "date": "2024-04-01",
+                "payee": "Elided",
+                "narration": "Auto Balanced",
+                "postings": [
+                    {"account": "Expenses:Food", "amount": 30, "currency": "BRL"},
+                    {"account": "Assets:Checking"},
+                ],
+            },
+        )
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
     def test_delete_transaction(self, client: TestClient) -> None:
         # First get a transaction's lineno
         r = client.get("/api/transactions")
@@ -328,6 +402,22 @@ class TestReportsRouter:
         assert abs(total) < 0.01, (
             f"Invariant violated via HTTP: A={t['assets']} L={t['liabilities']} E={t['equity']}"
         )
+
+    def test_balance_sheet_to_date_only(self, client: TestClient) -> None:
+        """A lone ``to_date`` (open lower bound) must not 500.
+
+        Missing ``from_date`` used to fall through to ``clamp_opt`` with
+        ``datetime.date.min``, which overflows when Beancount computes
+        ``date.min - 1 day``.  It must now be treated as an open lower bound.
+        """
+        r = client.get("/api/reports/balance-sheet?to_date=2024-03-01")
+        assert r.status_code == 200
+        body = r.json()
+        assert "assets" in body
+        assert "totals" in body
+        # Invariant still holds at the point-in-time cutoff.
+        t = body["totals"]
+        assert abs(t["assets"] + t["liabilities"] + t["equity"]) < 0.01
 
     # ---------------------------------------------------------------
     # view_mode filtering — income-expense

@@ -13,7 +13,7 @@ from __future__ import annotations
 import datetime
 
 from beancount.core import data
-from beancount.ops.summarize import clamp_opt
+from beancount.ops.summarize import clamp_opt, truncate
 from fava.core import FavaLedger
 from fava.core.filters import AccountFilter, AdvancedFilter
 
@@ -91,9 +91,21 @@ def get_filtered_entries(
     if filter_parts:
         entries = AdvancedFilter(" ".join(filter_parts)).apply(entries)
 
-    # 4. Time filter (clamp_opt — Beancount native)
-    if from_date or to_date:
-        begin = from_date or datetime.date.min
+    # 4. Time filter (Beancount native)
+    #
+    # With a real ``from_date`` we clamp: income/expenses before the period
+    # are summarized into opening equity.  With no ``from_date`` the lower
+    # bound is open, so there is no opening period to summarize — we merely
+    # truncate at ``to_date``.
+    #
+    # ``clamp_opt`` computes ``from_date - 1 day`` internally; a ``from_date``
+    # of ``datetime.date.min`` would underflow and raise ``OverflowError``.
+    # An unbounded lower bound has no opening period anyway, so treat it as
+    # absent and fall through to the open-lower-bound path below.
+    if from_date == datetime.date.min:
+        from_date = None
+
+    if from_date:
         if to_date:
             end = to_date
         else:
@@ -105,6 +117,9 @@ def get_filtered_entries(
                 if txn_dates
                 else datetime.date.max
             )
-        entries, _ = clamp_opt(entries, begin, end, ledger.options)
+        entries, _ = clamp_opt(entries, from_date, end, ledger.options)
+    elif to_date:
+        # Open lower bound: keep everything strictly before ``to_date``.
+        entries = truncate(entries, to_date)
 
     return entries

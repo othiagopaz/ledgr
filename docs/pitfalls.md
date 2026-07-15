@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-04-21
+last_updated: 2026-07-15
 ---
 
 # Known failure modes — do not repeat
@@ -18,6 +18,9 @@ Real incidents and their fixes. Add new entries as you encounter them — with e
 | Not calling `cap_opt()` on Balance Sheet | Assets ≠ Liabilities + Equity | `summarize.cap_opt()` is mandatory |
 | Writing to `.beancount` with `open()` | File corruption, no rollback | Use `FavaLedger.file.insert_entries()` — see [`backend/modules.md`](backend/modules.md) |
 | Returning raw `Decimal` or `date` in JSON responses | Serialization error 500 | Always pass through `serializers.py` |
+| `POST /api/transactions` writes without a balance check | Unbalanced postings are silently written to the ledger and return `success: true`, corrupting the file | Validate `interpolate.compute_residual()` before `insert_entries`. The MCP server has a defensive guard (`_balance_error`) meanwhile — see [`features/mcp-server.md`](features/mcp-server.md) |
+| Treating report `to_date` as inclusive | `to_date` is **exclusive** — `to_date=2026-07-31` drops transactions on the 31st, giving a total that silently differs from the UI | For a whole month use `[first-day, first-of-next-month)`. Frontend does this in `resolvePeriodDates`; MCP does it in `_month_range` |
+| `GET /api/reports/balance-sheet` with only `to_date` | Returns 500 (needs `from_date` too, or neither). Also 500s on `from_date` = year 1 | Send both dates or neither. MCP works around it with a far-past `from_date` |
 
 ## Frontend
 
