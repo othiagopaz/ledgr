@@ -10,7 +10,7 @@ import datetime
 from decimal import Decimal
 from typing import Any
 
-from beancount.core import amount as amt_mod, data
+from beancount.core import amount as amt_mod, data, interpolate
 from beancount.parser import printer
 from fastapi import APIRouter, Depends, Query
 from fava.beans.funcs import hash_entry
@@ -77,6 +77,45 @@ def _build_bc_postings(postings: list[PostingIn]) -> list[data.Posting]:
             data.Posting(p.account, units, cost, price, None, None)
         )
     return bc_postings
+
+
+def _validate_balance(
+    bc_postings: list[data.Posting], options_map: dict
+) -> list[str]:
+    """Return balance errors for a set of postings, or an empty list.
+
+    Mirrors how Beancount's own booking (``interpolate.balance_incomplete_postings``)
+    treats a transaction:
+
+    * A posting with an elided amount (``units is None``) is *incomplete* —
+      Beancount auto-balances it (a single such posting) or raises its own
+      error at load time (two or more). We do not pre-reject these; letting
+      the loader own that path keeps legitimate elided-amount entries working.
+    * When every posting is fully specified, the transaction must balance to
+      zero per currency, within the per-currency tolerance that Beancount
+      infers from the amounts' precision (``infer_tolerances``). Anything
+      outside tolerance is a real imbalance and must not be written.
+    """
+    # If any posting has an elided amount, defer to Beancount's booking —
+    # it interpolates the missing weight (or errors) at load time.
+    if any(p.units is None for p in bc_postings):
+        return []
+
+    residual = interpolate.compute_residual(bc_postings)
+    if residual.is_empty():
+        return []
+
+    tolerances = interpolate.infer_tolerances(bc_postings, options_map)
+    errors: list[str] = []
+    for position in residual.get_positions():
+        currency = position.units.currency
+        tolerance = tolerances.get(currency, Decimal("0.005"))
+        if abs(position.units.number) > tolerance:
+            errors.append(
+                f"Transaction does not balance: {position.units} "
+                f"residual exceeds tolerance {tolerance} {currency}"
+            )
+    return errors
 
 
 def _find_entry_by_lineno(
@@ -151,6 +190,10 @@ def add_transaction(
     txn_date = datetime.date.fromisoformat(body.date)
     bc_postings = _build_bc_postings(body.postings)
 
+    balance_errors = _validate_balance(bc_postings, ledger.options)
+    if balance_errors:
+        return {"success": False, "errors": balance_errors}
+
     meta = data.new_metadata(str(ledger.beancount_file_path), 0)
     txn = data.Transaction(
         meta,
@@ -187,6 +230,10 @@ def edit_transaction(
 
     txn_date = datetime.date.fromisoformat(body.date)
     bc_postings = _build_bc_postings(body.postings)
+
+    balance_errors = _validate_balance(bc_postings, ledger.options)
+    if balance_errors:
+        return {"success": False, "errors": balance_errors}
 
     # Start with fresh metadata, then re-apply all ledgr-* keys from the
     # original entry so that series metadata (ledgr-series, ledgr-series-type,
