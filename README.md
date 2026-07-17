@@ -62,12 +62,25 @@ cd ledgr
 ```
 
 `setup.sh` creates the Python venv, installs dependencies, and seeds an
-example ledger. `dev.sh` starts the backend on `:8080` and the frontend
+example ledger. `dev.sh` starts the backend on `:8420` and the frontend
 on `:5173`. Point `dev.sh` at your own file when you have one:
 
 ```bash
 ./scripts/dev.sh path/to/your-ledger.beancount
 ```
+
+To run Ledgr as a **persistent background service** (auto-start at login,
+relaunch on crash, and reused by the MCP so no stray backends pile up), see
+[`docs/running.md`](docs/running.md):
+
+```bash
+scripts/ledgr install   # once — installs the LaunchAgent and starts it
+scripts/ledgr status    # check backend + frontend
+```
+
+`install` offers to add a `ledgr` shortcut to your `~/.zshrc` so you can run it
+from anywhere as `ledgr status` / `ledgr restart` instead of `scripts/ledgr …`
+(add or remove later with `scripts/ledgr link` / `unlink`).
 
 ## Quick start
 

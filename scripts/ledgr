@@ -1,0 +1,226 @@
+#!/bin/bash
+# ledgr — manage the Ledgr background service (backend + frontend) via launchd.
+#
+# One persistent front+back, running in the background of your Mac on a
+# dedicated port, surviving reboots and relaunching on crash. This replaces
+# double-clicking Ledgr.command and, crucially, stops the MCP from spawning
+# stray backends — the MCP just reuses this one.
+#
+# Usage:
+#   ledgr install     Install & load the LaunchAgent (also starts it)
+#   ledgr start       Start the service
+#   ledgr stop        Stop the service
+#   ledgr restart     Restart (stop, then start)
+#   ledgr status      Show whether it's running and health of both ports
+#   ledgr logs        Tail the service log (Ctrl+C to quit)
+#   ledgr open        Open the app in your browser
+#   ledgr link        Add a `ledgr` shortcut to your shell (run from anywhere)
+#   ledgr unlink      Remove the shell shortcut
+#   ledgr uninstall   Stop and remove the LaunchAgent
+#
+# The service listens on:
+#   Backend  http://localhost:8420   (override with LEDGR_PORT)
+#   Frontend http://localhost:5173   (override with LEDGR_FRONTEND_PORT)
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LABEL="so.brick.ledgr"
+PLIST_TEMPLATE="$REPO_ROOT/scripts/$LABEL.plist"
+PLIST_INSTALLED="$HOME/Library/LaunchAgents/$LABEL.plist"
+LOG_FILE="$HOME/Library/Logs/ledgr.log"
+
+# Shell integration: a marked alias block we own in the user's rc file, so
+# `ledgr` works from any directory without cd-ing into the repo.
+LEDGR_BIN="$REPO_ROOT/scripts/ledgr"
+RC_FILE="${ZDOTDIR:-$HOME}/.zshrc"
+RC_MARKER="# >>> ledgr shell integration >>>"
+RC_MARKER_END="# <<< ledgr shell integration <<<"
+
+LEDGR_PORT="${LEDGR_PORT:-8420}"
+LEDGR_FRONTEND_PORT="${LEDGR_FRONTEND_PORT:-5173}"
+
+# gui/<uid> is the modern launchctl domain for a logged-in user's agents.
+DOMAIN="gui/$(id -u)"
+
+_installed() { [ -f "$PLIST_INSTALLED" ]; }
+
+_require_installed() {
+  if ! _installed; then
+    echo "Ledgr LaunchAgent is not installed. Run: ledgr install" >&2
+    exit 1
+  fi
+}
+
+# Is the agent registered with launchd right now?
+_loaded() { launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; }
+
+# bootout and wait for the service to actually leave the domain — bootstrapping
+# again too soon is what triggers launchctl's "Input/output error" (errno 5).
+_bootout_wait() {
+  launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    _loaded || return 0
+    sleep 0.5
+  done
+}
+
+cmd_install() {
+  mkdir -p "$(dirname "$PLIST_INSTALLED")" "$(dirname "$LOG_FILE")"
+  # Render the template: substitute repo path and log file, write to LaunchAgents.
+  sed -e "s|__REPO_ROOT__|$REPO_ROOT|g" \
+      -e "s|__LOG_FILE__|$LOG_FILE|g" \
+      "$PLIST_TEMPLATE" > "$PLIST_INSTALLED"
+  # Fully unload any prior copy (and wait) so re-running install picks up
+  # template changes without racing launchctl.
+  _bootout_wait
+  launchctl bootstrap "$DOMAIN" "$PLIST_INSTALLED"
+  launchctl enable "$DOMAIN/$LABEL"
+  echo "Installed and started. Logs: $LOG_FILE"
+  echo "Frontend: http://localhost:$LEDGR_FRONTEND_PORT"
+  _offer_link
+}
+
+cmd_start() {
+  _require_installed
+  # `stop` disables the service to defeat KeepAlive, so re-enable before start.
+  launchctl enable "$DOMAIN/$LABEL" 2>/dev/null || true
+  if _loaded; then
+    launchctl kickstart "$DOMAIN/$LABEL"
+  else
+    launchctl bootstrap "$DOMAIN" "$PLIST_INSTALLED"
+  fi
+  echo "Started $LABEL"
+}
+
+cmd_stop() {
+  _require_installed
+  # `KeepAlive` means a mere `kill` gets relaunched within seconds, so the only
+  # reliable "stop and stay stopped" is to bootout (fully unload) the agent.
+  # `start` bootstraps it back. `_bootout_wait` makes the next bootstrap safe.
+  _bootout_wait
+  echo "Stopped $LABEL (run 'ledgr start' to bring it back)"
+}
+
+cmd_restart() {
+  _require_installed
+  launchctl enable "$DOMAIN/$LABEL" 2>/dev/null || true
+  if _loaded; then
+    launchctl kickstart -k "$DOMAIN/$LABEL"
+  else
+    launchctl bootstrap "$DOMAIN" "$PLIST_INSTALLED"
+  fi
+  echo "Restarted $LABEL"
+}
+
+_port_ok() { # $1 = url
+  curl -sf -o /dev/null --max-time 2 "$1"
+}
+
+cmd_status() {
+  if _installed; then
+    echo "LaunchAgent: installed ($PLIST_INSTALLED)"
+  else
+    echo "LaunchAgent: not installed"
+  fi
+  if _loaded; then
+    echo "launchd:     loaded"
+  else
+    echo "launchd:     not loaded"
+  fi
+  if _port_ok "http://localhost:$LEDGR_PORT/health"; then
+    echo "Backend:     UP   http://localhost:$LEDGR_PORT"
+  else
+    echo "Backend:     down (http://localhost:$LEDGR_PORT)"
+  fi
+  if _port_ok "http://localhost:$LEDGR_FRONTEND_PORT"; then
+    echo "Frontend:    UP   http://localhost:$LEDGR_FRONTEND_PORT"
+  else
+    echo "Frontend:    down (http://localhost:$LEDGR_FRONTEND_PORT)"
+  fi
+}
+
+cmd_logs() {
+  [ -f "$LOG_FILE" ] || { echo "No log yet at $LOG_FILE"; exit 0; }
+  tail -f "$LOG_FILE"
+}
+
+cmd_open() {
+  open "http://localhost:$LEDGR_FRONTEND_PORT"
+}
+
+# Is our alias block already in the rc file?
+_linked() { [ -f "$RC_FILE" ] && grep -qF "$RC_MARKER" "$RC_FILE"; }
+
+# Remove our marked block from the rc file (idempotent).
+_rc_remove_block() {
+  [ -f "$RC_FILE" ] || return 0
+  # Delete everything between our markers, inclusive. Portable sed (BSD/GNU).
+  sed -i.ledgrbak "/^$RC_MARKER$/,/^$RC_MARKER_END$/d" "$RC_FILE"
+  rm -f "$RC_FILE.ledgrbak"
+}
+
+cmd_link() {
+  # Rewrite cleanly so re-running `link` updates the path instead of stacking.
+  _rc_remove_block
+  {
+    echo "$RC_MARKER"
+    echo "alias ledgr=\"$LEDGR_BIN\""
+    echo "$RC_MARKER_END"
+  } >> "$RC_FILE"
+  echo "Added 'ledgr' alias to $RC_FILE"
+  echo "Run this to use it now (new terminals get it automatically):"
+  echo "  source $RC_FILE"
+}
+
+cmd_unlink() {
+  if _linked; then
+    _rc_remove_block
+    echo "Removed 'ledgr' alias from $RC_FILE (restart your shell to apply)."
+  else
+    echo "No 'ledgr' alias found in $RC_FILE — nothing to remove."
+  fi
+}
+
+# Offer to add the shortcut during install — opt-in, like most CLIs. Skipped
+# when already linked, when not interactive (no TTY), or LEDGR_NO_LINK=1.
+_offer_link() {
+  _linked && return 0
+  [ "${LEDGR_NO_LINK:-0}" = "1" ] && return 0
+  [ -t 0 ] || { echo "Tip: run 'ledgr link' to use \`ledgr\` from anywhere."; return 0; }
+  printf "Add a 'ledgr' shortcut to %s so you can run it from anywhere? [Y/n] " "$RC_FILE"
+  read -r reply
+  case "$reply" in
+    [nN]*) echo "Skipped. You can add it later with: $LEDGR_BIN link" ;;
+    *)     cmd_link ;;
+  esac
+}
+
+cmd_uninstall() {
+  # Re-enable first: a service left disabled by `stop` stays disabled in
+  # launchd's override db even after bootout, which would block a future start.
+  launchctl enable "$DOMAIN/$LABEL" 2>/dev/null || true
+  _bootout_wait
+  rm -f "$PLIST_INSTALLED"
+  _rc_remove_block  # also clean up the shell shortcut if present
+  echo "Uninstalled $LABEL"
+}
+
+case "${1:-}" in
+  install)   cmd_install ;;
+  start)     cmd_start ;;
+  stop)      cmd_stop ;;
+  restart)   cmd_restart ;;
+  status)    cmd_status ;;
+  logs)      cmd_logs ;;
+  open)      cmd_open ;;
+  link)      cmd_link ;;
+  unlink)    cmd_unlink ;;
+  uninstall) cmd_uninstall ;;
+  *)
+    # Print only the contiguous header comment block (the usage docs), stopping
+    # at the first non-comment line so later inline comments don't leak in.
+    awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "${BASH_SOURCE[0]}"
+    exit 1
+    ;;
+esac

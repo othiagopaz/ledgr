@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 // Backend port is overridable via VITE_API_PORT so worktrees can run
 // their own backend on a unique port without stepping on each other.
-const backendPort = process.env.VITE_API_PORT || '8080'
+const backendPort = process.env.VITE_API_PORT || '8420'
 
 export default defineConfig({
   plugins: [react()],

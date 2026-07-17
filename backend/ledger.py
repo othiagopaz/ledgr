@@ -11,6 +11,7 @@ See AGENTS.md §5 for the full usage contract.
 from __future__ import annotations
 
 import datetime
+import os
 
 from beancount.core import data
 from beancount.ops.summarize import clamp_opt, truncate
@@ -18,6 +19,15 @@ from fava.core import FavaLedger
 from fava.core.filters import AccountFilter, AdvancedFilter
 
 _ledger: FavaLedger | None = None
+_ledger_path: str | None = None
+_ledger_mtime: float | None = None
+
+
+def _file_mtime(path: str) -> float | None:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
 
 
 def init_ledger(path: str) -> FavaLedger:
@@ -25,14 +35,30 @@ def init_ledger(path: str) -> FavaLedger:
 
     Called once during FastAPI lifespan startup.
     """
-    global _ledger
+    global _ledger, _ledger_path, _ledger_mtime
     _ledger = FavaLedger(path)
     _ledger.load_file()
+    _ledger_path = path
+    _ledger_mtime = _file_mtime(path)
     return _ledger
 
 
+def reload_ledger() -> None:
+    """Reload the ledger file and refresh the cached mtime.
+
+    Used both by API write paths and by the mtime-based auto-reload in
+    ``get_ledger()``. Keeps ``_ledger_mtime`` in sync so an internal write
+    doesn't trigger a redundant reload on the very next read.
+    """
+    global _ledger_mtime
+    if _ledger is None or _ledger_path is None:
+        raise RuntimeError("Ledger not initialized — call init_ledger() first")
+    _ledger.load_file()
+    _ledger_mtime = _file_mtime(_ledger_path)
+
+
 def get_ledger() -> FavaLedger:
-    """Return the initialised FavaLedger.
+    """Return the initialised FavaLedger, reloading if the file changed.
 
     Intended for use as a FastAPI dependency::
 
@@ -40,10 +66,21 @@ def get_ledger() -> FavaLedger:
         def get_accounts(ledger: FavaLedger = Depends(get_ledger)):
             ...
 
+    Before returning, it compares the ledger file's on-disk mtime to the one
+    cached at load time. If the file changed — a manual edit, or a write from
+    a *different* process (e.g. another Ledgr instance or the MCP) — it
+    reloads so reads never serve a stale account list. This is why creating an
+    account no longer requires a server restart to show up.
+
     Raises ``RuntimeError`` if called before ``init_ledger()``.
     """
-    if _ledger is None:
+    global _ledger_mtime
+    if _ledger is None or _ledger_path is None:
         raise RuntimeError("Ledger not initialized — call init_ledger() first")
+    current = _file_mtime(_ledger_path)
+    if current is not None and current != _ledger_mtime:
+        _ledger.load_file()
+        _ledger_mtime = current
     return _ledger
 
 

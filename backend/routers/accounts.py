@@ -24,7 +24,7 @@ from account_types import (
     VALID_TYPES_BY_ROOT,
     build_account_type_map,
 )
-from ledger import get_filtered_entries, get_ledger
+from ledger import get_filtered_entries, get_ledger, reload_ledger
 from serializers import (
     ACCOUNT_TYPE_ORDER,
     _INTERNAL_META_KEYS,
@@ -182,7 +182,7 @@ def set_default_payment_account(
         _, entry_sha = get_entry_slice(existing_entry)
         ledger.file.save_entry_slice(hash_entry(existing_entry), "", entry_sha)
 
-    ledger.load_file()
+    reload_ledger()
 
     # Return updated options
     return get_options(ledger)
@@ -376,7 +376,7 @@ def create_account(
 
     open_entry = data.Open(meta, open_date, body.name, currencies, None)
     ledger.file.insert_entries([open_entry])
-    ledger.load_file()
+    reload_ledger()
 
     # Re-fetch the entry from the reloaded ledger
     new_opens = _get_opens(ledger)
@@ -436,7 +436,7 @@ def update_account(
     source = "\n".join(source_lines)
     _, entry_sha = get_entry_slice(open_entry)
     ledger.file.save_entry_slice(hash_entry(open_entry), source, entry_sha)
-    ledger.load_file()
+    reload_ledger()
 
     new_opens = _get_opens(ledger)
     entry = new_opens.get(body.name)
@@ -467,7 +467,7 @@ def close_account(
         body.name,
     )
     ledger.file.insert_entries([close_entry])
-    ledger.load_file()
+    reload_ledger()
 
     return {"success": True, "account": body.name, "close_date": close_date.isoformat()}
 
