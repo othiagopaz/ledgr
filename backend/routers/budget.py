@@ -39,7 +39,7 @@ from budgets import (
     sum_account_postings,
     sum_cash_delta,
 )
-from ledger import get_filtered_entries, get_ledger
+from ledger import get_filtered_entries, get_ledger, reload_ledger
 from serializers import decimal_to_report_number
 
 router = APIRouter()
@@ -531,7 +531,7 @@ def set_budget(
             with open(str(ledger.beancount_file_path), "a") as f:
                 f.write(f"\n{source}\n")
 
-    ledger.load_file()
+    reload_ledger()
 
     response = _build_budget_response(ledger, body.month, view_mode)
     # Surface write-time warnings (e.g. cash account) alongside overlap ones.
@@ -601,5 +601,5 @@ def copy_budget(
         with open(str(ledger.beancount_file_path), "a") as f:
             f.write("\n" + "\n".join(lines) + "\n")
 
-    ledger.load_file()
+    reload_ledger()
     return _build_budget_response(ledger, body.to_month, view_mode)

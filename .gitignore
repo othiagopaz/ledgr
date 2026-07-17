@@ -14,6 +14,15 @@ data/financeiro.beancount
 PLAN-multicurrency-statements.md
 .gitignore
 
+# Local config — personal ledger paths, never committed
+.ledgr.env
+
+# Personal launcher (contains an absolute local path)
+Ledgr.command
+
 # Editor / tooling
 .obsidian/
 .claude/worktrees/
+# Machine-specific Claude Code config (absolute paths, personal permissions)
+.claude/settings.local.json
+.claude/launch.json

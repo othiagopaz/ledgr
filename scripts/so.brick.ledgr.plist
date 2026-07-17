@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent template for the Ledgr background service.
+
+  Do NOT edit the copy under ~/Library/LaunchAgents by hand — it is generated
+  from this template by `scripts/ledgr install`, which substitutes the repo
+  path and log location. Re-run `ledgr install` after changing this file.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>so.brick.ledgr</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__REPO_ROOT__/scripts/service.sh</string>
+    </array>
+
+    <!-- Start at login and keep it alive: relaunch on crash. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Throttle restart storms if it fails immediately. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_ROOT__</string>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_FILE__</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_FILE__</string>
+
+    <!-- Ensure Homebrew node/npm are on PATH under launchd's minimal env. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>

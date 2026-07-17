@@ -6,27 +6,37 @@ budget. It is a **thin client over the FastAPI backend** — it never touches
 Beancount directly, so the repo's one rule holds: *Beancount/Fava do the
 accounting, Ledgr presents it.*
 
-Backend lifecycle (reuse-or-spawn)
-----------------------------------
+Backend lifecycle (reuse-first)
+-------------------------------
 On first tool call the server ensures a backend is up:
 
-  1. GET ``{LEDGR_API_URL}/health``. If it answers, reuse it — this is the
-     process you get when you open ``Ledgr.command`` (or another MCP run).
-  2. Otherwise spawn a headless ``uvicorn`` (backend only, no frontend/
-     browser) bound to the same port, wait for ``/health``, and keep it
-     alive for the lifetime of this MCP process.
+  1. GET ``{LEDGR_API_URL}/health``. If it answers, reuse it — normally this
+     is the persistent service started by ``scripts/ledgr install`` (backend
+     on :8420 + frontend on :5173), always running in the background.
+  2. Only if nothing answers AND ``LEDGR_AUTOSTART=1`` do we spawn a headless
+     ``uvicorn`` for the lifetime of this MCP process.
 
-So you never have to open the app first — but if it's already open, we don't
-start a duplicate.
+Autostart is **off by default** on purpose. When the MCP spawned its own
+backend, every Claude client restart could orphan a stray uvicorn (the
+``atexit`` cleanup doesn't fire on an abrupt kill), leaving several Ledgr
+processes running "in the dark". With the persistent ``ledgr`` service always
+up, the MCP just reuses it — no duplicate processes, and account/edit changes
+are visible immediately because the service hot-reloads the ledger on change.
+
+If the service is down, the MCP errors with a clear "run: ledgr start"
+message instead of silently spawning a shadow backend. Set
+``LEDGR_AUTOSTART=1`` to restore the old spawn-if-absent behaviour.
 
 Configuration (environment variables)
 -------------------------------------
-  LEDGR_API_URL          Backend base URL. Default ``http://localhost:8080``.
-  LEDGR_BEANCOUNT_FILE   Ledger the spawned backend loads. Default is the
-                         real file used by ``Ledgr.command`` (Google Drive).
+  LEDGR_API_URL          Backend base URL. Default ``http://localhost:8420``.
+  LEDGR_BEANCOUNT_FILE   Ledger a spawned backend loads (only used when
+                         autostart spawns one). If unset, falls back to
+                         BEANCOUNT_FILE in the git-ignored ``.ledgr.env``,
+                         then to the bundled ``data/example.beancount``.
                          Ignored when an existing backend is reused.
-  LEDGR_AUTOSTART        ``0`` disables spawning — only reuse a running
-                         backend, else error. Default ``1``.
+  LEDGR_AUTOSTART        ``1`` spawns a backend if none is running. Default
+                         ``0`` — reuse the persistent service only, else error.
 
 Run for a quick manual check:  ``python backend/mcp_server.py``
 Wire into Claude: see ``docs/features/mcp-server.md``.
@@ -51,29 +61,50 @@ from mcp.server.fastmcp import FastMCP
 # Configuration
 # ------------------------------------------------------------------
 
-API_URL = os.environ.get("LEDGR_API_URL", "http://localhost:8080").rstrip("/")
+API_URL = os.environ.get("LEDGR_API_URL", "http://localhost:8420").rstrip("/")
 
 _BACKEND_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _BACKEND_DIR.parent
 
-# Default to the real ledger the desktop launcher (Ledgr.command) uses, so the
-# LLM writes to the same file you see in the app. Override with the env var to
-# point at, e.g., data/example.beancount for safe testing.
-_DEFAULT_LEDGER = (
-    "/Users/thiagopaz/Library/CloudStorage/"
-    "REDACTED/My Drive/Finance/financeiro.beancount"
-)
-BEANCOUNT_FILE = os.environ.get("LEDGR_BEANCOUNT_FILE", _DEFAULT_LEDGER)
+def _ledger_from_local_env() -> str | None:
+    """Read BEANCOUNT_FILE from the git-ignored ``.ledgr.env`` at the repo root.
 
-AUTOSTART = os.environ.get("LEDGR_AUTOSTART", "1") != "0"
+    Keeps the real (personal) ledger path OUT of version control: it lives only
+    in ``.ledgr.env``, the same file ``scripts/service.sh`` and ``dev.sh`` read.
+    Only consulted when ``LEDGR_BEANCOUNT_FILE`` isn't set in the environment.
+    """
+    env_file = _REPO_ROOT / ".ledgr.env"
+    if not env_file.is_file():
+        return None
+    try:
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("BEANCOUNT_FILE="):
+                val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                return val or None
+    except OSError:
+        return None
+    return None
+
+
+# Ledger a *spawned* backend loads (only when LEDGR_AUTOSTART=1). Resolution:
+# LEDGR_BEANCOUNT_FILE env > .ledgr.env > the bundled example ledger. No
+# personal path is hardcoded here — that would leak to origin.
+BEANCOUNT_FILE = (
+    os.environ.get("LEDGR_BEANCOUNT_FILE")
+    or _ledger_from_local_env()
+    or str(_REPO_ROOT / "data" / "example.beancount")
+)
+
+AUTOSTART = os.environ.get("LEDGR_AUTOSTART", "0") == "1"
 
 # Derive host:port for the spawned uvicorn from the configured URL.
 _url_no_scheme = API_URL.split("://", 1)[-1]
 _HOST = _url_no_scheme.split(":")[0] or "localhost"
 try:
-    _PORT = int(_url_no_scheme.split(":")[1]) if ":" in _url_no_scheme else 8080
+    _PORT = int(_url_no_scheme.split(":")[1]) if ":" in _url_no_scheme else 8420
 except ValueError:
-    _PORT = 8080
+    _PORT = 8420
 
 mcp = FastMCP("ledgr")
 
@@ -125,9 +156,10 @@ def _ensure_backend() -> None:
         return
     if not AUTOSTART:
         raise RuntimeError(
-            f"No Ledgr backend at {API_URL} and autostart is disabled "
-            "(LEDGR_AUTOSTART=0). Open the Ledgr app or start the backend "
-            "manually."
+            f"No Ledgr backend at {API_URL}. The persistent service isn't "
+            "running — start it with:  scripts/ledgr start  (or "
+            "'scripts/ledgr install' the first time). To let the MCP spawn "
+            "its own backend instead, set LEDGR_AUTOSTART=1."
         )
     _spawned = _spawn_backend()
     # Wait for readiness (fava load of a large ledger can take a few seconds).

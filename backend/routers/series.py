@@ -16,7 +16,7 @@ from fava.core import FavaLedger
 from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
-from ledger import get_filtered_entries, get_ledger
+from ledger import get_filtered_entries, get_ledger, reload_ledger
 from series import (
     generate_series_id,
     generate_series_transactions,
@@ -244,7 +244,7 @@ def create_series(
 
     try:
         ledger.file.insert_entries(txns)
-        ledger.load_file()
+        reload_ledger()
     except Exception as e:
         return {"success": False, "errors": [str(e)]}
 
@@ -393,7 +393,7 @@ def extend_series(
 
     try:
         ledger.file.insert_entries(new_txns)
-        ledger.load_file()
+        reload_ledger()
     except Exception as e:
         return {"success": False, "errors": [str(e)]}
 
@@ -433,7 +433,7 @@ def cancel_series(
             errors.append(str(e))
 
     if deleted > 0:
-        ledger.load_file()
+        reload_ledger()
 
     result: dict[str, Any] = {
         "success": len(errors) == 0,

@@ -25,25 +25,34 @@ slightly wrong and the backend currently writes unbalanced entries silently
 (see [`pitfalls.md`](../pitfalls.md)). Postings with an elided amount pass
 through untouched for Beancount to auto-balance.
 
-## Backend lifecycle — reuse-or-spawn
+## Backend lifecycle — reuse the persistent service
 
-You don't have to open the app first. On the first tool call the server:
+The MCP is designed to **reuse** the persistent Ledgr service (the one you
+manage with `scripts/ledgr` — see [`docs/running.md`](../running.md)), which is
+always running in the background on `:8420`. On the first tool call:
 
-1. GETs `{LEDGR_API_URL}/health`. If it answers, it **reuses** that backend —
-   the one from `Ledgr.command`, or a previous MCP run.
-2. Otherwise it **spawns** a headless `uvicorn` (backend only, no frontend, no
-   browser) on the same port, waits for `/health`, and keeps it alive for the
-   MCP process's lifetime (terminated on exit via `atexit`).
+1. GETs `{LEDGR_API_URL}/health`. If it answers, it **reuses** that backend.
+2. Otherwise, only if `LEDGR_AUTOSTART=1`, it spawns a headless `uvicorn` for
+   the MCP process's lifetime (terminated on exit via `atexit`). By default
+   autostart is **off** and step 2 raises a clear "run: ledgr start" error.
 
 `GET /health` was added to `backend/main.py` solely for this probe.
+
+**Why autostart is off by default:** when the MCP spawned its own backend,
+every Claude client restart could orphan a stray `uvicorn` (the `atexit`
+cleanup doesn't fire on an abrupt kill), so several Ledgr processes piled up
+running in the dark. Reusing the one persistent service eliminates that — and
+because the service now hot-reloads the ledger on file change (see
+`backend/ledger.py::get_ledger`), account/edit changes are visible immediately
+without any restart.
 
 ## Configuration (env vars)
 
 | Var | Default | Purpose |
 |---|---|---|
-| `LEDGR_API_URL` | `http://localhost:8080` | Backend base URL. |
-| `LEDGR_BEANCOUNT_FILE` | the real Drive `financeiro.beancount` | Ledger the **spawned** backend loads. Ignored when reusing a running backend. Point at `data/example.beancount` for safe testing. |
-| `LEDGR_AUTOSTART` | `1` | `0` = only reuse a running backend, never spawn. |
+| `LEDGR_API_URL` | `http://localhost:8420` | Backend base URL — the persistent service's port. |
+| `LEDGR_BEANCOUNT_FILE` | `.ledgr.env` → `data/example.beancount` | Ledger a **spawned** backend loads (only when `LEDGR_AUTOSTART=1`). Falls back to `BEANCOUNT_FILE` in the git-ignored `.ledgr.env`, then the bundled example. Ignored when reusing the service. |
+| `LEDGR_AUTOSTART` | `0` | `1` = spawn a backend if none is running. Default reuses the persistent service only, else errors. |
 
 ## Dates are exclusive-end — use `month="YYYY-MM"`
 

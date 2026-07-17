@@ -18,7 +18,7 @@ from fava.core import FavaLedger
 from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
-from ledger import get_filtered_entries, get_ledger
+from ledger import get_filtered_entries, get_ledger, reload_ledger
 from serializers import serialize_transaction
 
 router = APIRouter()
@@ -208,7 +208,7 @@ def add_transaction(
 
     try:
         ledger.file.insert_entries([txn])
-        ledger.load_file()
+        reload_ledger()
     except Exception as e:
         return {"success": False, "errors": [str(e)]}
 
@@ -259,7 +259,7 @@ def edit_transaction(
         entry_hash_val = hash_entry(entry)
         _, entry_sha = get_entry_slice(entry)
         ledger.file.save_entry_slice(entry_hash_val, new_source, entry_sha)
-        ledger.load_file()
+        reload_ledger()
     except Exception as e:
         return {"success": False, "errors": [str(e)]}
 
@@ -283,7 +283,7 @@ def delete_transaction(
         entry_hash_val = hash_entry(entry)
         _, entry_sha = get_entry_slice(entry)
         ledger.file.delete_entry_slice(entry_hash_val, entry_sha)
-        ledger.load_file()
+        reload_ledger()
     except Exception as e:
         return {"success": False, "errors": [str(e)]}
 
