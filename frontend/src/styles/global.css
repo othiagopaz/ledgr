@@ -587,6 +587,30 @@ body {
   font-size: 12px;
 }
 
+/* Keep every register row a single line tall. The two flexible columns
+   (Narration and Transfer) have no fixed width, so on a narrow window their
+   text used to wrap onto a second line — growing that one row taller than its
+   neighbours and breaking the vertical rhythm (dates/amounts no longer align
+   across rows). Clip to one line with an ellipsis instead, the same way the
+   Payee cell already truncates. max-width:0 lets the cell shrink below its
+   content width under table-layout:auto so the ellipsis actually engages. */
+.narration-cell,
+.register .transfer {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The split disclosure keeps the arrow + label on one line and truncates. */
+.register .transfer .split-toggle {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Amounts — red for negative, green for positive */
 .positive { color: var(--amount-positive); }
 .negative { color: var(--amount-negative); }
@@ -2805,6 +2829,10 @@ body {
   border-bottom: 1px solid var(--color-border-subtle);
   vertical-align: middle;
 }
+/* Full-row hover highlight — the row is wide, so highlighting the whole row
+   (as the register and account tree do) helps match a name on the left to its
+   figures on the right. Matches .register-row:hover / .acct-row:hover. */
+.budget-envelope-row:hover { background: var(--color-bg-secondary); }
 .budget-envelope-name {
   color: var(--color-text-primary);
 }

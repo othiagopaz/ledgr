@@ -307,7 +307,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
                   )}
                 </td>
                 <td className="narration-cell">
-                  <span>{row.txn.narration || "—"}</span>
+                  <span title={row.txn.narration || undefined}>{row.txn.narration || "—"}</span>
                   {costBasis && (
                     <span className="cost-basis">{costBasis}</span>
                   )}
