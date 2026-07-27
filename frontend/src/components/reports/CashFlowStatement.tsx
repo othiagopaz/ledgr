@@ -229,7 +229,7 @@ function CashFlowSectionRows({
     <>
       {/* Section header */}
       <tr className="report-table-section-header">
-        <td colSpan={periods.length + 2 + (showOther ? 1 : 0)}>{label}</td>
+        <td colSpan={periods.length + 2 + (showOther ? 1 : 0)}><span className="report-section-sticky">{label}</span></td>
       </tr>
 
       {/* Line items */}

@@ -1694,7 +1694,6 @@ body {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  max-width: 1100px;
 }
 
 .report-section {
@@ -1812,7 +1811,13 @@ body {
 }
 
 .report-statement { width: 100%; }
-.report-table-wrapper { overflow-x: auto; }
+/* Owns BOTH scroll axes so the sticky header (top) and the frozen Account
+   column (left) resolve against the same scroll box — Excel-style freeze panes.
+   Vertical scrolling moves here from .reports-content for the report tables. */
+.report-table-wrapper {
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+}
 .report-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .report-table th {
   text-align: left;
@@ -1825,8 +1830,51 @@ body {
   color: var(--color-text-tertiary);
   border-bottom: 1px solid var(--color-border-default);
   white-space: nowrap;
+  /* Freeze the header row while scrolling months vertically. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-bg-primary);
 }
 .report-table-account { min-width: 200px; }
+
+/* ── Freeze the first (Account) column ───────────────────────────────────────
+   Row names stay visible while scrolling horizontally through periods. Every
+   row type's first cell is pinned with an opaque background matching that row,
+   so scrolled figures never bleed under it. The header/account corner sits
+   above both the sticky row and sticky column. */
+.report-table td.report-table-account {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-bg-primary);
+}
+.report-table th.report-table-account {
+  left: 0; /* freeze horizontally too; top:0 is inherited from .report-table th */
+  z-index: 3; /* corner: above sticky header (2) and sticky column (1) */
+}
+/* Subtotal + grand-total rows have a single-column label cell — pin it like the
+   account cells so "Total Income" / "Net Income" stay visible. */
+.report-table-subtotal td:first-child,
+.report-table-grand-total td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-bg-primary);
+}
+/* Section banners (Income/Expenses) are a single cell spanning EVERY column, so
+   position:sticky on the cell has no range to stick within (it fills the whole
+   scroll width). Pin the label text instead: an inline sticky span holds the
+   word at the left edge while the banner row scrolls under it. */
+.report-section-sticky {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  background: var(--color-bg-primary);
+  padding-right: 8px;
+}
+/* Keep the frozen cell's background in step with each row's own background. */
+.report-tree-parent:hover td.report-table-account { background: var(--color-bg-secondary); }
 .report-table-num {
   text-align: right;
   font-family: var(--font-mono);

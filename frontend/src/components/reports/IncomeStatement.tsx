@@ -87,7 +87,7 @@ export default function IncomeStatement() {
           <tbody key={expandKey}>
             {/* Income section */}
             <tr className="report-table-section-header">
-              <td colSpan={colCount}>Income</td>
+              <td colSpan={colCount}><span className="report-section-sticky">Income</span></td>
             </tr>
             {income.map((node) => (
               <ReportTreeRows key={node.name} node={node} periods={periods} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} signFactor={1} />
@@ -103,7 +103,7 @@ export default function IncomeStatement() {
 
             {/* Expenses section */}
             <tr className="report-table-section-header">
-              <td colSpan={colCount}>Expenses</td>
+              <td colSpan={colCount}><span className="report-section-sticky">Expenses</span></td>
             </tr>
             {expenses.map((node) => (
               <ReportTreeRows key={node.name} node={node} periods={periods} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} signFactor={-1} />

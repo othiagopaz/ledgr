@@ -62,7 +62,7 @@ export default function BalanceSheet() {
           <tbody key={expandKey}>
             {/* Assets */}
             <tr className="report-table-section-header">
-              <td colSpan={colCount}>Assets</td>
+              <td colSpan={colCount}><span className="report-section-sticky">Assets</span></td>
             </tr>
             {assets.map((node) => (
               <BalanceTreeRows key={node.name} node={node} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} />
@@ -81,7 +81,7 @@ export default function BalanceSheet() {
 
             {/* Liabilities */}
             <tr className="report-table-section-header">
-              <td colSpan={colCount}>Liabilities</td>
+              <td colSpan={colCount}><span className="report-section-sticky">Liabilities</span></td>
             </tr>
             {liabilities.map((node) => (
               <BalanceTreeRows key={node.name} node={node} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} />
@@ -100,7 +100,7 @@ export default function BalanceSheet() {
 
             {/* Equity */}
             <tr className="report-table-section-header">
-              <td colSpan={colCount}>Equity</td>
+              <td colSpan={colCount}><span className="report-section-sticky">Equity</span></td>
             </tr>
             {equity.map((node) => (
               <BalanceTreeRows key={node.name} node={node} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} />
