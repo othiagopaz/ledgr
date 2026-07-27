@@ -1853,10 +1853,13 @@ body {
   left: 0; /* freeze horizontally too; top:0 is inherited from .report-table th */
   z-index: 3; /* corner: above sticky header (2) and sticky column (1) */
 }
-/* Subtotal + grand-total rows have a single-column label cell — pin it like the
-   account cells so "Total Income" / "Net Income" stay visible. */
+/* Subtotal, grand-total and Cash-Flow opening/closing-balance rows each have a
+   single-column label cell — pin it like the account cells so "Total Income" /
+   "Net Income" / "Opening Cash Balance" stay visible and figures don't bleed
+   under them. */
 .report-table-subtotal td:first-child,
-.report-table-grand-total td:first-child {
+.report-table-grand-total td:first-child,
+.cashflow-balance-row td:first-child {
   position: sticky;
   left: 0;
   z-index: 1;
@@ -1873,8 +1876,9 @@ body {
   background: var(--color-bg-primary);
   padding-right: 8px;
 }
-/* Keep the frozen cell's background in step with each row's own background. */
-.report-tree-parent:hover td.report-table-account { background: var(--color-bg-secondary); }
+/* Keep the frozen cell's background in step with the row hover (it has its own
+   opaque background stacked above the row, so it needs the hover colour too). */
+.report-tree-row:hover td.report-table-account { background: var(--color-bg-secondary); }
 .report-table-num {
   text-align: right;
   font-family: var(--font-mono);
@@ -1905,7 +1909,8 @@ body {
 
 .report-tree-row td { padding: 5px 12px; border-bottom: 1px solid var(--color-border-subtle); }
 .report-tree-parent { cursor: pointer; }
-.report-tree-parent:hover td { background: var(--color-bg-secondary); }
+/* Highlight the whole row on hover — parents AND expanded leaf sub-items. */
+.report-tree-row:hover td { background: var(--color-bg-secondary); }
 .report-tree-toggle { display: inline-block; width: 16px; font-size: 10px; color: var(--color-text-tertiary); }
 
 .report-table-subtotal td {
