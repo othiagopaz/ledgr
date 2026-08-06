@@ -20,7 +20,7 @@
 #
 # The service listens on:
 #   Backend  http://localhost:8420   (override with LEDGR_PORT)
-#   Frontend http://localhost:5173   (override with LEDGR_FRONTEND_PORT)
+#   Frontend http://localhost:5273   (override with LEDGR_FRONTEND_PORT)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -37,7 +37,7 @@ RC_MARKER="# >>> ledgr shell integration >>>"
 RC_MARKER_END="# <<< ledgr shell integration <<<"
 
 LEDGR_PORT="${LEDGR_PORT:-8420}"
-LEDGR_FRONTEND_PORT="${LEDGR_FRONTEND_PORT:-5173}"
+LEDGR_FRONTEND_PORT="${LEDGR_FRONTEND_PORT:-5273}"
 
 # gui/<uid> is the modern launchctl domain for a logged-in user's agents.
 DOMAIN="gui/$(id -u)"

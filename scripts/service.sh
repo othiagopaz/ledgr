@@ -15,7 +15,7 @@
 #
 # Recognised settings:
 #   LEDGR_PORT            Backend port         (default 8420)
-#   LEDGR_FRONTEND_PORT   Frontend port        (default 5173)
+#   LEDGR_FRONTEND_PORT   Frontend port        (default 5273)
 #   BEANCOUNT_FILE        Ledger file to load  (default: data/example.beancount)
 #   LEDGR_RELOAD          1 = run uvicorn with --reload so backend Python edits
 #                         auto-reload (for development). Default off — the
@@ -42,7 +42,7 @@ fi
 [ -n "$_env_fport" ] && LEDGR_FRONTEND_PORT="$_env_fport"
 
 LEDGR_PORT="${LEDGR_PORT:-8420}"
-LEDGR_FRONTEND_PORT="${LEDGR_FRONTEND_PORT:-5173}"
+LEDGR_FRONTEND_PORT="${LEDGR_FRONTEND_PORT:-5273}"
 # Default to the bundled example ledger so the service runs out of the box with
 # no personal path in version control. Set BEANCOUNT_FILE (in .ledgr.env or the
 # environment) to point at your real file.

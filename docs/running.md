@@ -2,7 +2,8 @@
 
 There are two ways to run Ledgr locally. Both serve the backend on a
 **dedicated port `:8420`** (not the common `:8080`, so it never clashes with
-other projects you develop in parallel) and the frontend on `:5173`.
+other projects you develop in parallel) and the frontend on a dedicated
+`:5273` (not Vite's default `:5173`, for the same reason).
 
 ## 1. Persistent background service (recommended)
 
@@ -13,7 +14,7 @@ spawns a stray shadow backend.
 ```bash
 scripts/ledgr install   # first time: installs the LaunchAgent and starts it
 scripts/ledgr status    # show launchd state + backend/frontend health
-scripts/ledgr open      # open http://localhost:5173 in your browser
+scripts/ledgr open      # open http://localhost:5273 in your browser
 scripts/ledgr logs      # tail the service log (Ctrl+C to quit)
 scripts/ledgr restart   # restart both processes
 scripts/ledgr stop      # stop the service (won't relaunch until start/install)
@@ -130,7 +131,7 @@ Set these in `.ledgr.env` (or the environment):
 |---------|---------|---------|
 | `BEANCOUNT_FILE` | `data/example.beancount` | Ledger file to load |
 | `LEDGR_PORT` | `8420` | Backend port |
-| `LEDGR_FRONTEND_PORT` | `5173` | Frontend port |
+| `LEDGR_FRONTEND_PORT` | `5273` | Frontend port |
 | `LEDGR_RELOAD` | off | `1` = backend auto-reload on Python edits (dev) |
 
 The Vite dev-server proxy forwards `/api` to the backend port via

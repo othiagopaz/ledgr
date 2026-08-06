@@ -12,7 +12,7 @@ On first tool call the server ensures a backend is up:
 
   1. GET ``{LEDGR_API_URL}/health``. If it answers, reuse it — normally this
      is the persistent service started by ``scripts/ledgr install`` (backend
-     on :8420 + frontend on :5173), always running in the background.
+     on :8420 + frontend on :5273), always running in the background.
   2. Only if nothing answers AND ``LEDGR_AUTOSTART=1`` do we spawn a headless
      ``uvicorn`` for the lifetime of this MCP process.
 

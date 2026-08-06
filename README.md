@@ -63,7 +63,7 @@ cd ledgr
 
 `setup.sh` creates the Python venv, installs dependencies, and seeds an
 example ledger. `dev.sh` starts the backend on `:8420` and the frontend
-on `:5173`. Point `dev.sh` at your own file when you have one:
+on `:5273`. Point `dev.sh` at your own file when you have one:
 
 ```bash
 ./scripts/dev.sh path/to/your-ledger.beancount

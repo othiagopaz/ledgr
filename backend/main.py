@@ -37,9 +37,15 @@ def health() -> dict[str, str]:
     """Liveness probe — used by the MCP server to detect a running backend."""
     return {"status": "ok"}
 
+# In normal dev the Vite proxy (changeOrigin) fronts /api, so CORS isn't
+# exercised — but allow the frontend origin directly for any cross-origin call.
+# Default to Ledgr's dedicated frontend port (5273); keep 5173 so a bare
+# `npm run dev` without LEDGR_FRONTEND_PORT still works out of the box.
+_frontend_port = os.environ.get("LEDGR_FRONTEND_PORT", "5273")
+_cors_origins = {f"http://localhost:{_frontend_port}", "http://localhost:5173"}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=sorted(_cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )

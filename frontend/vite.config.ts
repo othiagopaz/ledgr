@@ -8,7 +8,10 @@ const backendPort = process.env.VITE_API_PORT || '8420'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
+    // Dedicated port (Vite's default 5173 clashes with any other Vite dev
+    // server running in parallel). Overridable via LEDGR_FRONTEND_PORT, which
+    // scripts/service.sh and scripts/dev.sh pass through the CLI --port flag.
+    port: Number(process.env.LEDGR_FRONTEND_PORT) || 5273,
     proxy: {
       '/api': {
         target: `http://localhost:${backendPort}`,

@@ -19,6 +19,7 @@ fi
 export BEANCOUNT_FILE="$(cd "$(dirname "$BEANCOUNT_FILE")" && pwd)/$(basename "$BEANCOUNT_FILE")"
 
 LEDGR_PORT="${LEDGR_PORT:-8420}"
+LEDGR_FRONTEND_PORT="${LEDGR_FRONTEND_PORT:-5273}"
 
 # Start backend
 echo "Starting backend on :$LEDGR_PORT..."
@@ -30,22 +31,22 @@ BACKEND_PID=$!
 cd ..
 
 # Start frontend (proxy points at the dedicated backend port via VITE_API_PORT)
-echo "Starting frontend on :5173..."
+echo "Starting frontend on :$LEDGR_FRONTEND_PORT..."
 cd frontend
-VITE_API_PORT="$LEDGR_PORT" npm run dev &
+VITE_API_PORT="$LEDGR_PORT" npm run dev -- --port "$LEDGR_FRONTEND_PORT" &
 FRONTEND_PID=$!
 cd ..
 
 echo ""
 echo "Ledgr running:"
-echo "  Frontend: http://localhost:5173"
+echo "  Frontend: http://localhost:$LEDGR_FRONTEND_PORT"
 echo "  Backend:  http://localhost:$LEDGR_PORT"
 echo "  API docs: http://localhost:$LEDGR_PORT/docs"
 echo ""
 echo "Press Ctrl+C to stop"
 
 # Open browser after a short delay for servers to start
-(sleep 0.5 && open http://localhost:5173) &
+(sleep 0.5 && open "http://localhost:$LEDGR_FRONTEND_PORT") &
 
 trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT
 wait
