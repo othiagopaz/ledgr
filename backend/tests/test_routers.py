@@ -693,6 +693,50 @@ class TestAccountCRUD:
         })
         assert r.status_code == 400
 
+    # ── Update (PUT) — ledgr-type enforcement on Assets/Liabilities ──
+
+    def test_update_account_valid_type_change(self, client: TestClient) -> None:
+        """Changing an Assets account's type to another valid Assets type persists."""
+        r = client.put("/api/accounts", json={
+            "name": "Assets:Checking",
+            "ledgr_type": "receivable",
+        })
+        assert r.status_code == 200
+        assert r.json()["account"]["ledgr_type"] == "receivable"
+
+    def test_update_account_invalid_type_for_root(self, client: TestClient) -> None:
+        """Setting a Liabilities-only type on an Assets account is rejected."""
+        r = client.put("/api/accounts", json={
+            "name": "Assets:Checking",
+            "ledgr_type": "credit-card",  # invalid for Assets
+        })
+        assert r.status_code == 400
+        assert "Invalid ledgr_type" in r.json()["detail"]
+
+    def test_update_account_empty_type_rejected_for_assets(
+        self, client: TestClient
+    ) -> None:
+        """An explicit empty type on an Assets account is rejected (cannot clear
+        the required type)."""
+        r = client.put("/api/accounts", json={
+            "name": "Assets:Checking",
+            "ledgr_type": "",
+        })
+        assert r.status_code == 400
+        assert "ledgr_type" in r.json()["detail"]
+
+    def test_update_account_metadata_only_preserves_type(
+        self, client: TestClient
+    ) -> None:
+        """A metadata-only update (no ledgr_type) must NOT wipe the existing
+        required type — ledgr-type is protected internal metadata."""
+        r = client.put("/api/accounts", json={
+            "name": "Assets:Checking",
+            "metadata": {"institution": "Some Bank"},
+        })
+        assert r.status_code == 200
+        assert r.json()["account"]["ledgr_type"] == "cash"  # unchanged
+
     def test_close_account(self, client: TestClient) -> None:
         r = client.post("/api/accounts/close", json={
             "name": "Assets:Savings",

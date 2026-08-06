@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchAccountNames,
+  fetchAccountTypes,
   createAccount,
   updateAccount,
   closeAccount,
@@ -13,25 +14,18 @@ import { today, parseSmartDate } from "../utils/dateUtils";
 import { formatDateFull, getDatePlaceholder } from "../utils/format";
 import InlineAutocomplete from "./InlineAutocomplete";
 
-// Static type vocabulary — mirrors VALID_TYPES_BY_ROOT in backend/account_types.py
-const ACCOUNT_TYPES: Record<string, { value: string; label: string }[]> = {
-  Assets: [
-    { value: "cash", label: "Cash / Bank Account" },
-    { value: "receivable", label: "Receivable" },
-    { value: "investment", label: "Investment / Brokerage" },
-    { value: "prepaid", label: "Prepaid / Deposit" },
-  ],
-  Liabilities: [
-    { value: "credit-card", label: "Credit Card" },
-    { value: "loan", label: "Loan / Mortgage" },
-    { value: "payable", label: "Payable" },
-  ],
+// Minimal fallback type vocabulary — only used for the brief window before
+// /api/account-types loads (the backend is the source of truth). Kept tiny on
+// purpose so it can't silently drift; the fetched list replaces it.
+const FALLBACK_ACCOUNT_TYPES: Record<string, { value: string; label: string }[]> = {
   Income: [{ value: "general", label: "General" }],
   Expenses: [{ value: "general", label: "General" }],
   Equity: [{ value: "general", label: "General" }],
 };
 
-// Roots where ledgr-type is required
+// Roots where ledgr-type is required. Mirrors REQUIRED_TYPE_ROOTS in
+// backend/account_types.py — the backend enforces this with a 400; this guard
+// is the client-side counterpart so the user never makes a doomed request.
 const REQUIRED_TYPE_ROOTS = new Set(["Assets", "Liabilities"]);
 
 interface MetadataRow {
@@ -124,6 +118,15 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
     queryFn: fetchAccountNames,
   });
 
+  // Valid ledgr-types per account root, fetched from the backend (single
+  // source of truth) rather than hardcoded — so the modal can never drift from
+  // VALID_TYPES_BY_ROOT. FALLBACK covers the brief pre-load window only.
+  const accountTypesQuery = useQuery({
+    queryKey: ["account-types"],
+    queryFn: fetchAccountTypes,
+  });
+  const accountTypes = accountTypesQuery.data?.types ?? FALLBACK_ACCOUNT_TYPES;
+
   useEffect(() => {
     if (isEditing) {
       typeRef.current?.focus();
@@ -135,7 +138,9 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
   // ── Dynamic type options ──────────────────────────────────────────────────
 
   const root = isEditing ? account!.name.split(":")[0] : name.split(":")[0];
-  const typeOptions = ACCOUNT_TYPES[root] || [];
+  const typeOptions = accountTypes[root] || [];
+  // A required root (Assets/Liabilities) with no type selected yet.
+  const missingRequiredType = REQUIRED_TYPE_ROOTS.has(root) && !ledgrType;
 
   // Reset ledgrType when root changes and current selection is no longer valid
   useEffect(() => {
@@ -174,6 +179,14 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
   async function handleSave() {
     if (saving) return;
     setError(null);
+
+    // Assets/Liabilities require a ledgr-type. Guard client-side so the user
+    // never fires a request the backend will reject with a 400.
+    if (missingRequiredType) {
+      setError("This account has no ledgr-type. Set one to continue.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -361,6 +374,14 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
                   </option>
                 ))}
               </select>
+              {missingRequiredType && (
+                <span
+                  className="form-hint"
+                  style={{ color: "var(--color-warning-fg)" }}
+                >
+                  Required for Assets &amp; Liabilities
+                </span>
+              )}
             </div>
 
             <div className="form-field">
@@ -588,7 +609,12 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
             <button
               className="btn btn-primary"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || missingRequiredType}
+              title={
+                missingRequiredType
+                  ? "Select a type for this Assets/Liabilities account"
+                  : undefined
+              }
             >
               {saving
                 ? "Saving…"

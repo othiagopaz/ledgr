@@ -9,7 +9,14 @@ This module replaces the legacy prefix-based classification system
 prefixes, accounts are classified by their explicit ``ledgr-type`` metadata
 on the ``Open`` directive.
 
-See AGENTS.md §7 for the classification rules.
+``Assets`` and ``Liabilities`` accounts **require** a ``ledgr-type`` (see
+``REQUIRED_TYPE_ROOTS``); ``Income`` / ``Expenses`` / ``Equity`` default to
+``"general"``. The requirement is enforced at account create and edit by
+``_validate_ledgr_type`` in ``routers/accounts.py`` (HTTP 400), guarded again
+client-side in the account modal, and surfaced for pre-existing untyped
+accounts by ``GET /api/accounts/warnings``.
+
+See ``docs/backend/cashflow.md`` for the classification rules and their rationale.
 """
 
 from __future__ import annotations
@@ -31,6 +38,28 @@ INVESTMENT_TYPES: frozenset[str] = frozenset({"investment"})
 # Types that make a Liabilities account a "loan" for Cash Flow.
 # Transactions between a cash account and a loan account = FINANCING.
 LOAN_TYPES: frozenset[str] = frozenset({"loan"})
+
+# Working-capital types — Assets/Liabilities that represent a timing difference
+# around ordinary (operating) activity rather than an investing or financing
+# instrument. In the Cash Flow Statement, cash moving against one of these
+# counterparts is OPERATING (IAS 7 working capital):
+#   receivable  — someone owes you (reimbursement in transit)
+#   prepaid     — you paid ahead; benefit consumed later
+#   credit-card — a payment mechanism for operating spend (IAS 7 permits
+#                 operating OR financing; Ledgr chooses operating by substance)
+#   payable     — you owe for something already received
+# See docs/backend/cashflow.md for the full rationale.
+RECEIVABLE_TYPES: frozenset[str] = frozenset({"receivable"})
+PREPAID_TYPES: frozenset[str] = frozenset({"prepaid"})
+CREDIT_CARD_TYPES: frozenset[str] = frozenset({"credit-card"})
+PAYABLE_TYPES: frozenset[str] = frozenset({"payable"})
+
+# Every ledgr-type that the Cash Flow Statement treats as OPERATING working
+# capital. Kept as one set so the classifier and any future report share a
+# single source of truth.
+OPERATING_WORKING_CAPITAL_TYPES: frozenset[str] = (
+    RECEIVABLE_TYPES | PREPAID_TYPES | CREDIT_CARD_TYPES | PAYABLE_TYPES
+)
 
 # Asset/Liability types that are valid Budget *allocation* envelopes — money
 # you deliberately set aside (investment contributions, debt paydown). Every
@@ -138,6 +167,36 @@ def is_investment_account(account: str, type_map: dict[str, str]) -> bool:
 def is_loan_account(account: str, type_map: dict[str, str]) -> bool:
     """Return True if account's ledgr-type is in LOAN_TYPES."""
     return type_map.get(account) in LOAN_TYPES
+
+
+def is_receivable_account(account: str, type_map: dict[str, str]) -> bool:
+    """Return True if account's ledgr-type is in RECEIVABLE_TYPES."""
+    return type_map.get(account) in RECEIVABLE_TYPES
+
+
+def is_prepaid_account(account: str, type_map: dict[str, str]) -> bool:
+    """Return True if account's ledgr-type is in PREPAID_TYPES."""
+    return type_map.get(account) in PREPAID_TYPES
+
+
+def is_creditcard_account(account: str, type_map: dict[str, str]) -> bool:
+    """Return True if account's ledgr-type is in CREDIT_CARD_TYPES."""
+    return type_map.get(account) in CREDIT_CARD_TYPES
+
+
+def is_payable_account(account: str, type_map: dict[str, str]) -> bool:
+    """Return True if account's ledgr-type is in PAYABLE_TYPES."""
+    return type_map.get(account) in PAYABLE_TYPES
+
+
+def is_operating_working_capital(account: str, type_map: dict[str, str]) -> bool:
+    """Return True if account's ledgr-type is an OPERATING working-capital type.
+
+    Covers receivable, prepaid, credit-card, and payable — the Assets/Liabilities
+    types that represent a timing difference around operating activity. Cash
+    moving against one of these is OPERATING in the Cash Flow Statement.
+    """
+    return type_map.get(account) in OPERATING_WORKING_CAPITAL_TYPES
 
 
 def is_budgetable_allocation(account: str, type_map: dict[str, str]) -> bool:

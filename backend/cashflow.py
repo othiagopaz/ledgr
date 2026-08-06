@@ -26,6 +26,7 @@ from account_types import (
     is_cash_account,
     is_investment_account,
     is_loan_account,
+    is_operating_working_capital,
 )
 from serializers import decimal_to_report_number, format_other_balances
 
@@ -49,62 +50,80 @@ def date_to_period(d: datetime.date, interval: str) -> str:
 # Classification — ORDER IS CRITICAL (see AGENTS.md §7 & §13)
 # ------------------------------------------------------------------
 #
-# Three tiers of Assets accounts (determined by ledgr-type metadata):
-#   cash        → ledgr-type: "cash"
-#   investment  → ledgr-type: "investment"
-#   other       → everything else (receivable, prepaid, …)
+# Classification is per **counterpart** (a single non-cash posting account),
+# driven by ledgr-type first and account-root prefix only as a last resort.
 #
 # The check order must be:
-#   1. Loan counterpart       → financing
-#   2. Investment counterpart  → investing
-#   3. Income / Expenses / Liabilities / other non-cash asset → operating
-#   4. default                 → transfer
+#   1. loan                                    → financing
+#   2. investment                              → investing
+#   3. receivable/prepaid/credit-card/payable  → operating (working capital)
+#   4. Income:/Expenses:/Liabilities: prefix   → operating (fallback)
+#   5. non-cash Assets: prefix                 → operating (fallback)
+#   6. default                                 → transfer
 #
 # Loans MUST be checked BEFORE generic Liabilities.
 # This was a real bug — do not regress.
 #
 # INVESTING MUST be checked BEFORE OPERATING. Otherwise, investment
 # transactions with incidental expenses (commissions, fees) get
-# misclassified as operating. Dividends still classify as operating
-# because they flow from Income → cash account (no investment counterpart).
+# misclassified as operating. Because attribution is now per-counterpart,
+# the commission leg lands in operating and the investment leg in investing —
+# but this ordering still guards the single-counterpart classification and any
+# untyped account that a prefix might otherwise misroute.
 #
-# "Other" non-cash assets (Receivables, Deposits…) are OPERATING working
-# capital — e.g. a reimbursement coming in from Assets:Receivables.
+# Working-capital counterparts (receivable, prepaid, credit-card, payable) are
+# OPERATING — e.g. a reimbursement coming in from Assets:Receivables, or a
+# credit-card payment settling ordinary spend. credit-card is operating by
+# substance over legal form (IAS 7 permits operating OR financing).
 # ------------------------------------------------------------------
 
 def classify_posting(
     cash_account: str,
-    counterparts: list[str],
+    counterpart: str | None,
     type_map: dict[str, str],
 ) -> str:
-    """Classify a cash flow posting per IAS 7 categories using ledgr-type.
+    """Classify a single cash-flow counterpart per IAS 7, using ledgr-type.
+
+    ``counterpart`` is one non-cash posting account (or ``None`` when a cash
+    posting has no non-cash counterpart at all — a pure cash↔cash move).
+
+    Assets/Liabilities are classified **entirely by ledgr-type** (loan /
+    investment / receivable / prepaid / credit-card / payable). Income and
+    Expenses carry no distinguishing type — they are all ``general`` — so their
+    account **root** is the only classification signal, and the prefix check for
+    them is primary, not a fallback.
 
     Classification order (CRITICAL — do not rearrange):
-      1. FINANCING: counterpart has ledgr-type "loan"
-      2. INVESTING: counterpart has ledgr-type "investment"
-      3. OPERATING: counterpart is Income/Expenses/Liabilities(non-loan) or non-cash Asset
-      4. TRANSFER: default (cash ↔ cash)
+      1. FINANCING: ledgr-type "loan"
+      2. INVESTING: ledgr-type "investment"
+      3. OPERATING: ledgr-type receivable/prepaid/credit-card/payable
+                    (working capital), OR an Income:/Expenses: account
+      4. TRANSFER: default — Equity, an unrecognised account, or an
+                   Asset/Liability missing its (required) ledgr-type. A
+                   misconfigured account surfacing here is intentional: it reads
+                   as visibly wrong rather than being silently bucketed.
     """
-    # ── Step 1: FINANCING — counterpart is a loan account ──
-    for cp in counterparts:
-        if is_loan_account(cp, type_map):
-            return "financing"
+    if counterpart is None:
+        return "transfer"
 
-    # ── Step 2: INVESTING — counterpart is an investment account ──
-    for cp in counterparts:
-        if is_investment_account(cp, type_map):
-            return "investing"
+    # ── 1. FINANCING — loan counterpart (BEFORE generic liabilities) ──
+    if is_loan_account(counterpart, type_map):
+        return "financing"
 
-    # ── Step 3: OPERATING — Income / Expenses / Liabilities / other non-cash asset ──
-    for cp in counterparts:
-        if cp.startswith(("Income:", "Expenses:")):
-            return "operating"
-        if cp.startswith("Liabilities:"):
-            return "operating"  # Non-loan liabilities (credit-card, payable)
-        if cp.startswith("Assets:") and not is_cash_account(cp, type_map):
-            return "operating"  # Receivables, prepaid — working capital
+    # ── 2. INVESTING — investment counterpart (BEFORE operating) ──
+    if is_investment_account(counterpart, type_map):
+        return "investing"
 
-    # ── Step 4: TRANSFER (default) ──
+    # ── 3. OPERATING — working-capital ledgr-type (receivable / prepaid /
+    #        credit-card / payable), or an Income/Expenses account (general
+    #        type; the root is the signal). ──
+    if is_operating_working_capital(counterpart, type_map):
+        return "operating"
+    if counterpart.startswith(("Income:", "Expenses:")):
+        return "operating"
+
+    # ── 4. TRANSFER (default) — Equity, unknown, or an untyped (misconfigured)
+    #        Asset/Liability. ──
     return "transfer"
 
 
@@ -150,6 +169,13 @@ def compute_cashflow(
     other_items: list[dict[str, Any]] = []
     periods_set: set[str] = set()
 
+    def emit(item: dict[str, Any]) -> None:
+        """Route an item to the OC or non-OC bucket."""
+        if oc and item["currency"] != oc:
+            other_items.append(item)
+        else:
+            items.append(item)
+
     for txn in txns:
         cash_postings = [
             p for p in txn.postings
@@ -158,45 +184,119 @@ def compute_cashflow(
         if not cash_postings:
             continue  # No cash movement → not a cash flow event
 
-        counterparts = [
-            p.account for p in txn.postings
-            if not is_cash_account(p.account, type_map)
+        counterpart_postings = [
+            p for p in txn.postings
+            if not is_cash_account(p.account, type_map) and p.units is not None
         ]
 
         period = date_to_period(txn.date, interval)
         periods_set.add(period)
 
-        for posting in cash_postings:
-            category = classify_posting(
-                posting.account, counterparts, type_map
-            )
+        # Attribution is per **currency**: a cash movement is explained by the
+        # non-cash counterparts sharing its currency. Cross-currency legs (e.g.
+        # buy shares priced in ITOT with a USD cash leg) have no same-currency
+        # counterpart and are classified as a whole against the txn's other
+        # counterparts — see the "no same-currency counterpart" branch.
+        cash_currencies = {p.units.currency for p in cash_postings}
 
-            if counterparts:
-                cp_display = (
-                    counterparts[0] if len(counterparts) == 1 else "Split"
-                )
+        for cur in cash_currencies:
+            cash_c = [p for p in cash_postings if p.units.currency == cur]
+            cps_c = [p for p in counterpart_postings if p.units.currency == cur]
+
+            if cps_c:
+                # ── Same-currency counterparts: attribute per counterpart ──
+                # Each counterpart's cash effect is the negative of its own
+                # amount. A mixed transaction thus splits correctly across
+                # sections (interest→operating, principal→investing, …), per
+                # IAS 7 §12 which requires splitting a mixed transaction.
+                attributed = Decimal(0)
+                for cp in cps_c:
+                    attributed += -cp.units.number
+                    emit({
+                        "period": period,
+                        "account": cash_c[0].account,
+                        "counterpart": cp.account,
+                        "amount": -cp.units.number,
+                        "currency": cur,
+                        "category": classify_posting(
+                            cash_c[0].account, cp.account, type_map
+                        ),
+                    })
+                # ── Cross-currency residual. The same-currency counterparts only
+                # explain part of the cash when another leg is priced in a
+                # DIFFERENT currency (a commodity held at cost, or an FX leg) —
+                # e.g. buy shares in ITOT with a USD cash leg AND a USD
+                # commission: the commission explains only 5 of a 3505 outflow.
+                # The remainder is real cash that must be attributed, classified
+                # against the txn's other-currency counterpart(s) (investing when
+                # one exists, else a transfer). Without this the cross-currency
+                # portion of the cash leg would be silently dropped and net cash
+                # flow would stop reconciling with the opening/closing balance. ──
+                residual = sum((p.units.number for p in cash_c), Decimal(0)) - attributed
+                if residual != 0:
+                    other_cur_cps = [
+                        p.account for p in counterpart_postings
+                        if p.units.currency != cur
+                    ]
+                    if other_cur_cps:
+                        category = classify_posting(
+                            cash_c[0].account, other_cur_cps[0], type_map
+                        )
+                        cp_display = (
+                            other_cur_cps[0] if len(other_cur_cps) == 1 else "Split"
+                        )
+                    else:
+                        # No other-currency counterpart → net movement between
+                        # the txn's own cash accounts → transfer.
+                        category = "transfer"
+                        cash_names = [p.account for p in cash_c]
+                        cp_display = cash_names[0] if len(cash_names) == 1 else "Split"
+                    emit({
+                        "period": period,
+                        "account": cash_c[0].account,
+                        "counterpart": cp_display,
+                        "amount": residual,
+                        "currency": cur,
+                        "category": category,
+                    })
             else:
-                # All postings are cash accounts — show the other one(s)
-                other_cash = [
-                    p.account for p in txn.postings if p.account != posting.account
+                # ── No same-currency counterpart. Either a pure cash↔cash move
+                #    (bank transfer) or a cross-currency leg whose counterpart is
+                #    priced in another currency (asset purchase / FX). Classify
+                #    each cash posting as a whole against the *other-currency*
+                #    counterparts, mirroring the legacy per-cash-posting rule. ──
+                other_cur_cps = [
+                    p.account for p in counterpart_postings
+                    if p.units.currency != cur
                 ]
-                cp_display = (
-                    other_cash[0] if len(other_cash) == 1 else "Split"
-                )
-
-            item = {
-                "period": period,
-                "account": posting.account,
-                "counterpart": cp_display,
-                "amount": posting.units.number,
-                "currency": posting.units.currency,
-                "category": category,
-            }
-
-            if oc and posting.units.currency != oc:
-                other_items.append(item)
-            else:
-                items.append(item)
+                for posting in cash_c:
+                    if other_cur_cps:
+                        category = classify_posting(
+                            posting.account, other_cur_cps[0], type_map
+                        )
+                        cp_display = (
+                            other_cur_cps[0]
+                            if len(other_cur_cps) == 1
+                            else "Split"
+                        )
+                    else:
+                        # Pure cash↔cash: label with the other cash account(s).
+                        other_cash = [
+                            p.account for p in cash_c
+                            if p.account != posting.account
+                        ]
+                        category = "transfer"
+                        cp_display = (
+                            other_cash[0] if len(other_cash) == 1 else "Split"
+                        )
+                    emit({
+                        "period": period,
+                        "account": posting.account,
+                        "counterpart": cp_display,
+                        "amount": posting.units.number,
+                        "currency": cur,
+                        "category": category,
+                    })
 
     periods = sorted(periods_set)
 
