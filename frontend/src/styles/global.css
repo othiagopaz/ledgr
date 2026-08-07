@@ -2067,6 +2067,20 @@ body {
   align-items: center;
   gap: 12px;
 }
+.series-completed-toggle {
+  margin-left: auto;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-text-secondary);
+}
+.series-completed-toggle:hover { color: var(--color-accent); text-decoration: underline; }
 .series-reconcile-btn { font-size: 11px; padding: 3px 10px; }
 
 .series-summaries, .series-transactions { display: flex; flex-direction: column; }
@@ -2139,9 +2153,18 @@ body {
   color: var(--color-text-primary);
 }
 .series-summary-row:hover td { background: var(--color-bg-secondary); color: var(--color-text-primary); }
+/* Completed series (revealed via the toggle) get a success-tinted highlight
+   plus a left accent stripe so they read as "done" and stay distinct from the
+   active rows above them. Text stays muted. */
+.series-summary-completed td { color: var(--color-text-secondary); background: var(--color-success-bg); }
+.series-summary-completed td:first-child { box-shadow: inset 2px 0 0 var(--color-success-fg); }
+.series-summary-completed:hover td { background: var(--color-success-bg); color: var(--color-text-primary); }
 .series-summary-payee { font-weight: 500; color: var(--color-text-primary); }
 .series-summary-narration { color: var(--color-text-tertiary); font-size: 11px; }
-.series-summary-dates { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-secondary); }
+.series-summary-dates { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-secondary); white-space: nowrap; }
+/* Keep the amount columns on one line so the date/amount columns don't wrap
+   when the Total column tightens the layout. */
+.series-summary-table th.num, .series-summary-table td.num { white-space: nowrap; }
 .series-currency-label { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); margin-left: 3px; }
 .series-type-cell { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .series-freq-label { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); text-transform: lowercase; letter-spacing: 0.04em; }
