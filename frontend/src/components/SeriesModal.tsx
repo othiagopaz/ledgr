@@ -40,6 +40,7 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
   // ── Create form state ─────────────────────────────────────────────────────
 
   const [seriesType, setSeriesType] = useState<'recurring' | 'installment'>(seriesModalDefaultType ?? 'recurring');
+  const [frequency, setFrequency] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
   const [payee, setPayee] = useState(isEditing ? series!.payee : "");
   const [narration, setNarration] = useState(isEditing ? series!.narration : "");
   const [startDate, setStartDate] = useState(formatDateFull(today(), operatingCurrency));
@@ -174,6 +175,7 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
           end_date: parsedEnd,
           currency: currency.trim().toUpperCase(),
           postings: apiPostings,
+          frequency,
         });
         if (!result.success) {
           setError(result.errors?.join(", ") || "Failed to create series.");
@@ -312,10 +314,13 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
               <div className="series-detail-grid">
                 <div className="series-detail-row">
                   <span className="series-detail-label">Type</span>
-                  <span>
+                  <span className="series-type-cell">
                     <span className={`series-type-badge series-type-${series.type}`}>
                       {series.type}
                     </span>
+                    {series.type === 'recurring' && (
+                      <span className="series-freq-label">{series.frequency}</span>
+                    )}
                   </span>
                 </div>
                 <div className="series-detail-row">
@@ -570,6 +575,24 @@ export default function SeriesModal({ onMutated }: SeriesModalProps) {
                     </button>
                   </div>
                 </div>
+
+                {seriesType === 'recurring' && (
+                  <div className="form-field">
+                    <label>Frequency</label>
+                    <div className="series-type-toggle">
+                      {(['weekly', 'monthly', 'yearly'] as const).map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          className={`series-type-btn${frequency === f ? ' active' : ''}`}
+                          onClick={() => setFrequency(f)}
+                        >
+                          {f.charAt(0).toUpperCase() + f.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Payee + Narration */}

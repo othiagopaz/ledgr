@@ -555,6 +555,7 @@ body {
   border-bottom: 1px solid var(--color-border-default);
   position: sticky;
   top: 0;
+  z-index: 2;
   background: var(--color-bg-primary);
 }
 
@@ -1690,7 +1691,8 @@ body {
   min-height: 0;
 }
 .reports-content {
-  padding: 16px 24px 24px;
+  --reports-pad-top: 16px;
+  padding: var(--reports-pad-top) 24px 24px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -2086,6 +2088,50 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+/* Sticky header for the scrolling transactions list (inside .reports-content).
+   Two coordinated sticky layers with opaque backgrounds so list rows can't
+   bleed through as they scroll past:
+     1. the "Transactions" section label pins at the very top (the lid);
+     2. the <thead> pins directly beneath it.
+   Sticking individual <th> cells does NOT stick in this table/flex layout, so
+   we stick the whole <thead>. With border-collapse the header's bottom border
+   belongs to the row and scrolls away — so the divider is an inset shadow on
+   the cells, which travels with the sticky header. Scoped to the transactions
+   view; the summary tables are not scroll-pinned.
+   --txn-head-lid = label height (16) + its 6px gap, kept in one place so the
+   thead offset stays in lockstep with the label. */
+/* The label pins flush to the true top of the scroll viewport. .reports-content
+   has top padding *inside* its scroll box, so we pin the label at -padding and
+   add matching padding-top to keep it opaque across that band — otherwise rows
+   scroll through the padding gap above the lid. --txn-head-lid then offsets the
+   thead to sit right under the label (label height 16 + its 6px gap). */
+.series-transactions { --txn-head-lid: 22px; }
+.series-transactions .series-section-label {
+  position: sticky;
+  top: calc(-1 * var(--reports-pad-top, 0px));
+  z-index: 3;
+  margin-bottom: 0;
+  padding-top: var(--reports-pad-top, 0px);
+  padding-bottom: 6px;
+  background: var(--color-bg-primary);
+}
+.series-txn-table thead {
+  position: sticky;
+  /* Tuck 1px under the label so their sub-pixel edges overlap instead of
+     leaving a fractional seam a scrolling row can peek through. The header's
+     opaque background hides the overlap. */
+  top: calc(var(--txn-head-lid) - 1px);
+  z-index: 2;
+  /* Opaque background on the whole header band — not just the <th> cells — so
+     no inter-cell seam or trailing edge can let a scrolling row show through. */
+  background: var(--color-bg-primary);
+}
+.series-txn-table thead tr { background: var(--color-bg-primary); }
+.series-txn-table th {
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 var(--color-border-default);
+  background: var(--color-bg-primary);
+}
 .series-summary-table td, .series-txn-table td {
   padding: 6px 10px;
   border-bottom: 1px solid var(--color-border-subtle);
@@ -2097,6 +2143,8 @@ body {
 .series-summary-narration { color: var(--color-text-tertiary); font-size: 11px; }
 .series-summary-dates { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-secondary); }
 .series-currency-label { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); margin-left: 3px; }
+.series-type-cell { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.series-freq-label { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); text-transform: lowercase; letter-spacing: 0.04em; }
 
 .series-type-badge,
 .series-type-recurring,
@@ -2140,6 +2188,9 @@ body {
 }
 
 .series-progress { display: flex; align-items: center; gap: 8px; }
+/* Installments tab has no Type column, so the bar fills the reclaimed width. */
+.series-progress-wide { width: 100%; }
+.series-progress-wide .series-progress-bar-wrap { width: auto; flex: 1 1 auto; }
 .series-progress-bar-wrap {
   width: 80px;
   height: 4px;

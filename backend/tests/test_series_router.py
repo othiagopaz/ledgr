@@ -296,6 +296,106 @@ class TestCreateRecurringSeries:
 
 
 # ------------------------------------------------------------------
+# POST /api/series — recurring frequency (weekly / yearly)
+# ------------------------------------------------------------------
+
+
+class TestCreateSeriesFrequency:
+    def _post(self, client, frequency, start, end):
+        return client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "Gym",
+            "narration": "Membership",
+            "start_date": start,
+            "end_date": end,
+            "currency": "BRL",
+            "frequency": frequency,
+            "postings": [
+                {"account": "Expenses:Health", "amount": "30"},
+                {"account": "Assets:Checking", "amount": "-30"},
+            ],
+        })
+
+    def test_weekly_count(self, minimal_client: TestClient) -> None:
+        # Jan 1 → Jan 29 weekly = 5 occurrences (1, 8, 15, 22, 29).
+        r = self._post(minimal_client, "weekly", "2025-01-01", "2025-01-29")
+        assert r.status_code == 200
+        assert r.json()["count"] == 5
+
+    def test_yearly_count(self, minimal_client: TestClient) -> None:
+        # 2025 → 2027 yearly = 3 occurrences.
+        r = self._post(minimal_client, "yearly", "2025-06-10", "2027-06-10")
+        assert r.status_code == 200
+        assert r.json()["count"] == 3
+
+    def test_weekly_frequency_in_summary(self, minimal_client: TestClient) -> None:
+        assert self._post(
+            minimal_client, "weekly", "2025-01-01", "2025-01-29"
+        ).status_code == 200
+        listed = minimal_client.get("/api/series").json()["series"]
+        gym = next(s for s in listed if s["payee"] == "Gym")
+        assert gym["frequency"] == "weekly"
+
+    def test_monthly_default_frequency_in_summary(
+        self, minimal_client: TestClient
+    ) -> None:
+        """A series created without 'frequency' reports 'monthly'."""
+        r = minimal_client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "Rent",
+            "narration": "Flat",
+            "start_date": "2025-01-01",
+            "end_date": "2025-03-01",
+            "currency": "BRL",
+            "postings": [
+                {"account": "Expenses:Rent", "amount": "1000"},
+                {"account": "Assets:Checking", "amount": "-1000"},
+            ],
+        })
+        assert r.status_code == 200
+        listed = minimal_client.get("/api/series").json()["series"]
+        rent = next(s for s in listed if s["payee"] == "Rent")
+        assert rent["frequency"] == "monthly"
+
+    def test_rejects_frequency_for_installment(
+        self, minimal_client: TestClient
+    ) -> None:
+        r = minimal_client.post("/api/series", json={
+            "type": "installment",
+            "payee": "Store",
+            "narration": "TV",
+            "start_date": "2025-01-01",
+            "count": 3,
+            "currency": "BRL",
+            "frequency": "weekly",
+            "postings": [
+                {"account": "Expenses:Stuff", "amount": "100"},
+                {"account": "Liabilities:CC", "amount": "-100"},
+            ],
+        })
+        assert r.status_code == 400
+
+    def test_installment_monthly_frequency_allowed(
+        self, minimal_client: TestClient
+    ) -> None:
+        """Explicit monthly on installment is the default and must not 400."""
+        r = minimal_client.post("/api/series", json={
+            "type": "installment",
+            "payee": "Store",
+            "narration": "TV",
+            "start_date": "2025-01-01",
+            "count": 3,
+            "currency": "BRL",
+            "frequency": "monthly",
+            "postings": [
+                {"account": "Expenses:Stuff", "amount": "100"},
+                {"account": "Liabilities:CC", "amount": "-100"},
+            ],
+        })
+        assert r.status_code == 200
+
+
+# ------------------------------------------------------------------
 # POST /api/series — validation
 # ------------------------------------------------------------------
 
@@ -474,6 +574,41 @@ class TestExtendSeries:
             json={"new_end_date": "2025-12-01"},
         )
         assert r.status_code == 404
+
+    def test_extend_preserves_weekly_cadence(
+        self, minimal_client: TestClient
+    ) -> None:
+        """A weekly series extends by weeks, not months, and keeps its freq key."""
+        created = minimal_client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "Weekly",
+            "narration": "Cleaner",
+            "start_date": "2025-01-01",
+            "end_date": "2025-01-15",   # 3 occurrences: Jan 1, 8, 15
+            "currency": "BRL",
+            "frequency": "weekly",
+            "postings": [
+                {"account": "Expenses:Home", "amount": "50"},
+                {"account": "Assets:Checking", "amount": "-50"},
+            ],
+        }).json()
+        sid = created["series_id"]
+        assert created["count"] == 3
+
+        # Extend three more weeks: Jan 22, 29, Feb 5.
+        r = minimal_client.post(
+            f"/api/series/{sid}/extend",
+            json={"new_end_date": "2025-02-05"},
+        )
+        assert r.status_code == 200
+        assert r.json()["transactions_created"] == 3
+
+        listed = minimal_client.get("/api/series").json()["series"]
+        summary = next(s for s in listed if s["series_id"] == sid)
+        assert summary["frequency"] == "weekly"
+        # Last date must be the weekly boundary, not a month later.
+        assert summary["last_date"] == "2025-02-05"
+        assert summary["total"] == 6
 
 
 class TestExtendSplitSeries:

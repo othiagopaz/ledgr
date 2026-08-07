@@ -11,10 +11,12 @@ from decimal import Decimal, ROUND_HALF_UP
 from beancount.core import data
 
 from series import (
+    compute_dates,
     compute_monthly_dates,
     generate_series_id,
     generate_series_transactions,
     months_between,
+    periods_between,
 )
 
 
@@ -106,6 +108,66 @@ class TestComputeMonthlyDates:
 
 
 # ------------------------------------------------------------------
+# compute_dates — weekly / monthly / yearly
+# ------------------------------------------------------------------
+
+
+class TestComputeDates:
+    def test_defaults_to_monthly(self) -> None:
+        """No frequency arg matches compute_monthly_dates."""
+        start = datetime.date(2025, 1, 15)
+        assert compute_dates(start, 3) == compute_monthly_dates(start, 3)
+
+    def test_weekly_basic(self) -> None:
+        start = datetime.date(2025, 1, 1)
+        dates = compute_dates(start, 4, "weekly")
+        assert dates == [
+            datetime.date(2025, 1, 1),
+            datetime.date(2025, 1, 8),
+            datetime.date(2025, 1, 15),
+            datetime.date(2025, 1, 22),
+        ]
+
+    def test_weekly_crosses_month(self) -> None:
+        """Weekly steps ignore month boundaries (exact 7-day jumps)."""
+        start = datetime.date(2025, 1, 29)
+        dates = compute_dates(start, 2, "weekly")
+        assert dates[1] == datetime.date(2025, 2, 5)
+
+    def test_weekly_crosses_year(self) -> None:
+        start = datetime.date(2025, 12, 25)
+        dates = compute_dates(start, 2, "weekly")
+        assert dates[1] == datetime.date(2026, 1, 1)
+
+    def test_yearly_basic(self) -> None:
+        start = datetime.date(2025, 6, 10)
+        dates = compute_dates(start, 3, "yearly")
+        assert dates == [
+            datetime.date(2025, 6, 10),
+            datetime.date(2026, 6, 10),
+            datetime.date(2027, 6, 10),
+        ]
+
+    def test_yearly_leap_day_clamps(self) -> None:
+        """Feb 29 → Feb 28 in the following (non-leap) years."""
+        start = datetime.date(2024, 2, 29)
+        dates = compute_dates(start, 2, "yearly")
+        assert dates[0] == datetime.date(2024, 2, 29)
+        assert dates[1] == datetime.date(2025, 2, 28)
+
+    def test_yearly_leap_to_leap(self) -> None:
+        """Feb 29 four years later lands on Feb 29 again."""
+        start = datetime.date(2024, 2, 29)
+        dates = compute_dates(start, 5, "yearly")
+        assert dates[4] == datetime.date(2028, 2, 29)
+
+    def test_single_date_each_frequency(self) -> None:
+        start = datetime.date(2025, 6, 1)
+        for freq in ("weekly", "monthly", "yearly"):
+            assert compute_dates(start, 1, freq) == [start]
+
+
+# ------------------------------------------------------------------
 # months_between
 # ------------------------------------------------------------------
 
@@ -130,6 +192,63 @@ class TestMonthsBetween:
         assert months_between(
             datetime.date(2025, 1, 1), datetime.date(2025, 12, 1)
         ) == 12
+
+    def test_drops_final_month_when_end_day_short(self) -> None:
+        """Start on the 15th, end on the 10th three months later → 3 due dates.
+
+        The 4th occurrence (the 15th of the end month) hasn't come due yet.
+        """
+        assert months_between(
+            datetime.date(2025, 1, 15), datetime.date(2025, 4, 10)
+        ) == 3
+
+
+class TestPeriodsBetween:
+    def test_defaults_to_monthly(self) -> None:
+        assert periods_between(
+            datetime.date(2025, 1, 1), datetime.date(2025, 12, 1)
+        ) == months_between(
+            datetime.date(2025, 1, 1), datetime.date(2025, 12, 1)
+        )
+
+    def test_end_before_start_is_zero(self) -> None:
+        assert periods_between(
+            datetime.date(2025, 5, 1), datetime.date(2025, 4, 1), "monthly"
+        ) == 0
+
+    def test_weekly_exact_multiple(self) -> None:
+        # 4 weeks span → 5 occurrences (inclusive of the start).
+        assert periods_between(
+            datetime.date(2025, 1, 1), datetime.date(2025, 1, 29), "weekly"
+        ) == 5
+
+    def test_weekly_partial_week_floors(self) -> None:
+        # 20 days = 2 whole weeks + change → 3 occurrences (day 0, 7, 14).
+        assert periods_between(
+            datetime.date(2025, 1, 1), datetime.date(2025, 1, 21), "weekly"
+        ) == 3
+
+    def test_weekly_same_day(self) -> None:
+        assert periods_between(
+            datetime.date(2025, 1, 1), datetime.date(2025, 1, 1), "weekly"
+        ) == 1
+
+    def test_yearly_on_anniversary(self) -> None:
+        # 2025-06-10 through 2027-06-10 → 3 occurrences.
+        assert periods_between(
+            datetime.date(2025, 6, 10), datetime.date(2027, 6, 10), "yearly"
+        ) == 3
+
+    def test_yearly_before_anniversary_drops_final(self) -> None:
+        # End falls before the anniversary that year → final year not due.
+        assert periods_between(
+            datetime.date(2025, 6, 10), datetime.date(2027, 6, 9), "yearly"
+        ) == 2
+
+    def test_yearly_after_anniversary_keeps_final(self) -> None:
+        assert periods_between(
+            datetime.date(2025, 6, 10), datetime.date(2027, 6, 11), "yearly"
+        ) == 3
 
 
 # ------------------------------------------------------------------
@@ -305,6 +424,87 @@ class TestGenerateRecurringTransactions:
             assert txn.meta["ledgr-series-type"] == "recurring"
             assert "ledgr-series-seq" not in txn.meta
             assert "ledgr-series-total" not in txn.meta
+
+
+# ------------------------------------------------------------------
+# generate_series_transactions — frequency metadata & dates
+# ------------------------------------------------------------------
+
+
+class TestSeriesFrequencyMetadata:
+    def _recurring(self, frequency: str, count: int = 3):
+        return generate_series_transactions(
+            series_type="recurring",
+            series_id="r",
+            payee="P",
+            narration="N",
+            start_date=datetime.date(2025, 1, 1),
+            count=count,
+            postings_spec=_two_posting_spec("E:S", "A:B", Decimal("10")),
+            default_currency="BRL",
+            beancount_file_path="t.bc",
+            frequency=frequency,
+        )
+
+    def test_monthly_omits_freq_key(self) -> None:
+        """Monthly is the implicit default — no key, so old series read as monthly."""
+        for txn in self._recurring("monthly"):
+            assert "ledgr-series-freq" not in txn.meta
+
+    def test_default_frequency_omits_key(self) -> None:
+        txns = generate_series_transactions(
+            series_type="recurring",
+            series_id="r",
+            payee="P",
+            narration="N",
+            start_date=datetime.date(2025, 1, 1),
+            count=2,
+            postings_spec=_two_posting_spec("E:S", "A:B", Decimal("10")),
+            default_currency="BRL",
+            beancount_file_path="t.bc",
+        )
+        for txn in txns:
+            assert "ledgr-series-freq" not in txn.meta
+
+    def test_weekly_writes_freq_key(self) -> None:
+        for txn in self._recurring("weekly"):
+            assert txn.meta["ledgr-series-freq"] == "weekly"
+
+    def test_yearly_writes_freq_key(self) -> None:
+        for txn in self._recurring("yearly"):
+            assert txn.meta["ledgr-series-freq"] == "yearly"
+
+    def test_weekly_dates(self) -> None:
+        txns = self._recurring("weekly", count=3)
+        assert [t.date for t in txns] == [
+            datetime.date(2025, 1, 1),
+            datetime.date(2025, 1, 8),
+            datetime.date(2025, 1, 15),
+        ]
+
+    def test_yearly_dates(self) -> None:
+        txns = self._recurring("yearly", count=3)
+        assert [t.date for t in txns] == [
+            datetime.date(2025, 1, 1),
+            datetime.date(2026, 1, 1),
+            datetime.date(2027, 1, 1),
+        ]
+
+    def test_installment_never_carries_freq(self) -> None:
+        """Installments are always monthly and must not stamp the key."""
+        txns = generate_series_transactions(
+            series_type="installment",
+            series_id="i",
+            payee="P",
+            narration="N",
+            start_date=datetime.date(2025, 1, 1),
+            count=3,
+            postings_spec=_two_posting_spec("E:S", "L:CC", Decimal("100")),
+            default_currency="BRL",
+            beancount_file_path="t.bc",
+        )
+        for txn in txns:
+            assert "ledgr-series-freq" not in txn.meta
 
 
 # ------------------------------------------------------------------

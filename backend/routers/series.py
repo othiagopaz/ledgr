@@ -18,9 +18,10 @@ from pydantic import BaseModel
 
 from ledger import get_filtered_entries, get_ledger, reload_ledger
 from series import (
+    compute_dates,
     generate_series_id,
     generate_series_transactions,
-    months_between,
+    periods_between,
 )
 
 router = APIRouter()
@@ -47,6 +48,7 @@ class SeriesCreateIn(BaseModel):
     currency: str                       # series default currency
     postings: list[PostingSpecIn]       # replaces account_from/account_to/amount
     amount_is_total: bool = False
+    frequency: Literal["weekly", "monthly", "yearly"] = "monthly"
 
 
 class SeriesExtendIn(BaseModel):
@@ -80,6 +82,8 @@ def _summarize_series(
 
     first = txns[0]
     series_type = first.meta.get("ledgr-series-type", "recurring")
+    # Missing freq key ⇒ monthly (pre-frequency series + all installments).
+    frequency = first.meta.get("ledgr-series-freq", "monthly")
     confirmed = sum(1 for t in txns if t.flag == "*")
     pending = sum(1 for t in txns if t.flag == "!")
 
@@ -124,6 +128,7 @@ def _summarize_series(
     return {
         "series_id": series_id,
         "type": series_type,
+        "frequency": frequency,
         "payee": first.payee or "",
         "narration": narration,
         "amount_per_txn": amount_per_txn,
@@ -182,6 +187,11 @@ def create_series(
                 status_code=400,
                 detail="Installment series requires 'count'.",
             )
+        if body.frequency != "monthly":
+            raise HTTPException(
+                status_code=400,
+                detail="'frequency' is only valid for recurring series; installments are always monthly.",
+            )
         count = body.count
     else:  # recurring
         if body.end_date is None:
@@ -190,7 +200,12 @@ def create_series(
                 detail="Recurring series requires 'end_date'.",
             )
         end = datetime.date.fromisoformat(body.end_date)
-        count = months_between(start, end)
+        count = periods_between(start, end, body.frequency)
+        if count <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="'end_date' must be on or after 'start_date'.",
+            )
 
     if body.amount_is_total and body.type != "installment":
         raise HTTPException(
@@ -240,6 +255,7 @@ def create_series(
         default_currency=body.currency,
         beancount_file_path=str(ledger.beancount_file_path),
         last_installment_adjustment=last_adj,
+        frequency=body.frequency,
     )
 
     try:
@@ -314,6 +330,8 @@ def extend_series(
             status_code=400,
             detail="Cannot extend installment series.",
         )
+    # Preserve the series' own cadence (missing key ⇒ monthly).
+    frequency = txns[0].meta.get("ledgr-series-freq", "monthly")
 
     # Determine current state
     current_last_date = max(t.date for t in txns)
@@ -324,12 +342,10 @@ def extend_series(
             detail=f"new_end_date must be after current last date ({current_last_date.isoformat()}).",
         )
 
-    # Compute next start: one month after current last
-    from series import compute_monthly_dates
-    next_start_dates = compute_monthly_dates(current_last_date, 2)
-    next_start = next_start_dates[1]  # one month after last
+    # Compute next start: one cadence step after the current last date.
+    next_start = compute_dates(current_last_date, 2, frequency)[1]
 
-    new_count = months_between(next_start, new_end)
+    new_count = periods_between(next_start, new_end, frequency)
     if new_count <= 0:
         raise HTTPException(
             status_code=400,
@@ -389,6 +405,7 @@ def extend_series(
         postings_spec=postings_spec,
         default_currency=default_currency or "",
         beancount_file_path=str(ledger.beancount_file_path),
+        frequency=frequency,
     )
 
     try:

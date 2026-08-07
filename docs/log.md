@@ -1,6 +1,6 @@
 ---
 type: log
-last_updated: 2026-07-15
+last_updated: 2026-08-06
 ---
 
 # Wiki Log
@@ -8,6 +8,15 @@ last_updated: 2026-07-15
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
+
+## 2026-08-06 — Recurring frequency (weekly / monthly / yearly)
+
+- Recurring series now support weekly and yearly cadences in addition to monthly. Installments stay monthly-only. No interval multipliers (every-N) — plain frequencies only.
+- New `ledgr-series-freq` metadata key on recurring series; `monthly` is the implicit default and omits the key, so all pre-existing series read back as monthly. Documented in [`features/series.md`](features/series.md).
+- `backend/series.py`: added `compute_dates()` / `periods_between()` (frequency-aware); `compute_monthly_dates()` / `months_between()` kept as monthly wrappers. `generate_series_transactions()` takes `frequency` and stamps the key for non-monthly recurring.
+- `backend/routers/series.py`: `frequency` on `SeriesCreateIn` (rejected for installments); create derives count via `periods_between`; **extend** reads the stored freq and steps by that cadence instead of the old hardcoded month; `_summarize_series` surfaces `frequency`.
+- Frontend: `SeriesFrequency` type, a recurring-only Weekly/Monthly/Yearly selector in `SeriesModal`, cadence label in `SeriesView` + view mode.
+- Tests: +31 (weekly/yearly date math, leap-year yearly clamp, back-compat no-key=monthly, freq metadata, router round-trips incl. weekly extend).
 
 ## 2026-07-15 — MCP server
 

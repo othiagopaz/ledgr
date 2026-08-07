@@ -32,13 +32,17 @@ function SeriesTypeIcon({ type }: { type: 'recurring' | 'installment' }) {
 interface SeriesSummaryRowProps {
   summary: SeriesSummary;
   onViewSeries: (s: SeriesSummary) => void;
+  filter: Filter;
 }
 
-function SeriesSummaryRow({ summary, onViewSeries }: SeriesSummaryRowProps) {
+function SeriesSummaryRow({ summary, onViewSeries, filter }: SeriesSummaryRowProps) {
   const pct = summary.total > 0
     ? Math.round((summary.confirmed / summary.total) * 100)
     : 0;
 
+  // The summary table renders only on the Recurring and Installments tabs.
+  // Recurring gets a Frequency column (monthly/weekly/yearly); Installments
+  // drops it entirely (the type is implied by the tab).
   return (
     <tr
       className="series-summary-row"
@@ -54,14 +58,14 @@ function SeriesSummaryRow({ summary, onViewSeries }: SeriesSummaryRowProps) {
           <span className="series-summary-narration"> — {summary.narration}</span>
         )}
       </td>
-      <td>
-        <span className={`series-type-badge series-type-${summary.type}`}>
-          {summary.type}
-        </span>
-      </td>
+      {filter === 'recurring' && (
+        <td>
+          <span className="series-freq-label">{summary.frequency}</span>
+        </td>
+      )}
       <td>
         {summary.type === 'installment' ? (
-          <span className="series-progress">
+          <span className={`series-progress${filter === 'installment' ? ' series-progress-wide' : ''}`}>
             <span className="series-progress-bar-wrap">
               <span
                 className="series-progress-bar-fill"
@@ -156,7 +160,8 @@ export default function SeriesView() {
         return [...seriesTxns.filter((t) => t.flag === '!'), ...pendingTxns];
       default:
         // 'all' → every transaction in the ledger (the unified view), not just
-        // series/pending. The Series summary above still lists series only.
+        // series/pending. There is no summary table on this tab, so series and
+        // installment postings appear here as normal rows.
         return allTxns;
     }
   })();
@@ -350,8 +355,9 @@ export default function SeriesView() {
 
       {!isLoading && (
         <div className="reports-content" style={{ maxWidth: 'none' }}>
-          {/* Series summaries */}
-          {filteredSeries.length > 0 && (
+          {/* Series summaries — only on the dedicated Recurring/Installments
+              tabs. The All and Pending tabs show plain transaction lists. */}
+          {(filter === 'recurring' || filter === 'installment') && filteredSeries.length > 0 && (
             <div className="series-summaries">
               <div className="series-section-label">Series</div>
               <table className="series-summary-table">
@@ -359,8 +365,10 @@ export default function SeriesView() {
                   <tr>
                     <th style={{ width: 36 }}></th>
                     <th>Payee / Narration</th>
-                    <th style={{ width: 110 }}>Type</th>
-                    <th style={{ width: 200 }}>Progress</th>
+                    {filter === 'recurring' && (
+                      <th style={{ width: 110 }}>Frequency</th>
+                    )}
+                    <th style={{ width: filter === 'installment' ? 280 : 200 }}>Progress</th>
                     <th>Dates</th>
                     <th className="num" style={{ width: 120 }}>Per Transaction</th>
                   </tr>
@@ -371,6 +379,7 @@ export default function SeriesView() {
                       key={s.series_id}
                       summary={s}
                       onViewSeries={openSeriesModal}
+                      filter={filter}
                     />
                   ))}
                 </tbody>

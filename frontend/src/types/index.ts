@@ -356,6 +356,8 @@ export interface PostingSpec {
   currency: string | null;
 }
 
+export type SeriesFrequency = 'weekly' | 'monthly' | 'yearly';
+
 export interface SeriesCreateIn {
   type: 'recurring' | 'installment';
   payee: string;
@@ -366,6 +368,7 @@ export interface SeriesCreateIn {
   currency: string;
   postings: PostingSpec[];
   amount_is_total?: boolean;
+  frequency?: SeriesFrequency;   // recurring only; defaults to monthly
 }
 
 export interface SeriesExtendIn {
@@ -385,6 +388,7 @@ export interface SeriesExtendResponse {
 export interface SeriesSummary {
   series_id: string;
   type: 'recurring' | 'installment';
+  frequency: SeriesFrequency;
   payee: string;
   narration: string;
   amount_per_txn: string;

@@ -6,13 +6,17 @@ installment series. Pure functions — no I/O, no FavaLedger access.
 
 from __future__ import annotations
 
-import calendar
 import datetime
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal
 
 from beancount.core import amount as amt_mod, data
+from dateutil.relativedelta import relativedelta
+
+#: Recurring cadence. Installments are always a fixed count and do not carry
+#: a frequency. Missing metadata reads back as ``"monthly"`` (see routers).
+Frequency = Literal["weekly", "monthly", "yearly"]
 
 
 def generate_series_id(prefix: str = "") -> str:
@@ -32,28 +36,79 @@ def generate_series_id(prefix: str = "") -> str:
     return short
 
 
+def compute_dates(
+    start: datetime.date,
+    count: int,
+    frequency: Frequency = "monthly",
+) -> list[datetime.date]:
+    """Generate ``count`` dates starting from ``start`` at the given cadence.
+
+    - ``weekly``: exact 7-day steps.
+    - ``monthly``: preserves the day-of-month, clamping to the last day of a
+      shorter month (e.g., Jan 31 → Feb 28).
+    - ``yearly``: preserves month + day, clamping Feb 29 → Feb 28 in non-leap
+      years.
+
+    Monthly/yearly clamping is handled by ``relativedelta``, which already
+    snaps overflowing days to month-end.
+    """
+    dates: list[datetime.date] = []
+    for i in range(count):
+        if frequency == "weekly":
+            dates.append(start + datetime.timedelta(weeks=i))
+        elif frequency == "yearly":
+            dates.append(start + relativedelta(years=i))
+        else:  # monthly
+            dates.append(start + relativedelta(months=i))
+    return dates
+
+
 def compute_monthly_dates(
     start: datetime.date,
     count: int,
 ) -> list[datetime.date]:
-    """Generate ``count`` monthly dates starting from ``start``.
+    """Back-compat wrapper — monthly cadence. See :func:`compute_dates`."""
+    return compute_dates(start, count, "monthly")
 
-    Preserves the day-of-month.  If the target month has fewer days,
-    clamps to the last day of that month (e.g., Jan 31 → Feb 28).
+
+def periods_between(
+    start: datetime.date,
+    end: datetime.date,
+    frequency: Frequency = "monthly",
+) -> int:
+    """Count cadence steps from ``start`` to ``end``, inclusive of both ends.
+
+    Returns how many transactions a recurring series spans when it runs from
+    ``start`` through ``end`` at ``frequency``. The ``end`` is treated as an
+    upper bound: the last generated date is ``<= end``.
+
+    - ``weekly``: whole 7-day steps that fit, plus one for the start.
+    - ``monthly``: whole months between the two, plus one; if ``end``'s day is
+      before ``start``'s day-of-month, that final month hasn't come due yet and
+      is dropped.
+    - ``yearly``: whole years between the two, plus one; if ``end`` falls before
+      the anniversary (month/day) that year, the final year is dropped.
     """
-    dates: list[datetime.date] = []
-    for i in range(count):
-        year = start.year + (start.month - 1 + i) // 12
-        month = (start.month - 1 + i) % 12 + 1
-        max_day = calendar.monthrange(year, month)[1]
-        day = min(start.day, max_day)
-        dates.append(datetime.date(year, month, day))
-    return dates
+    if end < start:
+        return 0
+    if frequency == "weekly":
+        return (end - start).days // 7 + 1
+    if frequency == "yearly":
+        years = end.year - start.year
+        # Drop the final year if end is before this year's anniversary.
+        if (end.month, end.day) < (start.month, start.day):
+            years -= 1
+        return years + 1
+    # monthly
+    months = (end.year - start.year) * 12 + (end.month - start.month)
+    if end.day < start.day:
+        months -= 1
+    return months + 1
 
 
 def months_between(start: datetime.date, end: datetime.date) -> int:
-    """Count months from ``start`` to ``end``, inclusive of both endpoints."""
-    return (end.year - start.year) * 12 + (end.month - start.month) + 1
+    """Back-compat wrapper — monthly cadence. See :func:`periods_between`."""
+    return periods_between(start, end, "monthly")
 
 
 def generate_series_transactions(
@@ -68,6 +123,7 @@ def generate_series_transactions(
     beancount_file_path: str,
     last_installment_adjustment: Decimal | None = None,
     seq_offset: int = 0,
+    frequency: Frequency = "monthly",
 ) -> list[data.Transaction]:
     """Generate a list of Beancount Transaction objects for a series.
 
@@ -88,11 +144,14 @@ def generate_series_transactions(
             division for ``amount_is_total``).
         seq_offset: for extend operations — start sequence numbering from
             this value (only relevant for installments, default 0).
+        frequency: cadence between transactions. Recorded as
+            ``ledgr-series-freq`` for recurring series; installments are
+            always monthly and omit the key.
 
     Returns:
         List of Transaction objects ready for ``insert_entries()``.
     """
-    dates = compute_monthly_dates(start_date, count)
+    dates = compute_dates(start_date, count, frequency)
     transactions: list[data.Transaction] = []
     total_display = seq_offset + count
 
@@ -115,6 +174,11 @@ def generate_series_transactions(
         if series_type == "installment":
             meta["ledgr-series-seq"] = Decimal(seq)
             meta["ledgr-series-total"] = Decimal(total_display)
+        else:  # recurring
+            # Only stamp non-default cadences; monthly is the implicit
+            # default so pre-existing series (no key) read back as monthly.
+            if frequency != "monthly":
+                meta["ledgr-series-freq"] = frequency
 
         # --- Postings ---
         is_last = i == len(dates) - 1
