@@ -18,6 +18,8 @@ import type {
   SeriesCreateResponse,
   SeriesExtendIn,
   SeriesExtendResponse,
+  SeriesReviseIn,
+  SeriesReviseResponse,
   SeriesCancelResponse,
   BudgetResponse,
 } from "../types";
@@ -329,6 +331,24 @@ export async function extendSeries(
     body: JSON.stringify(input),
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+export async function reviseSeries(
+  seriesId: string,
+  input: SeriesReviseIn
+): Promise<SeriesReviseResponse> {
+  const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/revise`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    // Surface the FastAPI validation detail (e.g. count below confirmed).
+    let detail = `${res.status} ${res.statusText}`;
+    try { detail = (await res.json()).detail || detail; } catch { /* keep default */ }
+    throw new Error(detail);
+  }
   return res.json();
 }
 

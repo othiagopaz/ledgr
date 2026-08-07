@@ -1,0 +1,48 @@
+option "title" "Non-contiguous Installment Fixture"
+option "operating_currency" "BRL"
+
+2024-01-01 open Expenses:Electronics     BRL
+2024-01-01 open Liabilities:CreditCard   BRL
+
+; Installment plan of 5, but confirmed OUT OF ORDER: seq 1, 2, and 5 are paid
+; (*), seq 3 and 4 are still pending (!). Exercises the seq_offset gap bug.
+
+2025-01-15 * "Store" "Item (1/5)"
+  ledgr-series: "noncontig001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 1
+  ledgr-series-total: 5
+  Expenses:Electronics  100.00 BRL
+  Liabilities:CreditCard  -100.00 BRL
+
+2025-02-15 * "Store" "Item (2/5)"
+  ledgr-series: "noncontig001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 2
+  ledgr-series-total: 5
+  Expenses:Electronics  100.00 BRL
+  Liabilities:CreditCard  -100.00 BRL
+
+2025-03-15 ! "Store" "Item (3/5)"
+  ledgr-series: "noncontig001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 3
+  ledgr-series-total: 5
+  Expenses:Electronics  100.00 BRL
+  Liabilities:CreditCard  -100.00 BRL
+
+2025-04-15 ! "Store" "Item (4/5)"
+  ledgr-series: "noncontig001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 4
+  ledgr-series-total: 5
+  Expenses:Electronics  100.00 BRL
+  Liabilities:CreditCard  -100.00 BRL
+
+2025-05-15 * "Store" "Item (5/5)"
+  ledgr-series: "noncontig001"
+  ledgr-series-type: "installment"
+  ledgr-series-seq: 5
+  ledgr-series-total: 5
+  Expenses:Electronics  100.00 BRL
+  Liabilities:CreditCard  -100.00 BRL

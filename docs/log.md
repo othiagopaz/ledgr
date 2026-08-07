@@ -9,6 +9,16 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-08-06 — Series revise: edit installments & recurring in place
+
+- New `POST /api/series/{id}/revise` (both types) — edits the **pending run in place**: amounts/accounts for either type, `count`/`amount_is_total` for installments, `frequency`/`end_date` for recurring. First step of the Composer consolidation (see plan); closes the "can't edit installments/recurring" gap.
+- Confirmed (`*`) txns are never rewritten — only an installment's `ledgr-series-total` counter bumps. The pending (`!`) tail is deleted and regenerated one cadence step after the last confirmed date, reusing `generate_series_transactions` / `compute_dates` / `periods_between` (no bespoke math). Rejects lowering `count` below confirmed (`400`).
+- `_summarize_series` now reads `frequency` from a **pending** txn when present, so a cadence-changing revise is reflected while confirmed history keeps its original dates.
+- Fixed: regenerated postings inherit the series currency when the new postings omit it (was emitting bare amounts).
+- Frontend scaffolding: `SeriesReviseIn` / `SeriesReviseResponse` types + `reviseSeries()` client (surfaces the 400 `detail`). No UI yet — Composer wiring is a later step.
+- Installment revise is **seq-driven** (helpers `_installment_series_start` / `_build_installments_by_seq`): the pending run fills the seq slots in `1..total` not held by a confirmed installment, each dated `series_start + (N−1) months`. Fixes a seq-corruption bug (adversarial review) where numbering the tail from `len(confirmed)` collided when installments were confirmed out of order — new fixture `series_noncontiguous.beancount` (confirmed {1,2,5}, pending {3,4}) locks it.
+- Tests: +15 in `test_series_router.py` (installment count/total/rounding/accounts/reject-below-confirmed + non-contiguous seq integrity ×2; recurring amount/frequency/horizon; confirmed-preservation; currency inheritance). Full backend suite **400 passing**. Documented in [`features/series.md`](features/series.md) + [`backend/testing.md`](backend/testing.md).
+
 ## 2026-08-06 — Recurring frequency (weekly / monthly / yearly)
 
 - Recurring series now support weekly and yearly cadences in addition to monthly. Installments stay monthly-only. No interval multipliers (every-N) — plain frequencies only.

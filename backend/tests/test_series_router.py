@@ -5,6 +5,7 @@ Uses real FavaLedger instances with fixture files — never mocks.
 
 from __future__ import annotations
 
+import datetime
 import shutil
 from pathlib import Path
 
@@ -35,6 +36,20 @@ def minimal_client(tmp_path: Path) -> TestClient:
     """TestClient backed by the minimal fixture (no existing series)."""
     src = FIXTURES_DIR / "minimal.beancount"
     dst = tmp_path / "minimal.beancount"
+    shutil.copy(src, dst)
+
+    ledger_mod.init_ledger(str(dst))
+
+    from main import app
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture()
+def noncontiguous_client(tmp_path: Path) -> TestClient:
+    """Installment series confirmed OUT OF ORDER (seqs 1,2,5 confirmed; 3,4 pending)."""
+    src = FIXTURES_DIR / "series_noncontiguous.beancount"
+    dst = tmp_path / "series_noncontiguous.beancount"
     shutil.copy(src, dst)
 
     ledger_mod.init_ledger(str(dst))
@@ -720,3 +735,338 @@ class TestEditTransactionPreservesSeriesMetadata:
         assert tv["total"] == 3, "Total must not drop after editing a transaction"
         assert tv["confirmed"] == 3, "Confirmed must reflect the flag flip"
         assert tv["pending"] == 0
+
+
+# ------------------------------------------------------------------
+# POST /api/series/{id}/revise — edit the whole pending run (both types)
+# ------------------------------------------------------------------
+
+
+def _series(client: TestClient, sid: str) -> dict:
+    """Fetch one series summary by id (or {} if gone)."""
+    for s in client.get("/api/series").json()["series"]:
+        if s["series_id"] == sid:
+            return s
+    return {}
+
+
+def _txns(client: TestClient, account: str) -> list[dict]:
+    return client.get(
+        "/api/transactions", params={"account": account}
+    ).json()["transactions"]
+
+
+class TestReviseInstallmentSeries:
+    """Revise an installment plan: change count / total / amount / accounts.
+
+    Fixture tv-fixture001: 3 txns @ 500 BRL, seq 1&2 confirmed (*), seq 3
+    pending (!). Confirmed installments must survive byte-for-byte except their
+    'total' counter; only the pending tail is rewritten.
+    """
+
+    def test_extend_count_rewrites_only_pending(
+        self, series_client: TestClient
+    ) -> None:
+        # 3 → 5 installments: 2 confirmed kept, 1 old pending replaced by 3 new.
+        r = series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={"count": 5},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["success"] is True
+        assert body["kept"] == 2                 # the 2 confirmed
+        assert body["transactions_created"] == 3  # new pending: seq 3,4,5
+
+        s = _series(series_client, "tv-fixture001")
+        assert s["total"] == 5
+        assert s["confirmed"] == 2
+        assert s["pending"] == 3
+
+    def test_confirmed_installments_untouched(
+        self, series_client: TestClient
+    ) -> None:
+        series_client.post(
+            "/api/series/tv-fixture001/revise", json={"count": 5}
+        )
+        txns = _txns(series_client, "Expenses:Electronics")
+        confirmed = sorted(
+            (t for t in txns if t["flag"] == "*"), key=lambda t: t["date"]
+        )
+        assert [t["date"] for t in confirmed] == ["2025-01-15", "2025-02-15"]
+        for t in confirmed:
+            assert t["postings"][0]["amount"] == "500.00"
+            # counter bumped to the new total
+            assert str(t["metadata"]["ledgr-series-total"]) in ("5", "5.0")
+
+    def test_new_pending_dates_continue_monthly(
+        self, series_client: TestClient
+    ) -> None:
+        series_client.post(
+            "/api/series/tv-fixture001/revise", json={"count": 5}
+        )
+        txns = _txns(series_client, "Expenses:Electronics")
+        pending = sorted(
+            (t for t in txns if t["flag"] == "!"), key=lambda t: t["date"]
+        )
+        # last confirmed is 2025-02-15 → pending continue Mar, Apr, May.
+        assert [t["date"] for t in pending] == [
+            "2025-03-15", "2025-04-15", "2025-05-15",
+        ]
+
+    def test_revise_amount_is_total_rounding_ties_out(
+        self, series_client: TestClient
+    ) -> None:
+        # Keep 5 installments but declare a new TOTAL of 1000 split across them.
+        # 2 confirmed already sit at 500 each (=1000 posted). Revising the total
+        # only re-divides the PENDING run over the remaining slots.
+        r = series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={
+                "count": 5,
+                "amount_is_total": True,
+                "postings": [
+                    {"account": "Expenses:Electronics", "amount": "300"},
+                    {"account": "Liabilities:CreditCard", "amount": "-300"},
+                ],
+            },
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["success"] is True
+        # 300 / 3 pending = 100.00 each, ties out exactly.
+        txns = _txns(series_client, "Expenses:Electronics")
+        pending = [t for t in txns if t["flag"] == "!"]
+        assert len(pending) == 3
+        assert sum(float(t["postings"][0]["amount"]) for t in pending) == 300.00
+
+    def test_revise_amount_is_total_remainder_on_last(
+        self, series_client: TestClient
+    ) -> None:
+        # 100 over 3 pending → 33.33, 33.33, 33.34 (remainder on the last).
+        series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={
+                "count": 5,
+                "amount_is_total": True,
+                "postings": [
+                    {"account": "Expenses:Electronics", "amount": "100"},
+                    {"account": "Liabilities:CreditCard", "amount": "-100"},
+                ],
+            },
+        )
+        txns = _txns(series_client, "Expenses:Electronics")
+        pending = sorted(
+            (t for t in txns if t["flag"] == "!"), key=lambda t: t["date"]
+        )
+        amounts = [float(t["postings"][0]["amount"]) for t in pending]
+        assert amounts == [33.33, 33.33, 33.34]
+        assert round(sum(amounts), 2) == 100.00
+
+    def test_revise_change_accounts_on_pending(
+        self, series_client: TestClient
+    ) -> None:
+        r = series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={
+                "count": 3,   # unchanged count → rewrite the single pending
+                "postings": [
+                    {"account": "Expenses:Food", "amount": "500"},
+                    {"account": "Liabilities:CreditCard", "amount": "-500"},
+                ],
+            },
+        )
+        assert r.status_code == 200, r.text
+        # This series' pending installment now hits Food, not Electronics.
+        # (Scope to the series via metadata — Food is shared with split-fix003.)
+        electronics_pending = [
+            t for t in _txns(series_client, "Expenses:Electronics")
+            if t["flag"] == "!"
+            and t["metadata"].get("ledgr-series") == "tv-fixture001"
+        ]
+        food_pending = [
+            t for t in _txns(series_client, "Expenses:Food")
+            if t["flag"] == "!"
+            and t["metadata"].get("ledgr-series") == "tv-fixture001"
+        ]
+        assert electronics_pending == []       # moved off Electronics
+        assert len(food_pending) == 1          # …onto Food
+        assert food_pending[0]["postings"][0]["account"] == "Expenses:Food"
+
+    def test_regenerated_postings_inherit_currency(
+        self, series_client: TestClient
+    ) -> None:
+        # New postings supplied without a currency must inherit the series' BRL,
+        # not fall back to a bare (currency-less) amount.
+        series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={
+                "count": 4,
+                "postings": [
+                    {"account": "Expenses:Electronics", "amount": "250"},
+                    {"account": "Liabilities:CreditCard", "amount": "-250"},
+                ],
+            },
+        )
+        txns = _txns(series_client, "Expenses:Electronics")
+        pending = [
+            t for t in txns if t["flag"] == "!"
+            and t["metadata"].get("ledgr-series") == "tv-fixture001"
+        ]
+        assert pending
+        assert all(p_["currency"] == "BRL" for t in pending for p_ in t["postings"])
+
+    def test_noncontiguous_confirmed_seqs_stay_unique(
+        self, noncontiguous_client: TestClient
+    ) -> None:
+        """Confirmed seqs {1,2,5}, pending {3,4}. Revise must NOT duplicate seq 5.
+
+        Regression: numbering the regenerated run from len(confirmed) assumed
+        confirmed seqs were 1..c and collided with the out-of-order confirmed 5.
+        """
+        r = noncontiguous_client.post(
+            "/api/series/noncontig001/revise", json={"count": 5}
+        )
+        assert r.status_code == 200, r.text
+
+        txns = _txns(noncontiguous_client, "Expenses:Electronics")
+        mine = [
+            t for t in txns
+            if t["metadata"].get("ledgr-series") == "noncontig001"
+        ]
+        seqs = sorted(int(t["metadata"]["ledgr-series-seq"]) for t in mine)
+        # Every seq 1..5 present exactly once — no duplicate, no gap.
+        assert seqs == [1, 2, 3, 4, 5], f"corrupted seqs: {seqs}"
+        # totals all read 5
+        totals = {int(t["metadata"]["ledgr-series-total"]) for t in mine}
+        assert totals == {5}
+        # confirmed set unchanged (still exactly the original 3)
+        confirmed_seqs = sorted(
+            int(t["metadata"]["ledgr-series-seq"])
+            for t in mine if t["flag"] == "*"
+        )
+        assert confirmed_seqs == [1, 2, 5]
+
+    def test_noncontiguous_grow_count_fills_and_appends(
+        self, noncontiguous_client: TestClient
+    ) -> None:
+        """Grow 5→7 with confirmed {1,2,5}: pending must cover {3,4,6,7}, unique."""
+        r = noncontiguous_client.post(
+            "/api/series/noncontig001/revise", json={"count": 7}
+        )
+        assert r.status_code == 200, r.text
+        txns = _txns(noncontiguous_client, "Expenses:Electronics")
+        mine = [
+            t for t in txns
+            if t["metadata"].get("ledgr-series") == "noncontig001"
+        ]
+        seqs = sorted(int(t["metadata"]["ledgr-series-seq"]) for t in mine)
+        assert seqs == [1, 2, 3, 4, 5, 6, 7], f"corrupted seqs: {seqs}"
+        pending_seqs = sorted(
+            int(t["metadata"]["ledgr-series-seq"])
+            for t in mine if t["flag"] == "!"
+        )
+        assert pending_seqs == [3, 4, 6, 7]
+
+    def test_rejects_count_below_confirmed(
+        self, series_client: TestClient
+    ) -> None:
+        # 2 already confirmed; can't shrink total to 1.
+        r = series_client.post(
+            "/api/series/tv-fixture001/revise", json={"count": 1}
+        )
+        assert r.status_code == 400
+
+    def test_not_found(self, series_client: TestClient) -> None:
+        r = series_client.post(
+            "/api/series/nonexistent/revise", json={"count": 5}
+        )
+        assert r.status_code == 404
+
+
+class TestReviseRecurringSeries:
+    """Revise a recurring plan: change amount / frequency / horizon / accounts.
+
+    Fixture netflix-fix002: 4 monthly txns @ 55.90, 1 confirmed (Jan), 3 pending
+    (Feb–Apr). Confirmed txns survive; the pending run is regenerated.
+    """
+
+    def test_change_amount_rewrites_pending(
+        self, series_client: TestClient
+    ) -> None:
+        r = series_client.post(
+            "/api/series/netflix-fix002/revise",
+            json={
+                "end_date": "2025-04-01",   # same horizon → same 3 pending slots
+                "postings": [
+                    {"account": "Expenses:Subscriptions", "amount": "65.90"},
+                    {"account": "Assets:Bank:Checking", "amount": "-65.90"},
+                ],
+            },
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["success"] is True
+        assert r.json()["kept"] == 1
+
+        txns = _txns(series_client, "Expenses:Subscriptions")
+        confirmed = [t for t in txns if t["flag"] == "*"]
+        pending = [t for t in txns if t["flag"] == "!"]
+        # confirmed Jan stays at 55.90; pending now 65.90
+        assert confirmed[0]["postings"][0]["amount"] == "55.90"
+        assert len(pending) == 3
+        assert all(t["postings"][0]["amount"] == "65.90" for t in pending)
+
+    def test_change_frequency_to_weekly(
+        self, series_client: TestClient
+    ) -> None:
+        # Switch the pending run to weekly, one month horizon after last confirmed.
+        r = series_client.post(
+            "/api/series/netflix-fix002/revise",
+            json={"frequency": "weekly", "end_date": "2025-02-19"},
+        )
+        assert r.status_code == 200, r.text
+        s = _series(series_client, "netflix-fix002")
+        assert s["frequency"] == "weekly"
+        # pending regenerated at 7-day steps from Feb 1 (one week after Jan 1...
+        # actually one *period* after the last confirmed date Jan 1 → Jan 8),
+        # bounded by Feb 19.
+        txns = _txns(series_client, "Expenses:Subscriptions")
+        pending = sorted(
+            (t for t in txns if t["flag"] == "!"), key=lambda t: t["date"]
+        )
+        dates = [t["date"] for t in pending]
+        # 7-day cadence, all within horizon
+        for a, b in zip(dates, dates[1:]):
+            d0 = datetime.date.fromisoformat(a)
+            d1 = datetime.date.fromisoformat(b)
+            assert (d1 - d0).days == 7
+        assert confirmed_count(series_client, "netflix-fix002") == 1
+
+    def test_confirmed_recurring_untouched(
+        self, series_client: TestClient
+    ) -> None:
+        series_client.post(
+            "/api/series/netflix-fix002/revise",
+            json={
+                "end_date": "2025-04-01",
+                "postings": [
+                    {"account": "Expenses:Subscriptions", "amount": "65.90"},
+                    {"account": "Assets:Bank:Checking", "amount": "-65.90"},
+                ],
+            },
+        )
+        txns = _txns(series_client, "Expenses:Subscriptions")
+        confirmed = [t for t in txns if t["flag"] == "*"]
+        assert len(confirmed) == 1
+        assert confirmed[0]["date"] == "2025-01-01"
+        assert confirmed[0]["postings"][0]["amount"] == "55.90"
+
+    def test_not_found(self, series_client: TestClient) -> None:
+        r = series_client.post(
+            "/api/series/nonexistent/revise",
+            json={"end_date": "2025-06-01"},
+        )
+        assert r.status_code == 404
+
+
+def confirmed_count(client: TestClient, sid: str) -> int:
+    return _series(client, sid).get("confirmed", -1)

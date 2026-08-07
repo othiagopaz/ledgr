@@ -385,6 +385,33 @@ export interface SeriesExtendResponse {
   errors?: string[];
 }
 
+/**
+ * Edit the pending run of a series in place. Confirmed (`*`) transactions are
+ * preserved; only the pending (`!`) tail is regenerated. `postings` replaces
+ * the amounts/accounts of the run; installments use `count`/`amount_is_total`,
+ * recurring use `frequency`/`end_date`.
+ */
+export interface SeriesReviseIn {
+  postings?: PostingSpec[];
+  // installment-only
+  count?: number;
+  amount_is_total?: boolean;
+  // recurring-only
+  frequency?: SeriesFrequency;
+  end_date?: string;
+  // both (optional)
+  payee?: string;
+  narration?: string;
+}
+
+export interface SeriesReviseResponse {
+  success: boolean;
+  series_id?: string;
+  kept?: number;
+  transactions_created?: number;
+  errors?: string[];
+}
+
 export interface SeriesSummary {
   series_id: string;
   type: 'recurring' | 'installment';

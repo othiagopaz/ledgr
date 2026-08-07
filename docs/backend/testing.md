@@ -1,6 +1,6 @@
 ---
 type: pattern
-last_updated: 2026-04-21
+last_updated: 2026-08-06
 ---
 
 # Backend testing
@@ -44,6 +44,7 @@ def ledger(tmp_path):
 - `routers/`: HTTP status codes, JSON response shape, `view_mode` param for every endpoint, invalid `view_mode` rejection, backward compatibility (no param = `combined`)
 - Accounting invariant: `total_assets == total_liabilities + total_equity` must pass on every generated Balance Sheet (both combined and actual modes) — see [`reports.md`](reports.md)
 - `series.py`: sum invariants (installment amounts sum to total), day-clamping for month-end dates, installments cannot be extended — see [`../features/series.md`](../features/series.md)
+- **Revise** (`POST …/revise`, both types): confirmed (`*`) txns untouched (only installment `total` counter bumps); pending (`!`) tail regenerated; `amount_is_total` re-division ties out with remainder on the last installment; `count` below confirmed → `400`; recurring cadence change (e.g. monthly→weekly) regenerates at the new step and is reflected in the summary; regenerated postings inherit the series currency. **Seq integrity:** installments are seq-driven — the pending run fills exactly the seq slots not held by a confirmed installment, so out-of-order confirmation (seq 5 paid before 3/4) never duplicates or gaps a seq (fixture `series_noncontiguous.beancount`)
 
 ## What does NOT need tests
 
