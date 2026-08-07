@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-04-21
+last_updated: 2026-08-07
 ---
 
 # Front-end guidelines
@@ -36,7 +36,7 @@ frontend/src/
 │   ├── PlannedToggle.tsx      # Actual ↔ Actual + Planned pill button
 │   ├── CommandPalette.tsx     # Cmd+K fuzzy-search command menu
 │   ├── AccountRegister.tsx    # Transaction table for a single account
-│   ├── TransactionModal.tsx   # Modal form for transaction CRUD
+│   ├── Composer.tsx           # Unified posting surface — transactions AND series
 │   ├── AccountModal.tsx       # Modal form for account CRUD
 │   ├── InlineEditor.tsx       # Inline transaction editing in register
 │   ├── InlineAutocomplete.tsx # Reusable autocomplete dropdown
@@ -129,6 +129,58 @@ export default function TransactionRow({ txn, onSelect }: TransactionRowProps) {
 - **No wrapper/HOC patterns** — use hooks for shared logic
 - **No component library** — all UI is hand-built (modals, autocomplete, dropdowns, tabs, command palette)
 - **Keep components focused** — if a component exceeds ~500 lines, consider extracting sub-components
+
+## The Composer (`Composer.tsx`) — one way to post
+
+`Composer.tsx` is the single surface for creating and editing **both** transactions and series. It
+replaced four components — `FastInput`, `AdvancedInput`, `TransactionModal`, `SeriesModal` (all
+deleted) — collapsing "simple / multiposting / recurring / installment" into one input that grows
+only as much as the transaction needs.
+
+- **Opened via `openComposer(opts?)`** (store). `{ txn }` edits one occurrence (or a plain txn),
+  `{ series }` edits a whole series, `{ initial: 'split' | 'repeat' }` pre-discloses a new draft.
+  The legacy `openTxnModal` / `openSeriesModal` remain as thin **shims** → `openComposer`, so every
+  existing call-site (register rows, Cmd+N, palette, SeriesView) still works.
+- **Levels**: L0 = the smart line (pill parser from the old FastInput — `$ @ > # ^ !` + a schedule
+  chip via `scheduleParser`). L1 = the editable posting grid (the old AdvancedInput). Details,
+  schedule (Repeat), and the series/occurrence panels are **add-on wings**.
+- **Amount + installment shortcuts** (`utils/fastInputParser.ts` + `scheduleParser.ts`): a bare
+  number becomes the amount on space — a plain integer (`230`, `750`), a decimal (`212,90`), or a
+  thousands-grouped number (`1.234,56`), all locale-aware (pt/BRL vs en), no `$` needed (`$` still
+  works; only a bare zero is rejected). Dates are detected first (they own `/ . -`), so `12/08`
+  stays a date. Installments use `*` = per-installment × count (`212,90*10` → 10 × 212,90 each,
+  count is integer-only) and `:` = total ÷
+  count (`1000:10` → 10 × 100 each, `amountIsTotal`). `/` is **never** a schedule — it belongs to
+  dates (`15/03`, `1000/10` read as day/month), which is why division uses `:`. (The old `x`/`×`
+  forms were removed.) **All of this is detected on space**, mirroring dates/tags — the parser only
+  fires once the token is complete, so `212,90*10` never commits at `*1`. When a schedule is
+  detected, the **Repeat wing opens automatically** (as if the button were pressed).
+- **The `>` route picker**: `>` builds a `from → to` route in one fluid motion (no cleared input) —
+  pick `from`, focus flows to `to`, `⇄` flips direction, amount sign follows the route. The dropdown
+  is fuzzy + personally-ranked (usage counts from all loaded txns, recents this session, the payee's
+  usual account) via `utils/accountRank.ts` (pure, unit-tested). The resolved route becomes the
+  `accounts` pill (`from` = primary, `to` = secondary). Replaced the old two-step "expense / pay-from"
+  dance. Splits (3+ postings) stay in the grid.
+- **Layout — the modal never scrolls.** A fixed-width center column stays put; Details docks as a
+  **left** wing, schedule/series as a **right** wing; each wing is absolutely positioned off the
+  center so opening one never shifts it. Only a wing's own body scrolls. See the `.cx-*` classes in
+  `global.css`.
+- **Date pill — visible, sticky, mandatory.** A new draft seeds a `today` pill (rendered with the
+  shared `CalendarIcon` from `components/icons` — no emoji); it's owned by a single `date → pill` sync
+  effect (so the typed-date token, the Details date field, and the seed all agree, with a friendly
+  `today`/`yesterday`/`DD/MM` label). It has no × (date is required — click it to edit in Details).
+  `finish()` on save-&-continue **keeps** the date and re-seeds its pill, so a run of same-day entries
+  reuses it; all other fields clear.
+- **Preview before accounts.** As soon as an amount (± installment plan) is set, the L0 preview shows
+  the breakdown (`120.00 × 10 (total 1200)`) even with no route yet — the `postings` memo emits one
+  account-less row for display, filtered out of balance/save. Picking a route upgrades it to the full
+  `from → to` line + balance.
+- **Save routing** falls out of scope + schedule: occurrence → `editTransaction`; whole series →
+  `reviseSeries`; new draft with a schedule → `createSeries`; else → `addTransaction`. Series
+  actions (extend / cancel / edit-plan) live in the right wing. See
+  [`../features/series.md`](../features/series.md).
+- **Series data is resolved live** from the `["series", …]` query (not the snapshot passed at open),
+  so a revise/extend/cancel is reflected in the wing without reopening.
 
 ## State management (Zustand)
 
@@ -346,7 +398,7 @@ return <div>{ /* render data */ }</div>;
 
 | Context            | Convention         | Example                     |
 |--------------------|--------------------|-----------------------------|
-| Component files    | `PascalCase.tsx`   | `TransactionModal.tsx`      |
+| Component files    | `PascalCase.tsx`   | `Composer.tsx`              |
 | Hook files         | `usePascalCase.ts` | `useKeyboardNav.ts`         |
 | Utility files      | `camelCase.ts`     | `format.ts`, `dateUtils.ts` |
 | Store files        | `camelCase.ts`     | `appStore.ts`               |

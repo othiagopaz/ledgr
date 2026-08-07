@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseInput } from './fastInputParser';
+import { parseInput, tryParseAmount } from './fastInputParser';
 
 describe('fastInputParser', () => {
   // ── Basic narration ──
@@ -245,5 +245,59 @@ describe('fastInputParser', () => {
     expect(amountToken.startIndex).toBe(6);
     expect(amountToken.endIndex).toBe(9);
     expect(amountToken.raw).toBe('$50');
+  });
+});
+
+describe('tryParseAmount — bare money detection (locale-aware)', () => {
+  // comma-decimal locale (pt/BRL): "," = decimal, "." = thousands
+  it('accepts decimals and thousands in a comma-decimal locale', () => {
+    expect(tryParseAmount('212,90', true)).toBe('212,90');
+    expect(tryParseAmount('1.234,56', true)).toBe('1.234,56');
+    expect(tryParseAmount('1.234', true)).toBe('1.234');       // thousands-only
+    expect(tryParseAmount('55,00', true)).toBe('55,00');
+  });
+  it('accepts decimals and thousands in a dot-decimal locale', () => {
+    expect(tryParseAmount('212.90', false)).toBe('212.90');
+    expect(tryParseAmount('1,234.56', false)).toBe('1,234.56');
+    expect(tryParseAmount('55.00', false)).toBe('55.00');
+  });
+  it('accepts plain integers (no separators) as the amount', () => {
+    expect(tryParseAmount('230', true)).toBe('230');
+    expect(tryParseAmount('750', true)).toBe('750');
+    expect(tryParseAmount('2026', false)).toBe('2026');
+    expect(tryParseAmount('5', true)).toBe('5');
+  });
+  it('rejects a bare zero (not a meaningful amount)', () => {
+    expect(tryParseAmount('0', true)).toBeNull();
+    expect(tryParseAmount('0,00', true)).toBeNull();
+    expect(tryParseAmount('0.00', false)).toBeNull();
+  });
+  it('rejects non-numbers and bad decimal shapes', () => {
+    expect(tryParseAmount('abc', true)).toBeNull();
+    expect(tryParseAmount('12,345', true)).toBeNull();   // 3 decimals in comma locale → not money
+    expect(tryParseAmount('', true)).toBeNull();
+  });
+});
+
+describe('parseInput — bare amount on space', () => {
+  it('detects a bare comma-decimal amount as an amount token', () => {
+    const r = parseInput('Coffee 212,90', 13, { commaDecimal: true });
+    const amt = r.tokens.find(t => t.type === 'amount');
+    expect(amt?.value).toBe('212,90');
+    expect(r.narration).toBe('Coffee');
+  });
+  it('keeps a date as a date, not an amount (date detection wins)', () => {
+    const r = parseInput('rent 12/08', 10, { commaDecimal: true });
+    expect(r.tokens.find(t => t.type === 'date')).toBeTruthy();
+    expect(r.tokens.find(t => t.type === 'amount')).toBeFalsy();
+  });
+  it('detects a bare plain integer as the amount', () => {
+    const r = parseInput('Groceries 230', 13, { commaDecimal: true });
+    expect(r.tokens.find(t => t.type === 'amount')?.value).toBe('230');
+    expect(r.narration).toBe('Groceries');
+  });
+  it('still supports the $ prefix', () => {
+    const r = parseInput('$50', 3);
+    expect(r.tokens.find(t => t.type === 'amount')?.value).toBe('50');
   });
 });

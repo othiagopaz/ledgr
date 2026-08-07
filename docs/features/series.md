@@ -48,6 +48,7 @@ Installments are always monthly and never carry the key; the API rejects a non-m
 ## Invariants
 
 - `sum(installment amounts) == total purchase price` (holds through revise: the regenerated pending run re-divides `amount_is_total`, remainder on the last installment)
+- `amount_is_total` divides the whole transaction across `count`: with a single positive leg it splits that leg (+ its matching negative); with a **multiposting** (>1 positive leg) it divides **every explicit leg** so each installment is the whole txn at 1/count. Multiposting total-form requires exactly one **auto-balance** leg to absorb per-installment rounding (else `400`); the last installment carries a per-leg remainder so each leg sums to its own typed total exactly
 - Monthly/yearly dates use day-clamping for month-end edge cases (weekly is exact 7-day steps)
 - Installments cannot be extended; recurring can be extended; **both can be revised**
 - Revise never lowers an installment `count` below the number already confirmed (rejected `400`)

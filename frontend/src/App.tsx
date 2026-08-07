@@ -8,10 +8,9 @@ import AccountRegister from "./components/AccountRegister";
 import ReportsView from "./components/reports/ReportsView";
 import SeriesView from "./components/SeriesView";
 import BudgetView from "./components/BudgetView";
-import TransactionModal from "./components/TransactionModal";
+import Composer from "./components/Composer";
 import TransactionDrawer from "./components/TransactionDrawer";
 import AccountModal from "./components/AccountModal";
-import SeriesModal from "./components/SeriesModal";
 import PlannedToggle from "./components/PlannedToggle";
 import FilterBar from "./components/FilterBar";
 import TabBar from "./components/TabBar";
@@ -29,9 +28,14 @@ export default function App() {
   const setOperatingCurrency = useAppStore((s) => s.setOperatingCurrency);
   const setLocale = useAppStore((s) => s.setLocale);
   const commandPaletteOpen = useAppStore((s) => s.commandPaletteOpen);
-  const txnModalOpen = useAppStore((s) => s.txnModalOpen);
+  const composerOpen = useAppStore((s) => s.composerOpen);
+  // Remount the Composer when its target changes (e.g. clicking an occurrence
+  // inside the series wing switches to editing that transaction).
+  const composerKey = useAppStore((s) =>
+    s.composerTxn ? `txn:${s.composerTxn.lineno}` :
+    s.composerSeries ? `series:${s.composerSeries.series_id}:${s.composerScope}` :
+    `new:${s.composerInitial ?? ''}`);
   const acctModalOpen = useAppStore((s) => s.acctModalOpen);
-  const seriesModalOpen = useAppStore((s) => s.seriesModalOpen);
   const drillTarget = useAppStore((s) => s.drillTarget);
   const closeDrill = useAppStore((s) => s.closeDrill);
   const viewMode = useAppStore((s) => s.viewMode);
@@ -188,9 +192,8 @@ export default function App() {
       />
 
       {commandPaletteOpen && <CommandPalette />}
-      {txnModalOpen && <TransactionModal onMutated={handleMutated} />}
+      {composerOpen && <Composer key={composerKey} onMutated={handleMutated} />}
       {acctModalOpen && <AccountModal onMutated={handleMutated} />}
-      {seriesModalOpen && <SeriesModal onMutated={handleMutated} />}
       {drillTarget && <TransactionDrawer target={drillTarget} onClose={closeDrill} />}
     </div>
   );

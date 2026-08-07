@@ -7,12 +7,33 @@ from __future__ import annotations
 
 import datetime
 import shutil
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from beancount.core import data
 from fastapi.testclient import TestClient
 
 import ledger as ledger_mod
+
+
+def _series_txns(series_id: str) -> list[data.Transaction]:
+    """All transactions for a series, sorted by date — read from the live ledger."""
+    led = ledger_mod.get_ledger()
+    txns = [
+        e for e in led.all_entries
+        if isinstance(e, data.Transaction)
+        and e.meta.get("ledgr-series") == series_id
+    ]
+    return sorted(txns, key=lambda t: t.date)
+
+
+def _leg(txn: data.Transaction, account: str) -> Decimal | None:
+    """The amount on ``account`` in ``txn`` (None if auto-balance / absent)."""
+    for p in txn.postings:
+        if p.account == account:
+            return p.units.number if p.units else None
+    return None
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -309,6 +330,26 @@ class TestCreateRecurringSeries:
         })
         assert r.status_code == 400
 
+    def test_non_iso_end_date_is_clean_400_not_500(
+        self, minimal_client: TestClient
+    ) -> None:
+        # A day-first display string (e.g. from the Until field) must not become
+        # an unhandled ValueError → 500; it's a clean 400 with a helpful detail.
+        r = minimal_client.post("/api/series", json={
+            "type": "recurring",
+            "payee": "Netflix",
+            "narration": "Assinatura",
+            "start_date": "2025-04-01",
+            "end_date": "31/12/2026",
+            "currency": "BRL",
+            "postings": [
+                {"account": "Expenses:Food", "amount": "55.90"},
+                {"account": "Assets:Checking", "amount": "-55.90"},
+            ],
+        })
+        assert r.status_code == 400
+        assert "ISO date" in r.json()["detail"]
+
 
 # ------------------------------------------------------------------
 # POST /api/series — recurring frequency (weekly / yearly)
@@ -521,9 +562,12 @@ class TestCreateSplitSeries:
         body = r.json()
         assert body["success"] is True
 
-    def test_rejects_amount_is_total_for_split(
+    def test_amount_is_total_split_needs_auto_balance(
         self, minimal_client: TestClient
     ) -> None:
+        # amount_is_total with >1 positive leg divides every leg by count, which
+        # needs an auto-balance leg to absorb per-installment rounding. All-explicit
+        # legs (no auto) are rejected with a clear 400.
         r = minimal_client.post("/api/series", json={
             "type": "installment",
             "payee": "P",
@@ -539,6 +583,67 @@ class TestCreateSplitSeries:
             ],
         })
         assert r.status_code == 400
+        assert "auto-balance" in r.json()["detail"]
+
+    def test_amount_is_total_split_divides_every_leg(
+        self, minimal_client: TestClient
+    ) -> None:
+        # Total 1200 across 10, split Food 600 / Ent 600 with an auto payment leg:
+        # each installment is the whole txn at 1/10 → Food 60, Ent 60, auto -120.
+        r = minimal_client.post("/api/series", json={
+            "type": "installment",
+            "payee": "Combo",
+            "narration": "MP total",
+            "start_date": "2025-01-01",
+            "count": 10,
+            "currency": "BRL",
+            "amount_is_total": True,
+            "postings": [
+                {"account": "Expenses:Food", "amount": "600"},
+                {"account": "Expenses:Entertainment", "amount": "600"},
+                {"account": "Assets:Checking"},
+            ],
+        })
+        assert r.status_code == 200
+        sid = r.json()["series_id"]
+        txns = _series_txns(sid)
+        assert len(txns) == 10
+        # Every installment: each explicit leg 60, Checking balances to -120
+        # (beancount elaborates the auto posting to the concrete number on load).
+        for t in txns:
+            assert _leg(t, "Expenses:Food") == Decimal("60.00")
+            assert _leg(t, "Expenses:Entertainment") == Decimal("60.00")
+            assert _leg(t, "Assets:Checking") == Decimal("-120.00")
+        # Legs sum to their typed totals exactly (no drift).
+        assert sum(_leg(t, "Expenses:Food") for t in txns) == Decimal("600.00")
+
+    def test_amount_is_total_split_remainder_on_last(
+        self, minimal_client: TestClient
+    ) -> None:
+        # 1000 across 3 → 333.33 per, last installment 333.34 so each leg sums
+        # to exactly its typed total.
+        r = minimal_client.post("/api/series", json={
+            "type": "installment",
+            "payee": "Rem",
+            "narration": "MP remainder",
+            "start_date": "2025-01-01",
+            "count": 3,
+            "currency": "BRL",
+            "amount_is_total": True,
+            "postings": [
+                {"account": "Expenses:Food", "amount": "1000"},
+                {"account": "Expenses:Entertainment", "amount": "1000"},
+                {"account": "Assets:Checking"},
+            ],
+        })
+        assert r.status_code == 200
+        txns = _series_txns(r.json()["series_id"])
+        assert [_leg(t, "Expenses:Food") for t in txns] == [
+            Decimal("333.33"), Decimal("333.33"), Decimal("333.34"),
+        ]
+        # Both explicit legs sum to exactly 1000 across the run.
+        assert sum(_leg(t, "Expenses:Food") for t in txns) == Decimal("1000.00")
+        assert sum(_leg(t, "Expenses:Entertainment") for t in txns) == Decimal("1000.00")
 
 
 # ------------------------------------------------------------------
@@ -862,6 +967,57 @@ class TestReviseInstallmentSeries:
         assert amounts == [33.33, 33.33, 33.34]
         assert round(sum(amounts), 2) == 100.00
 
+    def test_revise_amount_is_total_multiposting_divides_every_leg(
+        self, series_client: TestClient
+    ) -> None:
+        # Revise to a multiposting total-form: 300 split Electronics 150 / Fees 150
+        # with an auto CreditCard leg, over the 3 pending slots → each pending
+        # installment Electronics 50, Fees 50, CreditCard auto -100.
+        r = series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={
+                "count": 5,
+                "amount_is_total": True,
+                "postings": [
+                    {"account": "Expenses:Electronics", "amount": "150"},
+                    {"account": "Expenses:Fees", "amount": "150"},
+                    {"account": "Liabilities:CreditCard"},
+                ],
+            },
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["success"] is True
+        txns = _txns(series_client, "Expenses:Electronics")
+        pending = [t for t in txns if t["flag"] == "!"]
+        assert len(pending) == 3
+        for t in pending:
+            elec = next(p for p in t["postings"] if p["account"] == "Expenses:Electronics")
+            fees = next(p for p in t["postings"] if p["account"] == "Expenses:Fees")
+            assert float(elec["amount"]) == 50.00
+            assert float(fees["amount"]) == 50.00
+        # Confirmed installments (500 each) are untouched.
+        confirmed = [t for t in txns if t["flag"] == "*"]
+        assert all(t["postings"][0]["amount"] == "500.00" for t in confirmed)
+
+    def test_revise_amount_is_total_multiposting_needs_auto(
+        self, series_client: TestClient
+    ) -> None:
+        # All-explicit multiposting total-form (no auto leg) → clean 400.
+        r = series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={
+                "count": 5,
+                "amount_is_total": True,
+                "postings": [
+                    {"account": "Expenses:Electronics", "amount": "150"},
+                    {"account": "Expenses:Fees", "amount": "150"},
+                    {"account": "Liabilities:CreditCard", "amount": "-300"},
+                ],
+            },
+        )
+        assert r.status_code == 400
+        assert "auto-balance" in r.json()["detail"]
+
     def test_revise_change_accounts_on_pending(
         self, series_client: TestClient
     ) -> None:
@@ -1066,6 +1222,89 @@ class TestReviseRecurringSeries:
             json={"end_date": "2025-06-01"},
         )
         assert r.status_code == 404
+
+    def test_summary_reflects_pending_run_after_amount_change(
+        self, series_client: TestClient
+    ) -> None:
+        # After editing the pending amount, the summary's amount_per_txn +
+        # postings must reflect the PENDING run (what the user sees/edits), not
+        # the untouched confirmed run. tv-fixture001: 500 confirmed, revise
+        # pending to 600.
+        series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={
+                "count": 3,
+                "postings": [
+                    {"account": "Expenses:Electronics", "amount": "600"},
+                    {"account": "Liabilities:CreditCard", "amount": "-600"},
+                ],
+            },
+        )
+        s = _series(series_client, "tv-fixture001")
+        assert s["amount_per_txn"] == "600", "summary must show the pending amount"
+        # the representative postings also reflect 600
+        pos = [p for p in s["postings"] if p["amount"] and float(p["amount"]) > 0]
+        assert pos[0]["amount"] == "600"
+
+    def test_add_installments_keeps_pending_amount(
+        self, series_client: TestClient
+    ) -> None:
+        # Edit pending to 600, then ADD installments (count only). New pending
+        # must be 600 (the pending run's amount), not the confirmed 500.
+        series_client.post(
+            "/api/series/tv-fixture001/revise",
+            json={"count": 3, "postings": [
+                {"account": "Expenses:Electronics", "amount": "600"},
+                {"account": "Liabilities:CreditCard", "amount": "-600"},
+            ]},
+        )
+        r = series_client.post("/api/series/tv-fixture001/revise", json={"count": 5})
+        assert r.status_code == 200, r.text
+        pend = sorted(
+            (t for t in _txns(series_client, "Expenses:Electronics")
+             if t["flag"] == "!" and t["metadata"].get("ledgr-series") == "tv-fixture001"),
+            key=lambda t: t["date"],
+        )
+        assert len(pend) == 3
+        assert all(t["postings"][0]["amount"] == "600" for t in pend)
+
+    def test_revise_multiposting_applies_to_whole_pending_run(
+        self, series_client: TestClient
+    ) -> None:
+        # split-fix003: 3-posting recurring (Food 60 / Fun 40 / Bank -100),
+        # 1 confirmed + 2 pending. Editing all three postings must rewrite every
+        # pending txn and leave the confirmed one byte-identical.
+        r = series_client.post(
+            "/api/series/split-fix003/revise",
+            json={
+                "end_date": "2025-03-01",
+                "postings": [
+                    {"account": "Expenses:Food", "amount": "70"},
+                    {"account": "Expenses:Entertainment", "amount": "50"},
+                    {"account": "Assets:Bank:Checking", "amount": "-120"},
+                ],
+            },
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["success"] is True
+        assert r.json()["kept"] == 1
+
+        txns = sorted(
+            (t for t in _txns(series_client, "Expenses:Food")
+             if t["metadata"].get("ledgr-series") == "split-fix003"),
+            key=lambda t: t["date"],
+        )
+        confirmed = [t for t in txns if t["flag"] == "*"]
+        pending = [t for t in txns if t["flag"] == "!"]
+        # confirmed untouched (still 60/40/-100)
+        assert confirmed[0]["postings"][0]["amount"] == "60.00"
+        # every pending rewritten to the new 3-posting shape
+        assert len(pending) == 2
+        for t in pending:
+            by_acct = {p["account"]: p["amount"] for p in t["postings"]}
+            assert by_acct["Expenses:Food"] == "70"
+            assert by_acct["Expenses:Entertainment"] == "50"
+            assert by_acct["Assets:Bank:Checking"] == "-120"
 
 
 def confirmed_count(client: TestClient, sid: str) -> int:

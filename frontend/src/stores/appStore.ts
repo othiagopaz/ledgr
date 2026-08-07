@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode, PeriodPreset, FilterState } from '../types';
+import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode, PeriodPreset, FilterState, ComposerScope, ComposerOpts } from '../types';
 import type { DrillTarget } from '../components/TransactionDrawer';
 
 interface Tab {
@@ -42,12 +42,19 @@ interface AppState {
   requestBudgetNav: (action: BudgetNavAction) => void;
   consumeBudgetNav: () => void;
 
-  // Transaction modal
-  txnModalOpen: boolean;
-  txnModalTransaction: Transaction | null;
-  txnModalMode: TxnModalMode;
+  // Composer (unified posting surface — replaces the old txn + series modals).
+  composerOpen: boolean;
+  composerTxn: Transaction | null;          // editing one occurrence / plain txn
+  composerSeries: SeriesSummary | null;     // editing a whole series
+  composerScope: ComposerScope;             // 'occurrence' | 'series'
+  composerInitial: 'split' | 'repeat' | null; // pre-disclosure for a new draft
+  openComposer: (opts?: ComposerOpts) => void;
+  escalateToSeries: () => void;             // occurrence → whole-series scope (path 3)
+  closeComposer: () => void;
+  // Back-compat shims — existing call-sites (register rows, Cmd+N, palette,
+  // SeriesView) still call these; they now open the Composer.
   openTxnModal: (txn?: Transaction, mode?: TxnModalMode) => void;
-  closeTxnModal: () => void;
+  openSeriesModal: (series?: SeriesSummary, defaultType?: 'recurring' | 'installment') => void;
 
   // Drill-down drawer (report cell / budget row → transactions for account+period)
   drillTarget: DrillTarget | null;
@@ -64,12 +71,6 @@ interface AppState {
   openAcctModal: (account?: AccountNode) => void;
   closeAcctModal: () => void;
 
-  // Series modal
-  seriesModalOpen: boolean;
-  seriesModalSeries: SeriesSummary | null; // null = create, non-null = view/edit
-  seriesModalDefaultType: 'recurring' | 'installment' | null;
-  openSeriesModal: (series?: SeriesSummary, defaultType?: 'recurring' | 'installment') => void;
-  closeSeriesModal: () => void;
 
   // UI
   theme: 'dark' | 'light';
@@ -158,16 +159,43 @@ export const useAppStore = create<AppState>((set, get) => ({
   consumeBudgetNav: () =>
     set((s) => ({ budgetNavConsumedId: s.budgetNavRequestId })),
 
-  // Transaction modal
-  txnModalOpen: false,
-  txnModalTransaction: null,
-  txnModalMode: 'fast' as TxnModalMode,
-  openTxnModal: (txn, mode) => set({
-    txnModalOpen: true,
-    txnModalTransaction: txn || null,
-    txnModalMode: txn ? 'advanced' : (mode || 'fast'),
+  // Composer
+  composerOpen: false,
+  composerTxn: null,
+  composerSeries: null,
+  composerScope: 'occurrence',
+  composerInitial: null,
+  openComposer: (opts) => {
+    if (opts && 'txn' in opts) {
+      set({
+        composerOpen: true, composerTxn: opts.txn, composerSeries: null,
+        composerScope: 'occurrence', composerInitial: null,
+      });
+    } else if (opts && 'series' in opts) {
+      set({
+        composerOpen: true, composerTxn: null, composerSeries: opts.series,
+        composerScope: 'series', composerInitial: null,
+      });
+    } else {
+      set({
+        composerOpen: true, composerTxn: null, composerSeries: null,
+        composerScope: 'occurrence',
+        composerInitial: (opts && 'initial' in opts && opts.initial) || null,
+      });
+    }
+  },
+  escalateToSeries: () => set({ composerScope: 'series' }),
+  closeComposer: () => set({
+    composerOpen: false, composerTxn: null, composerSeries: null,
+    composerScope: 'occurrence', composerInitial: null,
   }),
-  closeTxnModal: () => set({ txnModalOpen: false, txnModalTransaction: null }),
+  // Shims → Composer.
+  openTxnModal: (txn, mode) => get().openComposer(
+    txn ? { txn } : { initial: mode === 'advanced' ? 'split' : undefined }
+  ),
+  openSeriesModal: (series, defaultType) => get().openComposer(
+    series ? { series } : (defaultType ? { initial: 'repeat' } : { initial: 'repeat' })
+  ),
 
   drillTarget: null,
   openDrill: (target) => set({ drillTarget: target }),
@@ -182,13 +210,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   acctModalAccount: null,
   openAcctModal: (account) => set({ acctModalOpen: true, acctModalAccount: account || null }),
   closeAcctModal: () => set({ acctModalOpen: false, acctModalAccount: null }),
-
-  // Series modal
-  seriesModalOpen: false,
-  seriesModalSeries: null,
-  seriesModalDefaultType: null,
-  openSeriesModal: (series, defaultType) => set({ seriesModalOpen: true, seriesModalSeries: series || null, seriesModalDefaultType: defaultType || null }),
-  closeSeriesModal: () => set({ seriesModalOpen: false, seriesModalSeries: null, seriesModalDefaultType: null }),
 
   // UI
   theme: 'light',

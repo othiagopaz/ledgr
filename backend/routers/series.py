@@ -86,6 +86,22 @@ class SeriesReviseIn(BaseModel):
 # ------------------------------------------------------------------
 
 
+def _parse_iso_date(value: str, field: str) -> datetime.date:
+    """Parse an ISO ``YYYY-MM-DD`` date, raising a clean 400 on bad input.
+
+    The frontend normalizes dates to ISO before sending; this guards against a
+    malformed value (e.g. a day-first ``31/12/2026`` string) becoming an
+    unhandled ``ValueError`` → 500.
+    """
+    try:
+        return datetime.date.fromisoformat(value)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{field}' must be an ISO date (YYYY-MM-DD); got {value!r}.",
+        )
+
+
 def _get_series_transactions(
     entries: list, series_id: str
 ) -> list[data.Transaction]:
@@ -106,22 +122,23 @@ def _summarize_series(
 
     first = txns[0]
     series_type = first.meta.get("ledgr-series-type", "recurring")
-    # A series' frequency is its going-forward cadence. Read it from a pending
-    # (!) txn when one exists — after a revise, confirmed (*) txns keep their
-    # original dates/cadence, but the current schedule lives on the pending run.
-    # Missing key ⇒ monthly (pre-frequency series + all installments).
-    freq_source = next((t for t in txns if t.flag == "!"), first)
-    frequency = freq_source.meta.get("ledgr-series-freq", "monthly")
+    # A series' "current" shape is its going-forward run. After a revise, the
+    # confirmed (*) txns keep their old amounts/accounts/cadence, but what the
+    # user sees + edits is the pending (!) run. So read the representative
+    # posting shape, amount, and frequency from a pending txn when one exists;
+    # fall back to the first txn for a fully-confirmed series.
+    repr_txn = next((t for t in txns if t.flag == "!"), first)
+    frequency = repr_txn.meta.get("ledgr-series-freq", "monthly")
     confirmed = sum(1 for t in txns if t.flag == "*")
     pending = sum(1 for t in txns if t.flag == "!")
 
-    # Build postings list from first transaction.
+    # Build the representative postings list (from the pending run when present).
     postings_out: list[dict[str, str | None]] = []
     positive_amounts: list[Decimal] = []
     account_to = ""
     account_from = ""
     currency = ""
-    for p in first.postings:
+    for p in repr_txn.postings:
         if p.units:
             postings_out.append({
                 "account": p.account,
@@ -185,7 +202,7 @@ def create_series(
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Create a new recurring or installment series."""
-    start = datetime.date.fromisoformat(body.start_date)
+    start = _parse_iso_date(body.start_date, "start_date")
 
     # --- Posting validation ---
     if len(body.postings) < 2:
@@ -202,10 +219,17 @@ def create_series(
     positive_count = sum(
         1 for p in body.postings if p.amount is not None and p.amount > 0
     )
-    if body.amount_is_total and positive_count > 1:
+    # amount_is_total with a multiposting (>1 positive leg) divides EVERY leg by
+    # count — each installment is the whole txn at 1/count. That needs an
+    # auto-balance leg to absorb per-installment rounding.
+    multiposting_total = body.amount_is_total and positive_count > 1
+    if multiposting_total and auto_balance_count != 1:
         raise HTTPException(
             status_code=400,
-            detail="'amount_is_total' is only valid for series with a single positive posting.",
+            detail=(
+                "'amount_is_total' with multiple positive postings needs exactly "
+                "one auto-balance posting (leave one amount blank)."
+            ),
         )
 
     # --- Validation & count derivation ---
@@ -227,7 +251,7 @@ def create_series(
                 status_code=400,
                 detail="Recurring series requires 'end_date'.",
             )
-        end = datetime.date.fromisoformat(body.end_date)
+        end = _parse_iso_date(body.end_date, "end_date")
         count = periods_between(start, end, body.frequency)
         if count <= 0:
             raise HTTPException(
@@ -252,22 +276,15 @@ def create_series(
 
     # --- Amount computation for amount_is_total ---
     last_adj = None
-    if body.amount_is_total:
-        # Find the single positive posting and divide
+    last_spec = None
+    if multiposting_total:
+        # Divide every explicit leg; auto-balance leg absorbs per-txn rounding.
+        last_spec = _divide_total_multiposting(postings_spec, count)
+    elif body.amount_is_total:
+        # Single positive posting: divide it (+ its matching negative leg).
         for spec in postings_spec:
             if spec["amount"] is not None and spec["amount"] > 0:
-                total_amount = spec["amount"]
-                per_txn = (total_amount / count).quantize(
-                    Decimal("0.01"), ROUND_HALF_UP
-                )
-                remainder = total_amount - per_txn * count
-                spec["amount"] = per_txn
-                # For the negative posting, also scale
-                for neg_spec in postings_spec:
-                    if neg_spec["amount"] is not None and neg_spec["amount"] < 0:
-                        neg_spec["amount"] = -per_txn
-                        break
-                last_adj = per_txn + remainder if remainder else None
+                last_adj = _apply_amount_is_total(postings_spec, spec["amount"], count)
                 break
 
     # --- Generate ---
@@ -284,6 +301,7 @@ def create_series(
         beancount_file_path=str(ledger.beancount_file_path),
         last_installment_adjustment=last_adj,
         frequency=body.frequency,
+        last_postings_spec=last_spec,
     )
 
     try:
@@ -363,7 +381,7 @@ def extend_series(
 
     # Determine current state
     current_last_date = max(t.date for t in txns)
-    new_end = datetime.date.fromisoformat(body.new_end_date)
+    new_end = _parse_iso_date(body.new_end_date, "new_end_date")
     if new_end <= current_last_date:
         raise HTTPException(
             status_code=400,
@@ -494,13 +512,16 @@ def _build_installments_by_seq(
     default_currency: str,
     beancount_file_path: str,
     last_installment_adjustment: Decimal | None,
+    last_postings_spec: list[dict] | None = None,
 ) -> list[data.Transaction]:
     """Build pending installment txns at *specific* seq slots (monthly).
 
     Each installment #s falls on ``series_start + (s-1) months`` and carries
     ``ledgr-series-seq = s`` / ``ledgr-series-total = total``. The
     ``last_installment_adjustment`` (if any) scales the highest seq in ``seqs``
-    — the plan's final installment absorbs the rounding remainder.
+    — the plan's final installment absorbs the rounding remainder. An explicit
+    ``last_postings_spec`` (per-leg remainder, from a multiposting total-form)
+    takes precedence over the scale on that final seq.
     """
     base_total = sum(
         s["amount"] for s in postings_spec
@@ -515,9 +536,15 @@ def _build_installments_by_seq(
         meta["ledgr-series-seq"] = Decimal(s)
         meta["ledgr-series-total"] = Decimal(total)
 
-        use_adjustment = s == highest and last_installment_adjustment is not None
+        is_last = s == highest
+        if is_last and last_postings_spec is not None:
+            spec_source = last_postings_spec
+            use_adjustment = False
+        else:
+            spec_source = postings_spec
+            use_adjustment = is_last and last_installment_adjustment is not None
         postings: list[data.Posting] = []
-        for spec in postings_spec:
+        for spec in spec_source:
             amt = spec.get("amount")
             cur = spec.get("currency") or default_currency
             if amt is None:
@@ -559,6 +586,36 @@ def _apply_amount_is_total(
         elif spec["amount"] is not None and spec["amount"] < 0:
             spec["amount"] = -per_txn
     return per_txn + remainder if remainder else None
+
+
+def _divide_total_multiposting(
+    postings_spec: list[dict], count: int
+) -> list[dict] | None:
+    """Divide EVERY explicit leg of a multiposting by ``count`` (total-form).
+
+    Each installment becomes the whole transaction at 1/count scale; an
+    auto-balance leg (``amount=None``) absorbs per-installment rounding, so every
+    installment balances. Mutates ``postings_spec`` to the per-installment
+    amounts and returns an explicit ``last_postings_spec`` in which each leg is
+    ``total − per×(count−1)`` so that leg's amounts sum EXACTLY to its original
+    total. Returns ``None`` when no rounding remainder exists (no override
+    needed). Requires an auto-balance leg — the caller guards that.
+    """
+    quant = Decimal("0.01")
+    last_spec: list[dict] = []
+    any_remainder = False
+    for spec in postings_spec:
+        amt = spec.get("amount")
+        if amt is None:
+            last_spec.append({**spec})   # auto-balance leg stays auto
+            continue
+        per = (amt / count).quantize(quant, ROUND_HALF_UP)
+        last_amt = amt - per * (count - 1)   # absorbs this leg's remainder
+        if last_amt != per:
+            any_remainder = True
+        last_spec.append({**spec, "amount": last_amt})
+        spec["amount"] = per
+    return last_spec if any_remainder else None
 
 
 @router.post("/api/series/{series_id}/revise")
@@ -663,24 +720,38 @@ def revise_series(
             s for s in range(1, new_total + 1) if s not in confirmed_seqs
         ]
 
+        last_adj = None
+        last_spec = None
         if body.amount_is_total:
             positives = [
                 s for s in postings_spec
                 if s["amount"] is not None and s["amount"] > 0
             ]
-            if len(positives) != 1:
+            autos = sum(1 for s in postings_spec if s.get("amount") is None)
+            pending_n = len(missing_seqs)
+            if len(positives) > 1:
+                # Multiposting total-form: divide every leg across the pending
+                # run; needs an auto-balance leg to absorb per-installment rounding.
+                if autos != 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "'amount_is_total' with multiple positive postings needs "
+                            "exactly one auto-balance posting (leave one amount blank)."
+                        ),
+                    )
+                if pending_n:
+                    last_spec = _divide_total_multiposting(postings_spec, pending_n)
+            elif len(positives) == 1:
+                if pending_n:
+                    last_adj = _apply_amount_is_total(
+                        postings_spec, positives[0]["amount"], pending_n
+                    )
+            else:
                 raise HTTPException(
                     status_code=400,
-                    detail="'amount_is_total' needs exactly one positive posting.",
+                    detail="'amount_is_total' needs at least one positive posting.",
                 )
-            if missing_seqs:
-                last_adj = _apply_amount_is_total(
-                    postings_spec, positives[0]["amount"], len(missing_seqs)
-                )
-            else:
-                last_adj = None
-        else:
-            last_adj = None
 
         new_txns = _build_installments_by_seq(
             series_id=series_id,
@@ -693,6 +764,7 @@ def revise_series(
             default_currency=default_currency,
             beancount_file_path=str(ledger.beancount_file_path),
             last_installment_adjustment=last_adj,
+            last_postings_spec=last_spec,
         )
     else:  # recurring
         if body.amount_is_total:
@@ -706,7 +778,7 @@ def revise_series(
                 status_code=400,
                 detail="Recurring revise requires 'end_date' (new horizon).",
             )
-        end = datetime.date.fromisoformat(body.end_date)
+        end = _parse_iso_date(body.end_date, "end_date")
         regen_count = periods_between(regen_start, end, freq)
         if regen_count < 0:
             regen_count = 0

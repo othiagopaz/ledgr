@@ -56,6 +56,40 @@ function offsetDays(n: number): string {
 const DATE_FULL_RE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
 const DATE_PARTIAL_RE = /^(\d{1,2})[/.-](\d{1,2})$/;
 
+/**
+ * Detect a bare money token (no `$` needed), locale-aware. Returns the raw
+ * money string as-typed (kept for display/pill), or null.
+ *
+ * Fires for any numeric token — a plain integer (`230`, `750`), a decimal
+ * (`212,90`), or a thousands-grouped number (`1.234,56`). The old ambiguity
+ * with dates is gone: dates own `/ . -` separators and are detected first, and
+ * installment counts live inside the `*` / `:` tokens (parsed before this), so
+ * a bare integer here is unambiguously the amount.
+ *
+ * `commaDecimal` (from the user's locale): true ⇒ `1.234,56` shape (`,` decimal,
+ * `.` thousands); false ⇒ `1,234.56` shape.
+ */
+export function tryParseAmount(token: string, commaDecimal: boolean): string | null {
+  // strip a leading currency-ish sign the user might type
+  const t = token.trim();
+  if (!t) return null;
+  // must be digits + separators only, and contain at least one digit
+  if (!/^[\d.,]+$/.test(t) || !/\d/.test(t)) return null;
+  const dec = commaDecimal ? ',' : '.';
+  const hasDecimal = t.includes(dec);
+  // Decimal part (if present) must be the LAST separator and have 1–2 digits.
+  if (hasDecimal) {
+    const parts = t.split(dec);
+    if (parts.length !== 2) return null;              // more than one decimal sep
+    if (!/^\d{1,2}$/.test(parts[1])) return null;     // 1–2 decimal digits
+    // integer part may carry thousands groups but no stray decimals
+    if (parts[0].includes(dec)) return null;
+  }
+  // Reject a bare zero (0, 0,00) — not a meaningful amount.
+  if (/^0[.,0]*$/.test(t)) return null;
+  return t;
+}
+
 function tryParseDate(token: string): string | null {
   const lower = token.toLowerCase();
 
@@ -97,10 +131,16 @@ function tryParseDate(token: string): string | null {
  * Trigger characters: $ > @ # ^ !
  * Everything else that isn't a recognized date keyword/pattern is narration.
  */
-export function parseInput(text: string, cursorPosition: number): ParseResult {
+export interface ParseOpts {
+  /** User locale uses comma as decimal (e.g. pt/BRL). Enables bare `212,90`. */
+  commaDecimal?: boolean;
+}
+
+export function parseInput(text: string, cursorPosition: number, opts: ParseOpts = {}): ParseResult {
   const tokens: ParsedToken[] = [];
   const narrationParts: string[] = [];
   let activeTrigger: ActiveTrigger | null = null;
+  const commaDecimal = opts.commaDecimal ?? false;
 
   // Split into whitespace-delimited tokens, preserving positions
   const tokenSegments = splitWithPositions(text);
@@ -175,10 +215,17 @@ export function parseInput(text: string, cursorPosition: number): ParseResult {
       continue;
     }
 
-    // --- Date detection ---
+    // --- Date detection (before bare-amount, so 12/08 stays a date) ---
     const dateValue = tryParseDate(word);
     if (dateValue) {
       tokens.push({ type: 'date', value: dateValue, raw: word, startIndex: start, endIndex: end });
+      continue;
+    }
+
+    // --- Bare amount (no $), locale-aware: 212,90 / 1.234,56 / 55.00 ---
+    const bareAmount = tryParseAmount(word, commaDecimal);
+    if (bareAmount) {
+      tokens.push({ type: 'amount', value: bareAmount, raw: word, startIndex: start, endIndex: end });
       continue;
     }
 

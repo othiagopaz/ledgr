@@ -59,14 +59,14 @@ export default function AccountRegister({ account, transactions, openingBalance,
   const registerRef = useRef<HTMLDivElement>(null);
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const newTxnRequestId = useAppStore((s) => s.newTxnRequestId);
-  const txnModalOpen = useAppStore((s) => s.txnModalOpen);
+  const composerOpen = useAppStore((s) => s.composerOpen);
 
-  // Refocus register when modal closes
+  // Refocus register when the composer closes
   useEffect(() => {
-    if (!txnModalOpen) {
+    if (!composerOpen) {
       requestAnimationFrame(() => registerRef.current?.focus());
     }
-  }, [txnModalOpen]);
+  }, [composerOpen]);
 
   const shortName = account.split(":").length > 2
     ? account.split(":").slice(1).join(":")
