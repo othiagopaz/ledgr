@@ -143,11 +143,15 @@ class TestListSeries:
         assert "netflix-fix002" in ids
         assert "split-fix003" in ids
 
-    def test_filter_by_date_narrows_counts(
+    def test_filter_by_date_shows_full_series_counts(
         self, series_client: TestClient
     ) -> None:
-        """Restrict to Jan 2025 — Netflix should surface with only its
-        single January txn counted."""
+        """A date filter decides *which* series surface, but each summary
+        still describes the WHOLE series. Netflix runs Jan..Apr (1 confirmed,
+        3 pending); restricting to January must surface it with its full
+        counts — not truncated to the single in-window txn. This is the
+        regression guard for the "filtered series looks 1/1 complete" bug.
+        """
         r = series_client.get(
             "/api/series",
             params={"from_date": "2025-01-01", "to_date": "2025-02-01"},
@@ -156,9 +160,12 @@ class TestListSeries:
         netflix = next(
             s for s in r.json()["series"] if s["series_id"] == "netflix-fix002"
         )
-        assert netflix["total"] == 1
+        assert netflix["total"] == 4
         assert netflix["confirmed"] == 1
-        assert netflix["pending"] == 0
+        assert netflix["pending"] == 3
+        # Dates reflect the full span, not the filtered window.
+        assert netflix["first_date"] == "2025-01-01"
+        assert netflix["last_date"] == "2025-04-01"
 
 
 # ------------------------------------------------------------------

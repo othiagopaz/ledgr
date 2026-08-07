@@ -43,9 +43,11 @@ function SeriesSummaryRow({ summary, onViewSeries, filter }: SeriesSummaryRowPro
   // The summary table renders only on the Recurring and Installments tabs.
   // Recurring gets a Frequency column (monthly/weekly/yearly); Installments
   // drops it entirely (the type is implied by the tab).
+  const isCompleted = summary.pending === 0;
+
   return (
     <tr
-      className="series-summary-row"
+      className={`series-summary-row${isCompleted ? ' series-summary-completed' : ''}`}
       onClick={() => onViewSeries(summary)}
       style={{ cursor: "pointer" }}
     >
@@ -92,6 +94,10 @@ function SeriesSummaryRow({ summary, onViewSeries, filter }: SeriesSummaryRowPro
         {formatAmount(parseFloat(summary.amount_per_txn), summary.currency)}
         <span className="series-currency-label"> {summary.currency}</span>
       </td>
+      <td className="num">
+        {formatAmount(parseFloat(summary.total_amount), summary.currency)}
+        <span className="series-currency-label"> {summary.currency}</span>
+      </td>
     </tr>
   );
 }
@@ -108,6 +114,9 @@ export default function SeriesView() {
   const [selectedLinenos, setSelectedLinenos] = useState<Set<number>>(new Set());
   const [reconciling, setReconciling] = useState(false);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  // Completed series (no pending occurrences) are hidden from the summary by
+  // default to keep the list focused on what's still active.
+  const [showCompleted, setShowCompleted] = useState(false);
   const [expandedSplits, setExpandedSplits] = useState<Set<number>>(new Set());
 
   const tableRef = useRef<HTMLDivElement>(null);
@@ -189,10 +198,18 @@ export default function SeriesView() {
     }
   }, [hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredSeries = (() => {
+  // Series for the current tab (the summary table only renders on the
+  // recurring/installment tabs).
+  const tabSeries = (() => {
     if (filter === 'all' || filter === 'pending') return allSeries;
     return allSeries.filter((s) => s.type === filter);
   })();
+  // A series is "completed" once nothing is pending: installments fully paid,
+  // recurring past its end. Hidden unless the user opts to show them.
+  const completedCount = tabSeries.filter((s) => s.pending === 0).length;
+  const filteredSeries = showCompleted
+    ? tabSeries
+    : tabSeries.filter((s) => s.pending > 0);
 
   function toggleSelect(lineno: number) {
     setSelectedLinenos((prev) => {
@@ -357,9 +374,21 @@ export default function SeriesView() {
         <div className="reports-content" style={{ maxWidth: 'none' }}>
           {/* Series summaries — only on the dedicated Recurring/Installments
               tabs. The All and Pending tabs show plain transaction lists. */}
-          {(filter === 'recurring' || filter === 'installment') && filteredSeries.length > 0 && (
+          {(filter === 'recurring' || filter === 'installment') && tabSeries.length > 0 && (
             <div className="series-summaries">
-              <div className="series-section-label">Series</div>
+              <div className="series-section-label">
+                Series
+                {completedCount > 0 && (
+                  <button
+                    type="button"
+                    className="series-completed-toggle"
+                    onClick={() => setShowCompleted((v) => !v)}
+                    title={showCompleted ? 'Hide completed series' : 'Show completed series'}
+                  >
+                    {showCompleted ? 'Hide completed' : `Show completed (${completedCount})`}
+                  </button>
+                )}
+              </div>
               <table className="series-summary-table">
                 <thead>
                   <tr>
@@ -371,6 +400,7 @@ export default function SeriesView() {
                     <th style={{ width: filter === 'installment' ? 280 : 200 }}>Progress</th>
                     <th>Dates</th>
                     <th className="num" style={{ width: 120 }}>Per Transaction</th>
+                    <th className="num" style={{ width: 120 }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>

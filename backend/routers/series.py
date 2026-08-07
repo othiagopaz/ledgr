@@ -297,16 +297,34 @@ def list_series(
         payee=payee,
     )
 
-    series_map: dict[str, list[data.Transaction]] = {}
+    # The filters decide *which* series are relevant (a series matches if any
+    # of its postings pass the filter), but a series summary — progress x/y,
+    # total, completed status — describes the whole series. Summarising the
+    # filtered subset would truncate e.g. a 13-installment series to the one
+    # posting in the window and report it as "1/1 complete". So: collect the
+    # matching series IDs from the filtered entries, then summarise each from
+    # the *complete* set of its transactions.
+    matching_ids: set[str] = set()
     for entry in entries:
         if not isinstance(entry, data.Transaction):
             continue
         sid = entry.meta.get("ledgr-series")
         if sid:
-            series_map.setdefault(sid, []).append(entry)
+            matching_ids.add(sid)
+
+    # Group every transaction of the matching series from the full ledger.
+    full_series_map: dict[str, list[data.Transaction]] = {
+        sid: [] for sid in matching_ids
+    }
+    for entry in ledger.all_entries:
+        if not isinstance(entry, data.Transaction):
+            continue
+        sid = entry.meta.get("ledgr-series")
+        if sid in full_series_map:
+            full_series_map[sid].append(entry)
 
     summaries = [
-        _summarize_series(sid, txns) for sid, txns in series_map.items()
+        _summarize_series(sid, txns) for sid, txns in full_series_map.items()
     ]
     summaries.sort(key=lambda s: s.get("first_date", ""), reverse=True)
 
