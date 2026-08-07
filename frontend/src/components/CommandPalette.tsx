@@ -24,7 +24,7 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { setCommandPaletteOpen, openTab, toggleTheme, openSeriesModal, requestBudgetNav } = useAppStore();
+  const { setCommandPaletteOpen, openTab, toggleTheme, openComposer, requestBudgetNav } = useAppStore();
 
   const accountNamesQuery = useQuery({
     queryKey: ["account-names"],
@@ -55,16 +55,18 @@ export default function CommandPalette() {
     });
   }
 
-  // Actions
-  items.push({
-    id: "action:new-txn",
-    label: "New Transaction",
-    group: "Actions",
-    action: () => {
-      useAppStore.getState().openTxnModal();
-      setCommandPaletteOpen(false);
-    },
-  });
+  // Actions — one Composer, opened at the level the user asks for.
+  const newActions: { id: string; label: string; open: () => void }[] = [
+    { id: "action:new-txn", label: "New", open: () => openComposer() },
+    { id: "action:new-split", label: "New — Split (multiple postings)", open: () => openComposer({ initial: 'split' }) },
+    { id: "action:new-repeat", label: "New — Repeat (recurring / installments)", open: () => openComposer({ initial: 'repeat' }) },
+  ];
+  for (const a of newActions) {
+    items.push({
+      id: a.id, label: a.label, group: "Actions",
+      action: () => { a.open(); setCommandPaletteOpen(false); },
+    });
+  }
 
   items.push({
     id: "action:new-account",
@@ -72,16 +74,6 @@ export default function CommandPalette() {
     group: "Actions",
     action: () => {
       useAppStore.getState().openAcctModal();
-      setCommandPaletteOpen(false);
-    },
-  });
-
-  items.push({
-    id: "action:new-series",
-    label: "New Series",
-    group: "Actions",
-    action: () => {
-      openSeriesModal();
       setCommandPaletteOpen(false);
     },
   });

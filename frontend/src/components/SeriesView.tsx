@@ -107,7 +107,7 @@ export default function SeriesView() {
   const openTxnModal = useAppStore((s) => s.openTxnModal);
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
-  const txnModalOpen = useAppStore((s) => s.txnModalOpen);
+  const composerOpen = useAppStore((s) => s.composerOpen);
   const queryClient = useQueryClient();
 
   const [filter, setFilter] = useState<Filter>('all');
@@ -126,12 +126,12 @@ export default function SeriesView() {
     window.scrollTo(0, 0);
   }, []);
 
-  // Refocus table when modal closes
+  // Refocus table when the composer closes
   useEffect(() => {
-    if (!txnModalOpen) {
+    if (!composerOpen) {
       requestAnimationFrame(() => tableRef.current?.focus({ preventScroll: true }));
     }
-  }, [txnModalOpen]);
+  }, [composerOpen]);
 
   // Auto-select first row on mount and when filter changes
   useEffect(() => {

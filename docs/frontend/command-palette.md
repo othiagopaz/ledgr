@@ -1,6 +1,6 @@
 ---
 type: feature
-last_updated: 2026-04-21
+last_updated: 2026-08-06
 ---
 
 # Cmd+K — every user-facing action must be accessible
@@ -19,7 +19,7 @@ If a capability is only reachable through a button nested in a specific view, it
 
 | Group        | Purpose                                                                        |
 |--------------|--------------------------------------------------------------------------------|
-| `"Actions"`  | Primary CRUD and navigation actions (New Transaction, New Account, New Series) |
+| `"Actions"`  | Primary CRUD and navigation actions (New, New — Split, New — Repeat, New Account) |
 | `"Views"`    | Navigate to a specific tab (Dashboard, Accounts, Reports, Series)              |
 | `"Accounts"` | Individual account register tabs                                               |
 
@@ -27,7 +27,7 @@ If a capability is only reachable through a button nested in a specific view, it
 
 When adding a new entry, place it in the correct group and use consistent labels:
 
-- Create actions: `"New <Thing>"` — e.g. `"New Transaction"`, `"New Series"`
+- Create actions: `"New"` opens the [Composer](guidelines.md#the-composer-composertsx--one-way-to-post); fast paths `"New — Split"` / `"New — Repeat"` pre-disclose it. (Transactions and series are one surface now — no separate "New Series".)
 - Navigate actions: `"View <Thing>"` — e.g. `"View Dashboard"`, `"View Series"`
 
 ## Keyboard access

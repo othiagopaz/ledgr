@@ -124,6 +124,7 @@ def generate_series_transactions(
     last_installment_adjustment: Decimal | None = None,
     seq_offset: int = 0,
     frequency: Frequency = "monthly",
+    last_postings_spec: list[dict] | None = None,
 ) -> list[data.Transaction]:
     """Generate a list of Beancount Transaction objects for a series.
 
@@ -147,6 +148,11 @@ def generate_series_transactions(
         frequency: cadence between transactions. Recorded as
             ``ledgr-series-freq`` for recurring series; installments are
             always monthly and omit the key.
+        last_postings_spec: optional explicit postings for the FINAL txn,
+            used instead of ``last_installment_adjustment`` scaling. Lets a
+            multiposting total-form put a per-leg remainder on the last
+            installment (each leg divided independently). Same shape as
+            ``postings_spec``; takes precedence over the scale path.
 
     Returns:
         List of Transaction objects ready for ``insert_entries()``.
@@ -182,10 +188,17 @@ def generate_series_transactions(
 
         # --- Postings ---
         is_last = i == len(dates) - 1
-        use_adjustment = is_last and last_installment_adjustment is not None
+        # An explicit last-txn spec (per-leg remainder) wins over scale-based
+        # adjustment. Either applies only to the final installment.
+        if is_last and last_postings_spec is not None:
+            spec_source = last_postings_spec
+            use_adjustment = False
+        else:
+            spec_source = postings_spec
+            use_adjustment = is_last and last_installment_adjustment is not None
 
         postings: list[data.Posting] = []
-        for spec in postings_spec:
+        for spec in spec_source:
             spec_amount = spec.get("amount")
             cur = spec.get("currency") or default_currency
 

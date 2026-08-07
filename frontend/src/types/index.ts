@@ -105,6 +105,22 @@ export interface OptionsResponse {
 
 export type TxnModalMode = 'fast' | 'advanced';
 
+/**
+ * A recurring/installment schedule attached to a draft. Its presence turns a
+ * one-off into a series: absence ⇒ a plain transaction (`POST /api/transactions`),
+ * presence ⇒ `POST /api/series`. `SeriesFrequency` is reused from the series API.
+ */
+export interface Schedule {
+  kind: 'recurring' | 'installment';
+  // recurring
+  frequency?: SeriesFrequency;   // weekly | monthly | yearly
+  until?: string | null;         // ISO end date (horizon)
+  // installment
+  count?: number;                // N installments
+  amountIsTotal?: boolean;       // the amount is the total, split across N
+  startDate?: string;            // defaults to the draft's date
+}
+
 export interface TransactionDraft {
   date: string;
   flag: '*' | '!';
@@ -113,7 +129,21 @@ export interface TransactionDraft {
   tags: string[];
   links: string[];
   postings: DraftPosting[];
+  /** Optional schedule — undefined for a plain one-off transaction. */
+  schedule?: Schedule;
 }
+
+/**
+ * How the Composer opens. `{txn}` edits one occurrence (or a plain txn);
+ * `{series}` edits a whole series; otherwise a new draft, optionally
+ * pre-disclosed into split/repeat.
+ */
+export type ComposerScope = 'occurrence' | 'series';
+
+export type ComposerOpts =
+  | { txn: Transaction }
+  | { series: SeriesSummary }
+  | { initial?: 'split' | 'repeat' };
 
 export interface DraftPosting {
   id: number;
@@ -381,6 +411,33 @@ export interface SeriesExtendResponse {
   success: boolean;
   series_id?: string;
   count?: number;
+  transactions_created?: number;
+  errors?: string[];
+}
+
+/**
+ * Edit the pending run of a series in place. Confirmed (`*`) transactions are
+ * preserved; only the pending (`!`) tail is regenerated. `postings` replaces
+ * the amounts/accounts of the run; installments use `count`/`amount_is_total`,
+ * recurring use `frequency`/`end_date`.
+ */
+export interface SeriesReviseIn {
+  postings?: PostingSpec[];
+  // installment-only
+  count?: number;
+  amount_is_total?: boolean;
+  // recurring-only
+  frequency?: SeriesFrequency;
+  end_date?: string;
+  // both (optional)
+  payee?: string;
+  narration?: string;
+}
+
+export interface SeriesReviseResponse {
+  success: boolean;
+  series_id?: string;
+  kept?: number;
   transactions_created?: number;
   errors?: string[];
 }
