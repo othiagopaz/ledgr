@@ -9,6 +9,13 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-08-07 — Fix: dates used UTC instead of local timezone
+
+- `today()` and the date keyword helpers built the string with `new Date().toISOString().slice(0,10)`, which converts to **UTC** first. In a negative-offset zone (e.g. BRT, UTC−3) an evening entry (21:00 local = 00:00 next-day UTC) was stamped with **tomorrow's** date — every register created "today" landed on 08/07 instead of 07/07.
+- Replaced with a local-component formatter (`getFullYear/getMonth/getDate`) in `dateUtils.ts` (`iso()` / `today()` / the `parseSmartDate` "yesterday" branch) and in `fastInputParser.ts` (`today`/`yesterday`/`tomorrow` keywords). `AccountRegister`'s "new transaction" row now calls `today()` instead of an inline UTC slice.
+- Backend needs no change: series/transaction dates always come from the request body (now correct), and the few `date.today()` defaults are server-local, not UTC.
+- New `dateUtils.test.ts` (+3) locks it — with a fake clock at 2026-07-07 evening, `today()` must be `2026-07-07`. Verified the guard **fails on the old UTC code under `TZ=America/Sao_Paulo`** and passes on the fix. 89 vitest (default + Sao_Paulo TZ) + tsc + eslint green.
+
 ## 2026-08-07 — Composer: `:` total feeds the grid + sticky date + preview polish
 
 - **`1200:12` now populates the posting grid + balance** like `100*12` did. The `:` (total) form used to route the number into a side `scheduleTotal` state the grid never read, so the preview/balance were blank; now both compact forms (`*` and `:`) set the **amount pill**, and the schedule's `amountIsTotal` flag alone decides meaning (per-installment vs total-to-divide). The `÷` preview and `auto-balances to −<total>` line render for both.

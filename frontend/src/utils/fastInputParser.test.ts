@@ -118,9 +118,12 @@ describe('fastInputParser', () => {
   it('parses "yesterday" as date', () => {
     const result = parseInput('yesterday', 9);
     expect(result.tokens[0].type).toBe('date');
-    const todayDate = new Date();
-    todayDate.setDate(todayDate.getDate() - 1);
-    expect(result.tokens[0].value).toBe(todayDate.toISOString().slice(0, 10));
+    // Expected value built from LOCAL components (matches the parser) — not
+    // toISOString, which is UTC and would disagree in a negative-offset zone.
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(result.tokens[0].value).toBe(expected);
   });
 
   it('parses "y" as yesterday shortcut', () => {
