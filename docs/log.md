@@ -22,6 +22,12 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 - Backend needs no change: series/transaction dates always come from the request body (now correct), and the few `date.today()` defaults are server-local, not UTC.
 - New `dateUtils.test.ts` (+3) locks it — with a fake clock at 2026-07-07 evening, `today()` must be `2026-07-07`. Verified the guard **fails on the old UTC code under `TZ=America/Sao_Paulo`** and passes on the fix. 89 vitest (default + Sao_Paulo TZ) + tsc + eslint green.
 
+## 2026-08-07 — Composer: fix Repeat-wing per-installment rounding
+
+- The Repeat wing computed the per-installment amount with `Math.floor((total/n)*100)/100`, which truncated an **exact** split down by a cent (`2924 ÷ 10` showed `292,39 each · last absorbs rounding` — wrong, and it disagreed with the L0 preview's `292,40`). Floating-point `292.4*100 = 29239.999…` floored to `292,39`.
+- Now the wing mirrors the backend (`ROUND_HALF_UP`, remainder on the last installment): `per = Math.round((total/n)*100)/100`, and the "· last <amount>" note appears **only when a remainder actually exists**. Exact splits show just `2.924,00 ÷ 10 = 292,40 each`; `1.000,00 ÷ 3` shows `333,33 each · last 333,34`. Matches the preview and the created postings.
+- 86 vitest + tsc + eslint green; verified live for both the exact and remainder cases.
+
 ## 2026-08-07 — Composer: `:` total feeds the grid + sticky date + preview polish
 
 - **`1200:12` now populates the posting grid + balance** like `100*12` did. The `:` (total) form used to route the number into a side `scheduleTotal` state the grid never read, so the preview/balance were blank; now both compact forms (`*` and `:`) set the **amount pill**, and the schedule's `amountIsTotal` flag alone decides meaning (per-installment vs total-to-divide). The `÷` preview and `auto-balances to −<total>` line render for both.
