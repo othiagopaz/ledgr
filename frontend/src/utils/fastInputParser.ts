@@ -42,14 +42,23 @@ const DATE_KEYWORDS: Record<string, () => string> = {
   amanha: () => offsetDays(1),
 };
 
+// Local-timezone YYYY-MM-DD — never toISOString().slice(0,10), which is UTC and
+// would roll to the next day on an evening in a negative-offset zone.
+function localISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localISO(new Date());
 }
 
 function offsetDays(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 }
 
 // Date pattern: DD/MM, DD/MM/YYYY, MM/DD, MM/DD/YYYY

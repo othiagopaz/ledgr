@@ -3,6 +3,7 @@ import type { Transaction, TransactionInput } from "../types";
 import { addTransaction, editTransaction, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, formatDateFull, getLocale, formatInstallmentBadge } from "../utils/format";
+import { today } from "../utils/dateUtils";
 import InlineEditor from "./InlineEditor";
 
 interface Props {
@@ -423,7 +424,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
               onClick={() => enterEditMode(NEW_ROW_INDEX)}
             >
               <td style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
-                {formatDateFull(new Date().toISOString().slice(0, 10), operatingCurrency)}
+                {formatDateFull(today(), operatingCurrency)}
               </td>
               <td style={{ color: "var(--text-muted)", fontStyle: "italic" }}>New transaction…</td>
               <td></td>

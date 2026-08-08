@@ -1,13 +1,22 @@
 import { useAppStore } from "../stores/appStore";
 import type { FilterState } from "../types";
 
-export function today(): string {
-  return new Date().toISOString().slice(0, 10);
+/**
+ * Format a Date as YYYY-MM-DD in the **local** timezone.
+ *
+ * NOT `toISOString().slice(0,10)` — that converts to UTC first, so an evening
+ * in a negative-offset zone (e.g. 21:00 BRT = 00:00 next-day UTC) would report
+ * tomorrow's date and mis-date every entry.
+ */
+function iso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-/** Format a Date as YYYY-MM-DD. */
-function iso(d: Date): string {
-  return d.toISOString().slice(0, 10);
+export function today(): string {
+  return iso(new Date());
 }
 
 /**
@@ -208,7 +217,7 @@ export function parseSmartDate(input: string): string {
   if (lower === "y" || lower === "yesterday") {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
+    return iso(d);
   }
   // Try DD/MM/YYYY or MM/DD/YYYY patterns
   const fullMatch = lower.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
