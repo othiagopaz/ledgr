@@ -211,6 +211,24 @@ export default function SeriesView() {
     ? tabSeries
     : tabSeries.filter((s) => s.pending > 0);
 
+  // Column totals for the summary footer, grouped by currency (the list can
+  // mix currencies). `perTxn` = combined per-cycle burden; `remaining` = what's
+  // still to be paid across the visible series (amount_per_txn × pending) — the
+  // "what I have in future installments" figure.
+  const summaryTotals = (() => {
+    const byCur: Record<string, { perTxn: number; remaining: number }> = {};
+    for (const s of filteredSeries) {
+      const cur = s.currency || operatingCurrency;
+      const per = parseFloat(s.amount_per_txn) || 0;
+      const bucket = byCur[cur] || (byCur[cur] = { perTxn: 0, remaining: 0 });
+      bucket.perTxn += per;
+      bucket.remaining += per * s.pending;
+    }
+    return Object.entries(byCur).map(([currency, v]) => ({ currency, ...v }));
+  })();
+  // Number of leading columns before "Per Transaction" (icon, payee, [freq], progress, dates).
+  const leadCols = filter === 'recurring' ? 5 : 4;
+
   function toggleSelect(lineno: number) {
     setSelectedLinenos((prev) => {
       const next = new Set(prev);
@@ -413,6 +431,25 @@ export default function SeriesView() {
                     />
                   ))}
                 </tbody>
+                {filteredSeries.length > 0 && (
+                  <tfoot>
+                    {summaryTotals.map((t) => (
+                      <tr key={t.currency} className="series-summary-foot">
+                        <td colSpan={leadCols} className="series-summary-foot-label">
+                          {summaryTotals.length > 1 ? `Remaining · ${t.currency}` : 'Remaining'}
+                        </td>
+                        <td className="num">
+                          {formatAmount(t.perTxn, t.currency)}
+                          <span className="series-currency-label"> {t.currency}</span>
+                        </td>
+                        <td className="num series-summary-foot-total">
+                          {formatAmount(t.remaining, t.currency)}
+                          <span className="series-currency-label"> {t.currency}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tfoot>
+                )}
               </table>
             </div>
           )}
