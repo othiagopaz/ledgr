@@ -21,13 +21,13 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
   const hints: string[] = ["⌘K search", `P ${viewLabel}`];
 
   if (viewType === "register") {
-    hints.push("N new", "⌘I fast", "⌘⇧I advanced", "Enter edit", "R reconcile", "Del delete");
+    hints.push("N new", "⌘I compose", "Enter edit", "R reconcile", "Del delete");
   } else if (viewType === "accounts") {
     hints.push("↑↓ navigate", "← → expand", "Enter open", "E edit");
   } else if (viewType === "series") {
     hints.push("↑↓ navigate", "Enter edit", "R reconcile", "Space select");
   } else {
-    hints.push("⌘I fast", "⌘⇧I advanced");
+    hints.push("⌘I compose");
   }
 
   if (viewType !== "register" || !account || transactions.length === 0) {

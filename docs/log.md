@@ -9,6 +9,12 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-08-07 — Consolidate Cmd+I into one command
+
+- The old fast/advanced split left **two** shortcuts — `⌘I` (fast) and `⌘⇧I` (advanced) — plus a "⌘⇧I advanced" hint at the bottom of the page. Since the Composer unified everything (multi-posting is just the Split disclosure inside the same modal), that distinction is gone. Now a single **`⌘I` opens the Composer** (`useKeyboardNav` matches `e.code === "KeyI"` regardless of Shift), identical to the palette's "New". StatusBar hints collapsed to `⌘I compose`.
+- Cleanup: removed the now-dead `advanced` mode — `openTxnModal` dropped its `mode` param (only edit-occurrence / blank-compose callers remain), and the orphaned `TxnModalMode` type is gone.
+- tsc + eslint + 89 vitest green; verified live: both `⌘I` and `⌘⇧I` open the same Composer (default line-first, Split one click away — not a pre-opened grid).
+
 ## 2026-08-07 — Fix: dates used UTC instead of local timezone
 
 - `today()` and the date keyword helpers built the string with `new Date().toISOString().slice(0,10)`, which converts to **UTC** first. In a negative-offset zone (e.g. BRT, UTC−3) an evening entry (21:00 local = 00:00 next-day UTC) was stamped with **tomorrow's** date — every register created "today" landed on 08/07 instead of 07/07.

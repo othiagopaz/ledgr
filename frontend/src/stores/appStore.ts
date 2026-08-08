@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode, AccountNode, SeriesSummary, TxnModalMode, PeriodPreset, FilterState, ComposerScope, ComposerOpts } from '../types';
+import type { Transaction, ViewMode, AccountNode, SeriesSummary, PeriodPreset, FilterState, ComposerScope, ComposerOpts } from '../types';
 import type { DrillTarget } from '../components/TransactionDrawer';
 
 interface Tab {
@@ -53,7 +53,7 @@ interface AppState {
   closeComposer: () => void;
   // Back-compat shims — existing call-sites (register rows, Cmd+N, palette,
   // SeriesView) still call these; they now open the Composer.
-  openTxnModal: (txn?: Transaction, mode?: TxnModalMode) => void;
+  openTxnModal: (txn?: Transaction) => void;
   openSeriesModal: (series?: SeriesSummary, defaultType?: 'recurring' | 'installment') => void;
 
   // Drill-down drawer (report cell / budget row → transactions for account+period)
@@ -189,10 +189,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     composerOpen: false, composerTxn: null, composerSeries: null,
     composerScope: 'occurrence', composerInitial: null,
   }),
-  // Shims → Composer.
-  openTxnModal: (txn, mode) => get().openComposer(
-    txn ? { txn } : { initial: mode === 'advanced' ? 'split' : undefined }
-  ),
+  // Shims → Composer. openTxnModal now only opens an occurrence for editing
+  // (a txn) or a blank compose; the old fast/advanced mode split is gone.
+  openTxnModal: (txn) => get().openComposer(txn ? { txn } : undefined),
   openSeriesModal: (series, defaultType) => get().openComposer(
     series ? { series } : (defaultType ? { initial: 'repeat' } : { initial: 'repeat' })
   ),

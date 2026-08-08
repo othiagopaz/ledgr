@@ -103,8 +103,6 @@ export interface OptionsResponse {
 
 // Fast Input types
 
-export type TxnModalMode = 'fast' | 'advanced';
-
 /**
  * A recurring/installment schedule attached to a draft. Its presence turns a
  * one-off into a series: absence ⇒ a plain transaction (`POST /api/transactions`),
