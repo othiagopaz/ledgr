@@ -28,6 +28,12 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 - Now the wing mirrors the backend (`ROUND_HALF_UP`, remainder on the last installment): `per = Math.round((total/n)*100)/100`, and the "· last <amount>" note appears **only when a remainder actually exists**. Exact splits show just `2.924,00 ÷ 10 = 292,40 each`; `1.000,00 ÷ 3` shows `333,33 each · last 333,34`. Matches the preview and the created postings.
 - 86 vitest + tsc + eslint green; verified live for both the exact and remainder cases.
 
+## 2026-08-07 — Series summary: "Remaining" totals footer
+
+- The Recurring/Installments summary table (`SeriesView`) now has a `<tfoot>` totalling the visible series: the **Per Transaction** column sums to the combined per-cycle burden, and the **Total** column sums to what's still to be paid — **remaining = Σ(amount_per_txn × pending)** — so you can see the outstanding future installments at a glance. This is the pending outstanding, NOT the full-plan sum (which would double-count already-paid installments).
+- Totals honour the active tab + the hide-completed toggle (they're computed from `filteredSeries`), and are **grouped by currency** (one footer row each if the list mixes currencies). The label spans the lead columns (`leadCols` = 5 on Recurring with its Frequency column, else 4) so the numbers align under their headers. New `.series-summary-foot*` CSS.
+- Verified live on :8430 copy: Installments → `Remaining 1.949,36 · 21.223,70 BRL` (matches Σ per×pending = 21223.70, distinct from the 28.036,15 full-plan sum); Recurring footer aligns under the 7-column layout. tsc + eslint green.
+
 ## 2026-08-07 — Composer: `:` total feeds the grid + sticky date + preview polish
 
 - **`1200:12` now populates the posting grid + balance** like `100*12` did. The `:` (total) form used to route the number into a side `scheduleTotal` state the grid never read, so the preview/balance were blank; now both compact forms (`*` and `:`) set the **amount pill**, and the schedule's `amountIsTotal` flag alone decides meaning (per-installment vs total-to-divide). The `÷` preview and `auto-balances to −<total>` line render for both.

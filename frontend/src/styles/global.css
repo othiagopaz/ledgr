@@ -2166,6 +2166,12 @@ body {
    when the Total column tightens the layout. */
 .series-summary-table th.num, .series-summary-table td.num { white-space: nowrap; }
 .series-currency-label { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); margin-left: 3px; }
+/* Summary footer — column totals across the visible series. The Remaining
+   (Total) figure is what's still to be paid in future installments. */
+.series-summary-foot td { border-top: 2px solid var(--color-border-default); border-bottom: none; padding-top: 8px; background: var(--color-bg-secondary); }
+.series-summary-foot-label { text-align: right; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-secondary); font-weight: 500; }
+.series-summary-foot .num { font-weight: 500; color: var(--color-text-secondary); }
+.series-summary-foot-total { color: var(--color-text-primary) !important; font-weight: 600 !important; }
 .series-type-cell { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .series-freq-label { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); text-transform: lowercase; letter-spacing: 0.04em; }
 
