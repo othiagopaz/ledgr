@@ -18,8 +18,8 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-0E2247?style=flat-square"></a>
-  <a href="https://github.com/thiagopaz/ledgr/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/thiagopaz/ledgr?style=flat-square&color=0E2247"></a>
-  <a href="https://github.com/thiagopaz/ledgr/releases"><img alt="Release" src="https://img.shields.io/github/v/release/thiagopaz/ledgr?style=flat-square&color=0E2247"></a>
+  <a href="https://github.com/thiagopaz/ledgr/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/othiagopaz/ledgr?style=flat-square&color=0E2247"></a>
+  <a href="https://github.com/thiagopaz/ledgr/releases"><img alt="Release" src="https://img.shields.io/github/v/release/othiagopaz/ledgr?style=flat-square&color=0E2247"></a>
 </p>
 
 ---
