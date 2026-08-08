@@ -1172,7 +1172,12 @@ function SchedulePanel({ schedule, total, draftAmount, multiposting, currency, o
   // the whole purchase and each installment is total ÷ N (remainder on last).
   const n = schedule.count && schedule.count > 0 ? schedule.count : 0;
   const amtNum = parseFloat((draftAmount || '0').replace(',', '.'));
-  const per = n > 0 ? Math.floor((amtNum / n) * 100) / 100 : 0;
+  // Mirror the backend (ROUND_HALF_UP, remainder on the LAST installment). Using
+  // Math.round — not floor — so an exact split like 2924/10 = 292,40 shows 292,40,
+  // and the "last absorbs rounding" note only appears when a remainder truly exists.
+  const per = n > 0 ? Math.round((amtNum / n) * 100) / 100 : 0;
+  const lastCent = n > 0 ? Math.round((amtNum - per * n) * 100) / 100 : 0;
+  const hasRemainder = Math.abs(lastCent) >= 0.005;
   return (
     <div className="cx-addon right">
       <div className="cx-panel-head"><span className="cx-pt">↻ Repeat</span>
@@ -1207,7 +1212,7 @@ function SchedulePanel({ schedule, total, draftAmount, multiposting, currency, o
             {!multiposting && n > 0 && amtNum > 0 && (
               <div className="cx-calc">
                 {schedule.amountIsTotal
-                  ? <>{formatAmount(amtNum, currency)} ÷ {n} = <b>{formatAmount(per, currency)}</b> each · last absorbs rounding</>
+                  ? <>{formatAmount(amtNum, currency)} ÷ {n} = <b>{formatAmount(per, currency)}</b> each{hasRemainder ? <> · last {formatAmount(per + lastCent, currency)}</> : null}</>
                   : <><b>{formatAmount(amtNum, currency)}</b> × {n} = {formatAmount(amtNum * n, currency)} total</>}
               </div>
             )}
