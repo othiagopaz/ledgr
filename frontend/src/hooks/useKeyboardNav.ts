@@ -14,17 +14,11 @@ export function useKeyboardNav() {
         return;
       }
 
-      // Cmd+Shift+I → Advanced mode (check before Cmd+I)
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyI") {
+      // Cmd+I → open the Composer. One command — the old fast/advanced split
+      // is gone; Split (multi-posting) is a disclosure inside the same modal.
+      if ((e.metaKey || e.ctrlKey) && e.code === "KeyI") {
         e.preventDefault();
-        useAppStore.getState().openTxnModal(undefined, 'advanced');
-        return;
-      }
-
-      // Cmd+I → Fast mode
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === "KeyI") {
-        e.preventDefault();
-        useAppStore.getState().openTxnModal(undefined, 'fast');
+        useAppStore.getState().openComposer();
         return;
       }
 
