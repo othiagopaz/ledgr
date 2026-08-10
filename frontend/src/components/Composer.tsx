@@ -262,10 +262,17 @@ export default function Composer({ onMutated }: ComposerProps) {
     });
   }, [date, isEditingTxn]);
 
-  // Occurrence scope: editing one txn that belongs to a series.
+  // Occurrence scope: editing one txn that belongs to a series. Drives the
+  // "editing this one · edit entire series →" banner, which only makes sense
+  // when there IS a series to escalate to.
   const occScope = isEditingTxn && inSeries && scope !== 'series';
   // Series scope: editing the whole series.
   const seriesScope = isEditingSeries && !occScope;
+  // Save routing: ANY open-with-a-txn that isn't a whole-series edit is an edit
+  // of that transaction (PUT), series member or not. Without this, editing a
+  // plain multi-posting txn fell through to saveTransaction() and POSTed a
+  // duplicate instead of updating the original.
+  const txnEditScope = isEditingTxn && !seriesScope;
 
   // ── derived postings (for preview + save) ──────────────────────────────
   const postings: Row[] = useMemo(() => {
@@ -594,8 +601,17 @@ export default function Composer({ onMutated }: ComposerProps) {
     if (saving) return;
     setError(null); setSaving(true);
     try {
-      if (occScope && txn?.lineno != null) return await saveOccurrence();
       if (seriesScope && resolvedSeries) return await saveSeriesEdit();
+      if (txnEditScope) {
+        // We opened on an existing txn: this must be an UPDATE. If the lineno
+        // is missing we cannot address the entry — surface that instead of
+        // silently falling through and POSTing a duplicate.
+        if (txn?.lineno == null) {
+          setError("Cannot edit: this transaction has no source line reference.");
+          return;
+        }
+        return await saveOccurrence();
+      }
       if (schedule) return await saveNewSeries();
       return await saveTransaction();
     } catch (err) {

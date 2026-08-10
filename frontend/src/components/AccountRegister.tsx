@@ -149,12 +149,16 @@ export default function AccountRegister({ account, transactions, openingBalance,
   const openTxnModal = useAppStore((s) => s.openTxnModal);
 
   const enterEditMode = useCallback((index: number) => {
+    // Always mark the row selected first — even for the modal path. Otherwise
+    // clicking a split row left selectedRowIndex null, so pressing Delete
+    // afterwards did nothing.
+    setSelectedRowIndex(index);
     // For split transactions (>2 postings), open modal instead of inline editor
     if (index < rows.length && rows[index].txn.postings.length > 2) {
+      setEditingRowIndex(null);
       openTxnModal(rows[index].txn);
       return;
     }
-    setSelectedRowIndex(index);
     setEditingRowIndex(index);
   }, [rows, openTxnModal]);
 
@@ -363,9 +367,17 @@ export default function AccountRegister({ account, transactions, openingBalance,
                       title="Delete transaction"
                       disabled={deletingLineno === row.txn.lineno}
                       onClick={() => {
+                        // Select this row and hand focus back to the register:
+                        // the cell stops propagation (so the row's own onClick
+                        // never runs), which otherwise left nothing selected and
+                        // focus on the button — making a follow-up Delete
+                        // keypress a no-op.
+                        setSelectedRowIndex(i);
+                        setEditingRowIndex(null);
                         if (confirm("Delete this transaction?")) {
                           handleDelete(row.txn.lineno!);
                         }
+                        requestAnimationFrame(() => registerRef.current?.focus());
                       }}
                     >
                       &times;
