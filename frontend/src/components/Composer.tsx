@@ -4,6 +4,7 @@ import {
   fetchAccountNames, fetchPayees, fetchTags, fetchSuggestions,
   addTransaction, editTransaction, fetchTransactions, deleteTransaction,
   createSeries, extendSeries, cancelSeries, reviseSeries, fetchSeries,
+  fetchSeriesTransactions,
 } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { parseInput } from "../utils/fastInputParser";
@@ -106,18 +107,18 @@ export default function Composer({ onMutated }: ComposerProps) {
   const resolvedSeries: SeriesSummary | null =
     seriesListQ.data?.series.find((s) => s.series_id === seriesId) || seedSeries || null;
 
-  // Per-occurrence transactions for the series (for the occurrence list). Fetched
-  // by a series account, filtered client-side to this series' metadata.
-  const occAccount = resolvedSeries?.account_to || resolvedSeries?.account_from
-    || resolvedSeries?.postings.find(p => p.account)?.account || null;
+  // Per-occurrence transactions for the series (for the occurrence list).
+  // Queried BY SERIES ID — not by account. Series membership is metadata, so
+  // an account-scoped fetch dropped every occurrence whose legs point
+  // elsewhere: after a revise re-points the pending run, the confirmed ones
+  // keep the old account and used to vanish from this list even though the
+  // header still counted them. The backend returns them sorted, oldest first.
   const occQ = useQuery({
-    queryKey: ["transactions", "series-occ", occAccount],
-    queryFn: () => fetchTransactions(occAccount!, undefined, undefined, "combined"),
-    enabled: inSeries && !!occAccount,
+    queryKey: ["series-transactions", seriesId],
+    queryFn: () => fetchSeriesTransactions(seriesId!),
+    enabled: inSeries && !!seriesId,
   });
-  const occurrences: Transaction[] = (occQ.data?.transactions || [])
-    .filter(t => t.metadata?.['ledgr-series'] === seriesId)
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const occurrences: Transaction[] = occQ.data?.transactions || [];
 
   // ── smart line + pills ────────────────────────────────────────────────────
   const [inputValue, setInputValue] = useState("");
@@ -174,6 +175,8 @@ export default function Composer({ onMutated }: ComposerProps) {
   function refreshSeries(msg: string) {
     queryClient.invalidateQueries({ queryKey: ["series"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    // The occurrence list has its own key — ["series"] does not prefix-match it.
+    queryClient.invalidateQueries({ queryKey: ["series-transactions"] });
     onMutated();
     setFlash(msg);
     setTimeout(() => setFlash(null), 2600);
@@ -243,6 +246,9 @@ export default function Composer({ onMutated }: ComposerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedSeries, scope]);
 
+  // Composing: cursor goes to the smart line. When the grid is the entry point
+  // (editing a txn / a whole series) PostingGrid focuses its own first account
+  // cell — it owns that ref, so it is populated by the time its effect runs.
   useEffect(() => { if (!editing) inputRef.current?.focus(); }, [editing]);
 
   // Keep the date pill in sync with the `date` field (typed token, Details edit,
@@ -707,6 +713,9 @@ export default function Composer({ onMutated }: ComposerProps) {
 
   function finish(closeAfter = false) {
     onMutated();
+    // Keep the occurrence list in step — editing one occurrence changes a row
+    // in it, and its key is not prefix-matched by ["transactions"].
+    queryClient.invalidateQueries({ queryKey: ["series-transactions"] });
     if (closeAfter || !continueMode) { close(); return; }
     // Reset for the next entry — but KEEP the date so a run of same-day entries
     // reuses it (the user sets the date once). The date pill is re-seeded from
@@ -770,12 +779,24 @@ export default function Composer({ onMutated }: ComposerProps) {
   }
 
   // ── keyboard: modal-level ────────────────────────────────────────────────
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") {
+  // Escape lives on a window listener, not the React onKeyDown below: that
+  // handler sits on a non-focusable div, so it only ever fired while focus
+  // happened to be inside the modal. Opening a txn for editing skips the
+  // input autofocus (see the !editing effect above), which left nothing
+  // focused and Escape dead. The inner dropdown/route-picker handlers call
+  // stopPropagation, so their Escape still wins over this one.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
       if (reviseOpen) { setReviseOpen(false); return; }
       if (showCancel) { setShowCancel(false); return; }
-      close(); return;
+      close();
     }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reviseOpen, showCancel, close]);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter") {
       const isLine = (e.target as HTMLElement).classList?.contains('cx-line-input');
       if (isLine && !split && !e.metaKey && !e.ctrlKey && dropdownItems.length === 0) {
@@ -934,7 +955,7 @@ export default function Composer({ onMutated }: ComposerProps) {
 
             {/* postings: preview (L0) or grid (split/editing) */}
             {(split || editing) ? (
-              <PostingGrid rows={rows} onChange={updateRow} onAdd={addRow} onRemove={removeRow} accountNames={accountNames} balance={balance} currencyPlaceholder={operatingCurrency} />
+              <PostingGrid rows={rows} onChange={updateRow} onAdd={addRow} onRemove={removeRow} accountNames={accountNames} balance={balance} currencyPlaceholder={operatingCurrency} autoFocusFirst={editing} />
             ) : (
               <PostingPreview postings={postings} balance={balance} schedule={schedule} currency={operatingCurrency} />
             )}
@@ -1055,10 +1076,25 @@ function PostingPreview({ postings, balance, schedule, currency }: { postings: R
   );
 }
 
-function PostingGrid({ rows, onChange, onAdd, onRemove, accountNames, balance, currencyPlaceholder }: {
+function PostingGrid({ rows, onChange, onAdd, onRemove, accountNames, balance, currencyPlaceholder, autoFocusFirst }: {
   rows: Row[]; onChange: (i: number, f: keyof Row, v: string) => void; onAdd: () => void; onRemove: (i: number) => void;
   accountNames: string[]; balance: BalanceState; currencyPlaceholder: string;
+  autoFocusFirst?: boolean;
 }) {
+  const firstAccountRef = useRef<HTMLInputElement>(null);
+  // Land the cursor on the first account cell so Tab walks the postings from the
+  // top. Owned here because the ref must be populated before the effect runs —
+  // a parent effect fires before this child's ref is attached.
+  useEffect(() => {
+    if (!autoFocusFirst) return;
+    const el = firstAccountRef.current;
+    if (!el) return;
+    el.focus();
+    // Caret at the end rather than selecting the value, so the first keystroke
+    // extends the account name instead of replacing it.
+    const n = el.value.length;
+    el.setSelectionRange(n, n);
+  }, [autoFocusFirst]);
   // Uses the app's canonical posting-row markup (was the old AdvancedInput) so
   // the grid matches every other form in Ledgr.
   return (
@@ -1071,7 +1107,7 @@ function PostingGrid({ rows, onChange, onAdd, onRemove, accountNames, balance, c
       </div>
       {rows.map((r, i) => (
         <div key={r.id} className="posting-row">
-          <InlineAutocomplete value={r.account} onChange={v => onChange(i, 'account', v)} options={accountNames} placeholder="Account" className="account-input" />
+          <InlineAutocomplete value={r.account} onChange={v => onChange(i, 'account', v)} options={accountNames} placeholder="Account" className="account-input" inputRef={i === 0 ? firstAccountRef : undefined} />
           <input className="amount-input" type="number" step="any" value={r.amount} placeholder="auto" onChange={e => onChange(i, 'amount', e.target.value)} />
           <input className="currency-input" value={r.currency} placeholder={currencyPlaceholder} onChange={e => onChange(i, 'currency', e.target.value.toUpperCase())} />
           <button type="button" className="remove-btn" onClick={() => onRemove(i)} disabled={rows.length <= 2} title="Remove posting">&times;</button>
