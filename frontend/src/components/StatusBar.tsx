@@ -20,10 +20,18 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
   const viewLabel = viewMode === 'combined' ? 'Actual + Planned' : 'Actual';
   const hints: string[] = ["⌘K search", `P ${viewLabel}`];
 
+  // Keep these in step with the real key handlers:
+  //   register → AccountRegister.handleKeyDown
+  //   accounts → AccountTree (keydown effect)
+  //   series   → SeriesView.handleKeyDown
+  // Enter and E differ on purpose: Enter edits in place, E opens the Composer.
   if (viewType === "register") {
-    hints.push("N new", "⌘I compose", "Enter edit", "R reconcile", "Del delete");
+    hints.push(
+      "↑↓ navigate", "N new", "⌘I compose",
+      "Enter edit", "E modal", "R reconcile", "Del delete",
+    );
   } else if (viewType === "accounts") {
-    hints.push("↑↓ navigate", "← → expand", "Enter open", "E edit");
+    hints.push("↑↓ navigate", "← → expand", "Space expand", "Enter open", "E edit account");
   } else if (viewType === "series") {
     hints.push("↑↓ navigate", "Enter edit", "R reconcile", "Space select");
   } else {

@@ -221,7 +221,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
           })),
         });
       }
-    } else if (e.key === "e" && selectedRowIndex !== null && selectedRowIndex < rows.length) {
+    } else if ((e.key === "e" || e.key === "E") && selectedRowIndex !== null && selectedRowIndex < rows.length) {
       e.preventDefault();
       openTxnModal(rows[selectedRowIndex].txn);
     } else if (e.key === "Delete" && selectedRowIndex !== null && selectedRowIndex < rows.length) {
@@ -238,8 +238,14 @@ export default function AccountRegister({ account, transactions, openingBalance,
       tabIndex={0}
       ref={registerRef}
       onKeyDown={handleKeyDown}
-      /* Grab focus when user clicks anywhere in the register area */
-      onClick={() => registerRef.current?.focus()}
+      /* Grab focus when the user clicks the register area — but not when that
+         click opened an overlay (clicking a split row opens the Composer, which
+         focuses its own first field). This handler runs last as the event
+         bubbles, so an unconditional focus() here would always steal it back. */
+      onClick={() => {
+        if (document.querySelector(".modal-overlay")) return;
+        registerRef.current?.focus();
+      }}
     >
       <div className="register-header">{shortName}</div>
       <table>

@@ -451,9 +451,18 @@ body {
 }
 
 .status-bar { gap: 12px; }
-.status-bar .status-group { display: flex; align-items: center; gap: 12px; }
+.status-bar .status-group { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .status-bar .status-item { display: flex; align-items: center; gap: 4px; }
-.status-bar .kbd-hints { margin-left: auto; color: var(--color-text-tertiary); }
+.status-bar .kbd-hints {
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  /* The hint list is the expendable half of the bar: keep it on one line and
+     let it clip rather than wrap or squeeze the balance figures beside it. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 
 /* Account tree */
 .acct-tree { font-size: 12px; outline: none; user-select: none; }
