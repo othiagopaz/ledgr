@@ -1,5 +1,6 @@
 import type {
   AccountsResponse,
+  Transaction,
   TransactionsResponse,
   MutationResponse,
   TransactionInput,
@@ -307,6 +308,18 @@ export async function fetchSeries(
   appendFilters(params, filters);
   const qs = params.toString();
   return get(`/api/series${qs ? "?" + qs : ""}`);
+}
+
+/** Every occurrence of a series, oldest first.
+ *
+ * Queries by series id rather than by account: membership is metadata, so this
+ * still returns occurrences whose legs point at a different account (e.g. the
+ * already-confirmed ones after a revise re-pointed the pending run).
+ */
+export async function fetchSeriesTransactions(
+  seriesId: string,
+): Promise<{ transactions: Transaction[]; count: number }> {
+  return get(`/api/series/${encodeURIComponent(seriesId)}/transactions`);
 }
 
 export async function createSeries(

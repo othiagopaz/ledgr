@@ -1314,5 +1314,67 @@ class TestReviseRecurringSeries:
             assert by_acct["Assets:Bank:Checking"] == "-120"
 
 
+class TestGetSeriesTransactions:
+    """GET /api/series/{id}/transactions — membership is metadata, not account."""
+
+    def test_returns_every_occurrence_sorted(
+        self, series_client: TestClient
+    ) -> None:
+        r = series_client.get("/api/series/split-fix003/transactions")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["count"] == 3
+        dates = [t["date"] for t in body["transactions"]]
+        assert dates == sorted(dates)
+        assert all(
+            t["metadata"]["ledgr-series"] == "split-fix003"
+            for t in body["transactions"]
+        )
+
+    def test_includes_occurrences_on_other_accounts(
+        self, series_client: TestClient
+    ) -> None:
+        # Regression: revising re-points the PENDING run to a new account while
+        # confirmed occurrences keep the old one. Gathering occurrences by a
+        # single representative account then dropped the confirmed ones — the
+        # list showed "2 of 3" while the summary still counted 3. Querying by
+        # series id must return every occurrence regardless of account.
+        r = series_client.post(
+            "/api/series/split-fix003/revise",
+            json={
+                "end_date": "2025-03-01",
+                "postings": [
+                    {"account": "Expenses:Food", "amount": "60.00"},
+                    {"account": "Expenses:Entertainment", "amount": "40.00"},
+                    {"account": "Assets:Bank:Savings", "amount": "-100.00"},
+                ],
+            },
+        )
+        assert r.status_code == 200, r.text
+
+        body = series_client.get(
+            "/api/series/split-fix003/transactions"
+        ).json()
+        assert body["count"] == 3, "confirmed occurrence must not disappear"
+
+        # The two runs really do live on different accounts...
+        accounts = {
+            p["account"]
+            for t in body["transactions"]
+            for p in t["postings"]
+            if p["amount"] and Decimal(p["amount"]) < 0
+        }
+        assert accounts == {"Assets:Bank:Checking", "Assets:Bank:Savings"}
+        # ...and the summary count agrees with the list (the original symptom).
+        assert _series(series_client, "split-fix003")["total"] == body["count"]
+
+    def test_unknown_series_returns_empty(
+        self, series_client: TestClient
+    ) -> None:
+        r = series_client.get("/api/series/does-not-exist/transactions")
+        assert r.status_code == 200
+        assert r.json() == {"transactions": [], "count": 0}
+
+
 def confirmed_count(client: TestClient, sid: str) -> int:
     return _series(client, sid).get("confirmed", -1)

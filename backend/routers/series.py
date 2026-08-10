@@ -19,6 +19,7 @@ from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
 from ledger import get_filtered_entries, get_ledger, reload_ledger
+from serializers import serialize_transaction
 from series import (
     compute_dates,
     generate_series_id,
@@ -375,6 +376,27 @@ def list_series(
     summaries.sort(key=lambda s: s.get("first_date", ""), reverse=True)
 
     return {"series": summaries}
+
+
+@router.get("/api/series/{series_id}/transactions")
+def get_series_transactions(
+    series_id: str,
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """List every transaction belonging to a series, oldest first.
+
+    Deliberately reads ``ledger.all_entries`` rather than the filtered or
+    account-scoped entries: series membership is a property of the
+    ``ledgr-series`` metadata, not of any account. Callers used to gather a
+    series' occurrences by querying one representative account, which silently
+    dropped occurrences posted to a different account — e.g. after a revise
+    re-pointed a leg, the already-confirmed occurrences kept the old account
+    and disappeared from the list while the counts still said otherwise.
+    """
+    txns = _get_series_transactions(ledger.all_entries, series_id)
+    txns.sort(key=lambda t: (t.date, t.meta.get("lineno") or 0))
+    result = [serialize_transaction(t) for t in txns]
+    return {"transactions": result, "count": len(result)}
 
 
 @router.post("/api/series/{series_id}/extend")
