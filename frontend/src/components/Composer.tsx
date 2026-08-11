@@ -671,11 +671,7 @@ export default function Composer({ onMutated }: ComposerProps) {
 
   async function saveNewSeries() {
     const v = validatePostings(); if (v) { setError(v); return; }
-    const specs: PostingSpec[] = postings.filter(p => p.account.trim()).map(p => ({
-      account: p.account.trim(),
-      amount: p.amount.trim() ? p.amount.trim() : null,
-      currency: (p.currency || operatingCurrency).trim() || null,
-    }));
+    const specs: PostingSpec[] = postingInputs();
     const s = schedule!;
     const narr = effectiveNarration();
     if (!payee.trim() && !narr.trim()) { setError("Payee or narration is required."); return; }
@@ -697,11 +693,7 @@ export default function Composer({ onMutated }: ComposerProps) {
 
   async function saveSeriesEdit() {
     // Series scope save = revise the plan with the current schedule + postings.
-    const specs: PostingSpec[] = postings.filter(p => p.account.trim()).map(p => ({
-      account: p.account.trim(),
-      amount: p.amount.trim() ? p.amount.trim() : null,
-      currency: (p.currency || operatingCurrency).trim() || null,
-    }));
+    const specs: PostingSpec[] = postingInputs();
     const s = schedule;
     const body = s?.kind === 'installment'
       ? { postings: specs.length >= 2 ? specs : undefined, count: s.count, amount_is_total: !!s.amountIsTotal }

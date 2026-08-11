@@ -379,8 +379,12 @@ export interface BudgetResponse {
 // Series types
 
 export interface PostingSpec {
+  /** Numeric, never a locale-formatted string: the backend parses this as a
+   * Decimal, so a comma-decimal form like "342,06" is rejected with a 422.
+   * Build these with the Composer's postingInputs(), which runs the raw pill
+   * text through toNum(). */
   account: string;
-  amount: string | null;   // null = auto-balance
+  amount: number | null;   // null = auto-balance
   currency: string | null;
 }
 
