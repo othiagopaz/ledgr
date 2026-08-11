@@ -3308,6 +3308,14 @@ body {
 .cx-occ-lbl { font-weight: 500; }
 .cx-occ-d { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); }
 .cx-occ-amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
+/* Plan total under the occurrence list. Right padding matches the row's delete
+   gutter (9px + 15px glyph + 9px) so the amount aligns with the column above. */
+.cx-occ-total { margin-top: 7px; padding: 7px 33px 0 9px; border-top: 1px solid var(--color-border-default); }
+.cx-occ-total-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+.cx-occ-total-lbl { font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--color-text-secondary); }
+.cx-occ-total-amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+.cx-occ-total-split { display: flex; justify-content: space-between; gap: 10px; margin-top: 3px; font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); }
+
 .cx-occ-hint { font-size: 11px; line-height: 1.45; color: var(--color-text-tertiary); }
 .cx-occ-hint b { color: var(--color-text-secondary); font-weight: 600; }
 

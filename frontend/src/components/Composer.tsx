@@ -1283,6 +1283,18 @@ function SeriesPanel({ series, occurrences, onEditOccurrence, onDeleteOccurrence
   const [extending, setExtending] = useState(false);
   const [end, setEnd] = useState("");
   const pct = series.total ? Math.round((series.confirmed / series.total) * 100) : 0;
+
+  // Plan total = what the whole series costs, split by what's already posted vs
+  // still owed. Summed from the occurrences actually on screen (not count × per-
+  // installment) so an edited or deleted occurrence is reflected honestly.
+  const totals = useMemo(() => {
+    let posted = 0, owed = 0;
+    for (const t of occurrences) {
+      const mag = txnMagnitude(t);
+      if (t.flag === '!') owed += mag; else posted += mag;
+    }
+    return { posted, owed, all: posted + owed };
+  }, [occurrences]);
   return (
     <div className="cx-addon right">
       <div className="cx-panel-head"><span className="cx-pt">{inst ? '#' : '↻'} Series</span></div>
@@ -1316,6 +1328,22 @@ function SeriesPanel({ series, occurrences, onEditOccurrence, onDeleteOccurrence
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Plan total — sits under the scrolling list so it stays visible. */}
+        {occurrences.length > 0 && (
+          <div className="cx-occ-total">
+            <div className="cx-occ-total-row">
+              <span className="cx-occ-total-lbl">Total</span>
+              <span className="cx-occ-total-amt">{formatAmount(totals.all, series.currency)}</span>
+            </div>
+            {totals.posted > 0 && totals.owed > 0 && (
+              <div className="cx-occ-total-split">
+                <span>{formatAmount(totals.posted, series.currency)} posted</span>
+                <span>{formatAmount(totals.owed, series.currency)} remaining</span>
+              </div>
+            )}
           </div>
         )}
 
