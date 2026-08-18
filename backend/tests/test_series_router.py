@@ -1248,10 +1248,10 @@ class TestReviseRecurringSeries:
             },
         )
         s = _series(series_client, "tv-fixture001")
-        assert s["amount_per_txn"] == "600", "summary must show the pending amount"
+        assert s["amount_per_txn"] == "600.00", "summary must show the pending amount"
         # the representative postings also reflect 600
         pos = [p for p in s["postings"] if p["amount"] and float(p["amount"]) > 0]
-        assert pos[0]["amount"] == "600"
+        assert pos[0]["amount"] == "600.00"
 
     def test_add_installments_keeps_pending_amount(
         self, series_client: TestClient
@@ -1273,7 +1273,7 @@ class TestReviseRecurringSeries:
             key=lambda t: t["date"],
         )
         assert len(pend) == 3
-        assert all(t["postings"][0]["amount"] == "600" for t in pend)
+        assert all(t["postings"][0]["amount"] == "600.00" for t in pend)
 
     def test_revise_multiposting_applies_to_whole_pending_run(
         self, series_client: TestClient
@@ -1309,9 +1309,9 @@ class TestReviseRecurringSeries:
         assert len(pending) == 2
         for t in pending:
             by_acct = {p["account"]: p["amount"] for p in t["postings"]}
-            assert by_acct["Expenses:Food"] == "70"
-            assert by_acct["Expenses:Entertainment"] == "50"
-            assert by_acct["Assets:Bank:Checking"] == "-120"
+            assert by_acct["Expenses:Food"] == "70.00"
+            assert by_acct["Expenses:Entertainment"] == "50.00"
+            assert by_acct["Assets:Bank:Checking"] == "-120.00"
 
 
 class TestGetSeriesTransactions:

@@ -18,6 +18,7 @@ from serializers import (
     build_balance_tree,
     build_report_tree,
     decimal_to_report_number,
+    quantize_amount,
     serialize_account_node,
     serialize_error,
     serialize_inventory,
@@ -410,3 +411,70 @@ class TestAccountTypeOrder:
 
     def test_assets_first(self) -> None:
         assert ACCOUNT_TYPE_ORDER["Assets"] == 0
+
+
+class TestQuantizeAmount:
+    """``quantize_amount`` — precision normalization on the write path.
+
+    Guards the silent-imbalance bug: beancount quantizes an elided posting's
+    interpolated value to the smallest precision in the transaction, then
+    checks the result against a tolerance inferred from that same precision.
+    A single-decimal amount (``38.2``) therefore both mis-rounds the
+    interpolation and widens the tolerance enough to hide the residual.
+    """
+
+    def test_pads_to_two_decimals(self) -> None:
+        assert str(quantize_amount(Decimal("38.2"))) == "38.20"
+
+    def test_pads_integer(self) -> None:
+        assert str(quantize_amount(Decimal("38"))) == "38.00"
+
+    def test_leaves_two_decimals_alone(self) -> None:
+        assert str(quantize_amount(Decimal("219.04"))) == "219.04"
+
+    def test_preserves_higher_precision(self) -> None:
+        """FX rates / fund units / crypto must never be rounded to cents."""
+        assert str(quantize_amount(Decimal("0.00012345"))) == "0.00012345"
+
+    def test_negative_amount(self) -> None:
+        assert str(quantize_amount(Decimal("-120"))) == "-120.00"
+
+    def test_elided_posting_balances_after_normalization(self) -> None:
+        """End-to-end: the real Clickbus shape must sum to zero once written.
+
+        With ``38.2`` the interpolated leg lands at ``219.0`` and the txn is
+        off by 0.04 — inside beancount's inferred 0.05 tolerance, so it loads
+        with zero errors. Normalizing to ``38.20`` pins interpolation to 2dp.
+        """
+        from beancount import loader
+        from beancount.parser import printer
+
+        postings = [
+            data.Posting(
+                "Liabilities:CreditCard:X",
+                amt_mod.Amount(quantize_amount(Decimal("-257.24")), "BRL"),
+                None, None, None, None,
+            ),
+            data.Posting("Expenses:Travel", None, None, None, None, None),
+            data.Posting(
+                "Assets:Receivables:Y",
+                amt_mod.Amount(quantize_amount(Decimal("38.2")), "BRL"),
+                None, None, None, None,
+            ),
+        ]
+        txn = data.Transaction(
+            data.new_metadata("f", 0), datetime.date(2026, 8, 11), "*",
+            "Clickbus", "Passagem", frozenset(), frozenset(), postings,
+        )
+        header = (
+            "2000-01-01 open Liabilities:CreditCard:X BRL\n"
+            "2000-01-01 open Expenses:Travel BRL\n"
+            "2000-01-01 open Assets:Receivables:Y BRL\n"
+        )
+        entries, errors, _ = loader.load_string(
+            header + printer.format_entry(txn)
+        )
+        assert errors == []
+        loaded = [e for e in entries if isinstance(e, data.Transaction)][0]
+        total = sum(p.units.number for p in loaded.postings if p.units)
+        assert total == Decimal("0")
