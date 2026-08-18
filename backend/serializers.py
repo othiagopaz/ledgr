@@ -16,7 +16,7 @@ Rules (AGENTS.md §6):
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from beancount.core import data, inventory, realization
@@ -187,6 +187,39 @@ def serialize_error(error: Any) -> dict[str, Any]:
             else None
         ),
     }
+
+
+# ------------------------------------------------------------------
+# Write helpers — precision normalization
+# ------------------------------------------------------------------
+
+def quantize_amount(value: Decimal) -> Decimal:
+    """Normalize a monetary value to exactly 2 decimal places for writing.
+
+    Amounts Ledgr writes to the ledger go through here.  Beancount's printer
+    preserves the precision it is handed, so a user typing ``38.2`` would
+    otherwise land in the file as ``38.2`` — and that single decimal place
+    breaks auto-balancing in a way that fails *silently*:
+
+    * Beancount quantizes an elided posting's interpolated value to the
+      smallest precision present in the transaction.  With ``38.2`` in the
+      mix, an interpolated ``219.04`` is rounded to ``219.0`` — 4 centavos
+      vanish and the transaction no longer sums to zero.
+    * It then re-checks the balance against a tolerance inferred from that
+      same precision (1 dp x 0.5 = ``0.05``), so the 0.04 residual fits
+      inside the tolerance and no error is ever raised.
+
+    Writing ``38.20`` instead pins both mechanisms to 2 dp: interpolation
+    rounds correctly and the tolerance tightens to ``0.005``.
+
+    Only ever *adds* precision — a value that already carries more than 2
+    decimals (an FX rate, a fund unit, a crypto holding) is returned
+    untouched, since rounding those would destroy real data.  Callers apply
+    this to posting ``units`` only; ``cost``/``price`` keep their precision.
+    """
+    if -value.as_tuple().exponent > 2:
+        return value
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 # ------------------------------------------------------------------

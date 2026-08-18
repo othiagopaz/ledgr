@@ -14,6 +14,8 @@ from typing import Literal
 from beancount.core import amount as amt_mod, data
 from dateutil.relativedelta import relativedelta
 
+from serializers import quantize_amount
+
 #: Recurring cadence. Installments are always a fixed count and do not carry
 #: a frequency. Missing metadata reads back as ``"monthly"`` (see routers).
 Frequency = Literal["weekly", "monthly", "yearly"]
@@ -218,7 +220,7 @@ def generate_series_transactions(
                 postings.append(
                     data.Posting(
                         spec["account"],
-                        amt_mod.Amount(scaled, cur),
+                        amt_mod.Amount(quantize_amount(scaled), cur),
                         None, None, None, None,
                     )
                 )

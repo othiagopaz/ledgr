@@ -19,7 +19,7 @@ from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
 from ledger import get_filtered_entries, get_ledger, reload_ledger
-from serializers import serialize_transaction
+from serializers import quantize_amount, serialize_transaction
 
 router = APIRouter()
 
@@ -68,7 +68,7 @@ def _build_bc_postings(postings: list[PostingIn]) -> list[data.Posting]:
         cost = None
         price = None
         if p.amount is not None and p.currency:
-            units = amt_mod.Amount(p.amount, p.currency)
+            units = amt_mod.Amount(quantize_amount(p.amount), p.currency)
         if p.cost is not None and p.cost_currency:
             cost = data.CostSpec(p.cost, None, p.cost_currency, None, None, False)
         if p.price is not None and p.price_currency:

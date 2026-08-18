@@ -19,7 +19,7 @@ from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
 from ledger import get_filtered_entries, get_ledger, reload_ledger
-from serializers import serialize_transaction
+from serializers import quantize_amount, serialize_transaction
 from series import (
     compute_dates,
     generate_series_id,
@@ -597,7 +597,7 @@ def _build_installments_by_seq(
                     amt = (amt * scale).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 postings.append(
                     data.Posting(
-                        spec["account"], amt_mod.Amount(amt, cur),
+                        spec["account"], amt_mod.Amount(quantize_amount(amt), cur),
                         None, None, None, None,
                     )
                 )
