@@ -1,6 +1,6 @@
 ---
 type: module
-last_updated: 2026-08-06
+last_updated: 2026-08-19
 ---
 
 # Cash Flow Statement — the only custom accounting
@@ -135,8 +135,8 @@ operating and the capital element as financing."*
      reconciling with the opening/closing balance. **Invariant:** per currency,
      the emitted item amounts sum to the cash-leg total, so `closing == opening +
      net` for every period.
-4. Group by category and sum. Section subtotal always equals the sum of its line
-   items (they are the same items).
+4. Group by category and sum. Section subtotal always equals the sum of the
+   breakdown's **top-level** nodes — see [Breakdown shape](#breakdown-shape).
 
 Transactions with no cash postings (e.g. `Income:Interest → Assets:Investments:Float` or a credit-card *purchase* `Expenses:Food → Liabilities:CreditCard`) are skipped entirely — no cash moved.
 
@@ -148,12 +148,50 @@ cash↔cash **transfer** among **3 or more** cash accounts in one transaction (a
 attribution, mixed operating/investing transactions no longer produce a "Split"
 row — each counterpart appears under its own name in its own section.
 
-## Investing breakdown labels
+## Breakdown shape
 
-Investing items strip the `Assets:` prefix from the counterpart name for readability:
+Each section's `items` is a **tree** of counterpart accounts, built by
+`build_report_tree` in [`modules.md`](modules.md)'s `serializers.py` — the same
+function the Income Statement uses. Every node carries:
 
-- `Assets:Investments:Account` → `"Investments:Account"`
-- `Assets:Broker:XP` → `"Broker:XP"`
+| Field       | Meaning                                                       |
+|-------------|---------------------------------------------------------------|
+| `name`      | Leaf segment only — the display label                         |
+| `full_name` | Full account path — the drill-down target                     |
+| `totals`    | period → number, the node **and its descendants**             |
+| `total`     | Sum across periods                                            |
+| `children`  | Nested nodes                                                  |
+
+**Why a tree.** Two counterparts can share a leaf name — a deferred-income
+release touches `Assets:Reserva:Bonus`, `Liabilities:Deferred:Bonus` and
+`Income:Bonus` in one transaction, and the flat breakdown rendered all three as
+`"Bonus"`. Nesting is what disambiguates them, so the label can stay short. This
+also retires the old "strip the `Assets:` prefix on investing items" special
+case, which existed only to compensate for the flat list.
+
+**The root is kept as a node** (`keep_root=True`), unlike the Income Statement,
+which drops it. Two reasons:
+
+- A cash flow section header (`Operating`) is not an account root, and
+  per-counterpart attribution puts `Assets`, `Liabilities`, `Income` and
+  `Expenses` under the *same* section by design.
+- An asset increase and a liability increase read **opposite** ways in a cash
+  flow, so the reader needs to see which root a row sits under.
+
+Consequences to respect:
+
+- **Subtotal ties to the top-level nodes only.** Summing every node
+  double-counts children. Tests use `flatten_items` / `leaf_items` helpers in
+  `test_cashflow.py` to walk the tree.
+- **Never pass `negate=True`.** Breakdown amounts are already sign-normalized to
+  their cash effect (`amount = -counterpart.number`); negating flips every row.
+- Counterparts that are zero in **every** period are dropped before the tree is
+  built, so no empty parent chains appear.
+- Intermediate levels with no postings of their own still render, as pure
+  rollups: `Assets:Reserva:Bonus:2026:Q1` produces five nested rows. Deep
+  single-child chains render as a ladder — a deliberate choice to keep the
+  rendering identical to the Income Statement's.
+- `"Split"` is a synthesized label with no colons; it stays a single node.
 
 ## What must NOT be done in `cashflow.py`
 

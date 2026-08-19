@@ -282,10 +282,17 @@ export interface CashFlowItem {
   total: number;
 }
 
+/** A breakdown row: `name` is the leaf label, `full_name` the drill target. */
+export interface CashFlowNode extends CashFlowItem {
+  children: CashFlowNode[];
+}
+
 export interface CashFlowSection {
   totals: Record<string, number>;
   total: number;
-  items: CashFlowItem[];
+  /** Tree, with the account root kept as the top-level node. A section's
+   * `totals` ties to the sum of these top-level entries, not of every node. */
+  items: CashFlowNode[];
   other_items?: CashFlowItem[];
 }
 

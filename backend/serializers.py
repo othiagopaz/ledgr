@@ -344,11 +344,22 @@ def build_report_tree(
     account_period: dict[str, dict[str, Decimal]],
     periods: list[str],
     negate: bool = False,
+    keep_root: bool = False,
 ) -> list[dict[str, Any]]:
     """Build a hierarchical tree for income-statement-style accounts.
 
     Each node has ``name``, ``totals`` (period → float), ``total`` (float),
     and ``children``.  Matches ``AccountReportNode`` in frontend types.
+
+    ``keep_root``: when False (the Income Statement), the root level is dropped
+    and its children are returned — the section header already names the root
+    ("Income"/"Expenses"), so a root row would be redundant.  When True (the
+    Cash Flow Statement), the root is returned as a node: a cash flow section
+    mixes roots by design (per-counterpart attribution puts Assets, Liabilities
+    and Income under the same section), and an asset increase reads opposite to
+    a liability increase, so the reader needs to see which root a row sits under.
+
+    ``accounts`` may span several roots; every root is included.
     """
     sign = -1 if negate else 1
 
@@ -397,7 +408,10 @@ def build_report_tree(
     for root in sorted(roots):
         if root in children_map or root in account_period:
             node = build_node(root)
-            result = node["children"]
+            if keep_root:
+                result.append(node)
+            else:
+                result.extend(node["children"])
     return result
 
 
