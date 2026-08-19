@@ -28,7 +28,11 @@ from account_types import (
     is_loan_account,
     is_operating_working_capital,
 )
-from serializers import decimal_to_report_number, format_other_balances
+from serializers import (
+    build_report_tree,
+    decimal_to_report_number,
+    format_other_balances,
+)
 
 
 # ------------------------------------------------------------------
@@ -130,6 +134,23 @@ def classify_posting(
 # ------------------------------------------------------------------
 # Computation
 # ------------------------------------------------------------------
+
+def _split_tree_names(nodes: list[dict[str, Any]]) -> None:
+    """Give each breakdown node a ``full_name`` (path) and a leaf ``name``.
+
+    ``build_report_tree`` names nodes by their full account path.  The Cash Flow
+    breakdown keeps that path as ``full_name`` — it is the drill-down target —
+    and displays only the leaf segment, because the nesting already supplies the
+    parent context.  Mutates in place.
+
+    A synthesized counterpart with no colons (``"Split"``) is left as-is.
+    """
+    for node in nodes:
+        path = node["name"]
+        node["full_name"] = path
+        node["name"] = path.split(":")[-1]
+        _split_tree_names(node["children"])
+
 
 def compute_cashflow(
     entries: list,
@@ -333,7 +354,11 @@ def compute_cashflow(
     )
     balances = _compute_period_asset_balances(all_txns, periods, interval, oc, type_map)
 
-    # Breakdown: group items by counterpart within each category (OC only)
+    # Breakdown: group items by counterpart within each category (OC only),
+    # as a tree.  The nesting is what disambiguates rows — two counterparts can
+    # share a leaf name (``Assets:Reserva:Bonus`` vs ``Income:Bonus``), and a
+    # flat list rendered them as identical labels.  The root is kept as a node
+    # because a section mixes roots; see ``build_report_tree``'s ``keep_root``.
     def build_breakdown(cat: str) -> list[dict[str, Any]]:
         by_counterpart: dict[str, dict[str, Decimal]] = {}
         for item in items:
@@ -347,25 +372,23 @@ def compute_cashflow(
                 by_counterpart[cp].get(p, Decimal(0)) + item["amount"]
             )
 
-        result: list[dict[str, Any]] = []
-        for cp in sorted(by_counterpart):
-            totals_map = {
-                p: decimal_to_report_number(v)
-                for p, v in by_counterpart[cp].items()
-                if v != 0
-            }
-            if totals_map:
-                if cat == "investing" and cp.startswith("Assets:"):
-                    short = cp[len("Assets:"):]  # "Investments:Account", "Broker:XP"
-                else:
-                    short = cp.split(":")[-1] if ":" in cp else cp
-                result.append({
-                    "name": short,
-                    "full_name": cp,
-                    "totals": totals_map,
-                    "total": round(sum(totals_map.values()), 2),
-                })
-        return result
+        # Drop counterparts that round to zero in every period.  The flat
+        # breakdown skipped them and the tree must not resurrect them as empty
+        # rows — test against the *rounded* value, because that is what the tree
+        # keeps (a sub-cent residue would otherwise yield a node with no totals).
+        contributing = {
+            cp: per_period
+            for cp, per_period in by_counterpart.items()
+            if any(decimal_to_report_number(v) != 0 for v in per_period.values())
+        }
+        if not contributing:
+            return []
+
+        tree = build_report_tree(
+            set(contributing), contributing, periods, keep_root=True
+        )
+        _split_tree_names(tree)
+        return tree
 
     # Build other-currency breakdown per category
     def build_other_breakdown(cat: str) -> list[dict[str, Any]]:

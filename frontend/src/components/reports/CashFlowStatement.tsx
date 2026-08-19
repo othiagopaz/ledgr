@@ -6,7 +6,7 @@ import { useFilterParams } from "../../hooks/useFilterParams";
 import { formatAmount, amountSignClass } from "../../utils/format";
 import { periodToDateRange } from "../../utils/dateUtils";
 import { IntervalSelector } from "./IncomeExpenseChart";
-import type { CashFlowSection, OtherCurrencyAmount } from "../../types";
+import type { CashFlowNode, CashFlowSection, OtherCurrencyAmount } from "../../types";
 
 function formatOtherCurrencies(items?: OtherCurrencyAmount[]): string {
   if (!items || items.length === 0) return "";
@@ -82,7 +82,7 @@ export default function CashFlowStatement() {
               section={operating}
               periods={periods}
               currency={currency}
-              defaultExpanded={expandAll}
+              expandAll={expandAll}
               showOther={showOther}
             />
 
@@ -93,7 +93,7 @@ export default function CashFlowStatement() {
                 section={investing}
                 periods={periods}
                 currency={currency}
-                defaultExpanded={expandAll}
+                expandAll={expandAll}
                 showOther={showOther}
               />
             )}
@@ -105,7 +105,7 @@ export default function CashFlowStatement() {
                 section={financing}
                 periods={periods}
                 currency={currency}
-                defaultExpanded={expandAll}
+                expandAll={expandAll}
                 showOther={showOther}
               />
             )}
@@ -117,7 +117,7 @@ export default function CashFlowStatement() {
                 section={transfers}
                 periods={periods}
                 currency={currency}
-                defaultExpanded={expandAll}
+                expandAll={expandAll}
                 showOther={showOther}
               />
             )}
@@ -212,18 +212,18 @@ function CashFlowSectionRows({
   section,
   periods,
   currency,
-  defaultExpanded,
+  expandAll,
   showOther,
 }: {
   label: string;
   section: CashFlowSection;
   periods: string[];
   currency: string;
-  defaultExpanded: boolean;
+  /** The "Expand All" toggle: opens this section and every level below it. */
+  expandAll: boolean;
   showOther: boolean;
 }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const openDrill = useAppStore((s) => s.openDrill);
+  const [expanded, setExpanded] = useState(expandAll);
 
   return (
     <>
@@ -232,41 +232,19 @@ function CashFlowSectionRows({
         <td colSpan={periods.length + 2 + (showOther ? 1 : 0)}><span className="report-section-sticky">{label}</span></td>
       </tr>
 
-      {/* Line items */}
+      {/* Line items — a tree: the nesting is what tells apart counterparts
+          that share a leaf name (Assets:Reserva:Bonus vs Income:Bonus). */}
       {expanded &&
-        section.items.map((item) => (
-          <tr key={item.full_name} className="report-tree-row">
-            <td className="report-table-account" style={{ paddingLeft: 36 }}>
-              {item.name}
-            </td>
-            {periods.map((p) => {
-              if (item.totals[p] == null) {
-                return <td key={p} className="report-table-num">—</td>;
-              }
-              return (
-                <td
-                  key={p}
-                  className={`report-table-num report-table-drill ${amountSignClass(item.totals[p])}`}
-                  onClick={() => {
-                    const { from_date, to_date } = periodToDateRange(p);
-                    openDrill({
-                      account: item.full_name,
-                      fromDate: from_date,
-                      toDate: to_date,
-                      label: `${item.name} · ${p}`,
-                    });
-                  }}
-                  title="View transactions"
-                >
-                  {formatAmount(item.totals[p], currency)}
-                </td>
-              );
-            })}
-            <td className={`report-table-num report-table-total ${item.total ? amountSignClass(item.total) : ""}`}>
-              {item.total ? formatAmount(item.total, currency) : "—"}
-            </td>
-            {showOther && <td className="report-table-num report-table-other" />}
-          </tr>
+        section.items.map((node) => (
+          <CashFlowTreeRows
+            key={node.full_name}
+            node={node}
+            periods={periods}
+            currency={currency}
+            depth={0}
+            showOther={showOther}
+            expandAll={expandAll}
+          />
         ))}
 
       {/* Subtotal */}
@@ -294,6 +272,95 @@ function CashFlowSectionRows({
         </td>
         {showOther && <td className="report-table-num report-table-other" />}
       </tr>
+    </>
+  );
+}
+
+/**
+ * One breakdown row plus its descendants. Mirrors `ReportTreeRows` in the
+ * Income Statement, except the drill-down target is `full_name` — the row
+ * label is only the leaf segment, so the account path lives in that field.
+ *
+ * Opening a section reveals **two** levels — the account root and its first
+ * child (`Assets` → `Investments`). Anything deeper stays folded until the user
+ * asks for it, so a deep chart of accounts doesn't dump a wall of rows. The
+ * "Expand All" toggle overrides this and opens every level.
+ */
+function CashFlowTreeRows({
+  node,
+  periods,
+  currency,
+  depth,
+  showOther,
+  expandAll,
+}: {
+  node: CashFlowNode;
+  periods: string[];
+  currency: string;
+  depth: number;
+  showOther: boolean;
+  expandAll: boolean;
+}) {
+  const [expanded, setExpanded] = useState(expandAll || depth === 0);
+  const openDrill = useAppStore((s) => s.openDrill);
+  const hasChildren = node.children.length > 0;
+
+  return (
+    <>
+      <tr
+        className={`report-tree-row ${hasChildren ? "report-tree-parent" : ""}`}
+        onClick={() => hasChildren && setExpanded(!expanded)}
+      >
+        <td
+          className="report-table-account"
+          style={{ paddingLeft: `${36 + depth * 20}px` }}
+        >
+          {hasChildren && (
+            <span className="report-tree-toggle">{expanded ? "▾" : "▸"}</span>
+          )}
+          {node.name}
+        </td>
+        {periods.map((p) => {
+          if (node.totals[p] == null) {
+            return <td key={p} className="report-table-num">—</td>;
+          }
+          return (
+            <td
+              key={p}
+              className={`report-table-num report-table-drill ${amountSignClass(node.totals[p])}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                const { from_date, to_date } = periodToDateRange(p);
+                openDrill({
+                  account: node.full_name,
+                  fromDate: from_date,
+                  toDate: to_date,
+                  label: `${node.name} · ${p}`,
+                });
+              }}
+              title="View transactions"
+            >
+              {formatAmount(node.totals[p], currency)}
+            </td>
+          );
+        })}
+        <td className={`report-table-num report-table-total ${node.total ? amountSignClass(node.total) : ""}`}>
+          {node.total ? formatAmount(node.total, currency) : "—"}
+        </td>
+        {showOther && <td className="report-table-num report-table-other" />}
+      </tr>
+      {expanded &&
+        node.children.map((child) => (
+          <CashFlowTreeRows
+            key={child.full_name}
+            node={child}
+            periods={periods}
+            currency={currency}
+            depth={depth + 1}
+            showOther={showOther}
+            expandAll={expandAll}
+          />
+        ))}
     </>
   );
 }

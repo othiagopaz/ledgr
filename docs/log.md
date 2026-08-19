@@ -1,11 +1,22 @@
 ---
 type: log
-last_updated: 2026-08-07
+last_updated: 2026-08-19
 ---
 
 # Wiki Log
 
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
+
+---
+
+## 2026-08-19 — Cash Flow breakdown is hierarchical
+
+- The Cash Flow was the only report returning a **flat** breakdown, and its rows were labelled with the account's leaf segment alone. Any two counterparts sharing a leaf name rendered identically — a deferred-income release (`Assets:Reserva:Bonus`, `Liabilities:Deferred:Bonus`, `Income:Bonus` in one transaction) produced three rows all reading `"Bonus"`. Now each section's `items` is a tree built by the same `build_report_tree` the Income Statement uses; the nesting disambiguates, so the short label stays.
+- **The root is kept as a node** in the Cash Flow (`keep_root=True`), unlike the Income Statement. A cash flow section mixes account roots by design, and an asset increase reads opposite to a liability increase — the reader needs to see which. See [`backend/cashflow.md`](backend/cashflow.md#breakdown-shape).
+- Fixed a latent bug in `build_report_tree`: it **overwrote** its result once per root, so only the last root survived. The Income Statement never hit it (it filters to one root before calling); the new Cash Flow caller does. Regression test added.
+- Retired the "strip the `Assets:` prefix on investing labels" special case — it existed only to compensate for the flat list.
+- New contract to respect: a section subtotal ties to the **top-level** nodes, not to every node, and the breakdown must never be built with `negate=True`.
+- Reveal depth: clicking a section title opens **two** levels (`Assets` → `Investments`); deeper levels stay folded until the user clicks them, and "Expand All" overrides and opens everything. The payload always carries the full depth — this is purely the renderer's default, so a deep chart of accounts doesn't dump a wall of rows.
 
 ---
 

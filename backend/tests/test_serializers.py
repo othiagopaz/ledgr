@@ -369,6 +369,38 @@ class TestBuildReportTree:
         assert negated[0]["totals"]["2024-01"] == 5000.0
         assert normal[0]["totals"]["2024-01"] == -5000.0
 
+    def test_every_root_is_kept(self) -> None:
+        """Regression: the result used to be overwritten once per root.
+
+        Only the last root survived, so any caller passing accounts from more
+        than one root silently lost the rest.  The Income Statement never hit it
+        (it filters to one root first); the Cash Flow breakdown does.
+        """
+        accounts = {"Income:Salary", "Expenses:Food", "Assets:Bank"}
+        account_period = {
+            "Income:Salary": {"2024-01": Decimal("-8000")},
+            "Expenses:Food": {"2024-01": Decimal("500")},
+            "Assets:Bank": {"2024-01": Decimal("100")},
+        }
+        result = build_report_tree(accounts, account_period, ["2024-01"])
+        assert {r["name"] for r in result} == {
+            "Assets:Bank", "Expenses:Food", "Income:Salary",
+        }
+
+    def test_keep_root_returns_the_root_as_a_node(self) -> None:
+        accounts = {"Assets:Reserva:Bonus", "Income:Bonus"}
+        account_period = {
+            "Assets:Reserva:Bonus": {"2024-01": Decimal("1000")},
+            "Income:Bonus": {"2024-01": Decimal("1000")},
+        }
+        result = build_report_tree(
+            accounts, account_period, ["2024-01"], keep_root=True
+        )
+        assert [r["name"] for r in result] == ["Assets", "Income"]
+        # The root rolls up its descendants.
+        assert result[0]["totals"]["2024-01"] == 1000.0
+        assert result[0]["children"][0]["name"] == "Assets:Reserva"
+
 
 # ------------------------------------------------------------------
 # build_balance_tree

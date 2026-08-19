@@ -45,6 +45,39 @@ DEFAULT_TYPE_MAP: dict[str, str] = {
 
 
 # ------------------------------------------------------------------
+# Breakdown helpers — a section's ``items`` is a TREE (root kept as a node),
+# so a section total is the sum of its **top-level** entries.  These walk it.
+# ------------------------------------------------------------------
+
+
+def flatten_items(items: list[dict]) -> list[dict]:
+    """Every node in a breakdown tree, depth-first — parents included.
+
+    Use for membership and lookup by ``full_name``.
+    """
+    out: list[dict] = []
+    for node in items:
+        out.append(node)
+        out.extend(flatten_items(node["children"]))
+    return out
+
+
+def leaf_items(items: list[dict]) -> list[dict]:
+    """Only the childless nodes of a breakdown tree.
+
+    These are the counterparts the cash was actually attributed to, so this is
+    what an exact-set assertion should compare against (parents are rollups).
+    """
+    out: list[dict] = []
+    for node in items:
+        if node["children"]:
+            out.extend(leaf_items(node["children"]))
+        else:
+            out.append(node)
+    return out
+
+
+# ------------------------------------------------------------------
 # classify_posting — per-counterpart, ledgr-type based (see AGENTS.md §7)
 # ------------------------------------------------------------------
 
@@ -190,7 +223,7 @@ class TestCCPurchaseExcluded:
         # Collect all items from all categories
         all_items = []
         for section in ("operating", "investing", "financing", "transfers"):
-            all_items.extend(result[section]["items"])
+            all_items.extend(flatten_items(result[section]["items"]))
 
         # The CC purchase is Expenses:Food ↔ Liabilities:CreditCard — neither
         # is a cash account, so the 150 BRL purchase must NOT show up anywhere.
@@ -227,7 +260,7 @@ class TestComputeCashflow:
         operating = result["operating"]
         # Salary (+10000), Food (-500), Rent (-3000), CC payment (-200) = +6300
         assert operating["total"] == pytest.approx(6300.0)
-        item_names = {i["full_name"] for i in operating["items"]}
+        item_names = {i["full_name"] for i in flatten_items(operating["items"])}
         assert "Income:Salary" in item_names
 
     def test_fixture_signed_subtotals(self, cashflow_ledger: FavaLedger) -> None:
@@ -243,10 +276,11 @@ class TestComputeCashflow:
     def test_financing_includes_loan(self, cashflow_ledger: FavaLedger) -> None:
         result = compute_cashflow(cashflow_ledger.all_entries, interval="yearly")
         financing = result["financing"]
-        item_names = {i["full_name"] for i in financing["items"]}
+        nodes = flatten_items(financing["items"])
+        item_names = {i["full_name"] for i in nodes}
         assert "Liabilities:Loans:Mortgage" in item_names
         # Loan payment is a -1500 cash outflow → financing.
-        loan = next(i for i in financing["items"]
+        loan = next(i for i in nodes
                     if i["full_name"] == "Liabilities:Loans:Mortgage")
         assert loan["total"] == pytest.approx(-1500.0)
 
@@ -254,20 +288,29 @@ class TestComputeCashflow:
         result = compute_cashflow(cashflow_ledger.all_entries, interval="yearly")
         investing = result["investing"]
         # Investment accounts appear as counterpart full_names, signed (outflow).
-        by_name = {i["full_name"]: i["total"] for i in investing["items"]}
+        by_name = {
+            i["full_name"]: i["total"] for i in flatten_items(investing["items"])
+        }
         assert by_name.get("Assets:Investments:Stocks") == pytest.approx(-2000.0)
         assert by_name.get("Assets:Broker:XP") == pytest.approx(-1000.0)
 
-    def test_investing_labels_strip_assets_prefix(
+    def test_investing_breakdown_nests_under_its_root(
         self, cashflow_ledger: FavaLedger
     ) -> None:
-        """Investing breakdown items use descriptive names (strip 'Assets:' prefix)."""
+        """The breakdown is a tree: the root is a node and the label is the leaf.
+
+        Replaces the old "strip the Assets: prefix" naming, which existed only
+        to disambiguate a flat list.  The nesting does that job now.
+        """
         result = compute_cashflow(cashflow_ledger.all_entries, interval="yearly")
-        investing = result["investing"]
-        item_short_names = {i["name"] for i in investing["items"]}
-        # Should show "Investments:Stocks" not just "Stocks"
-        assert "Investments:Stocks" in item_short_names
-        assert "Broker:XP" in item_short_names
+        roots = result["investing"]["items"]
+        assert [r["full_name"] for r in roots] == ["Assets"]
+        # Assets → {Broker → XP, Investments → Stocks}; each label is the leaf.
+        assert {c["name"] for c in roots[0]["children"]} == {"Broker", "Investments"}
+        leaves = {i["name"] for i in leaf_items(roots)}
+        assert leaves == {"XP", "Stocks"}
+        # The root rolls its descendants up.
+        assert roots[0]["total"] == pytest.approx(-3000.0)
 
     def test_transfers_includes_bank_transfer(
         self, cashflow_ledger: FavaLedger
@@ -395,7 +438,7 @@ class TestMultiCurrencyCashflow:
         )
         assert result["operating_currency"] == "USD"
         for section in ("operating", "investing", "financing", "transfers"):
-            for item in result[section]["items"]:
+            for item in flatten_items(result[section]["items"]):
                 for p, val in item["totals"].items():
                     assert isinstance(val, (int, float)), (
                         f"Non-OC value leaked into {section}: {item}"
@@ -499,16 +542,22 @@ class TestPerCounterpartAttribution:
         result = compute_cashflow([txn], interval="monthly",
                                   operating_currency="BRL", type_map=PC_TYPE_MAP)
         p = "2026-08"
-        # Investing = principal only.
-        inv = {i["full_name"]: i["totals"].get(p) for i in result["investing"]["items"]}
+        # Investing = principal only (leaves = the attributed counterparts).
+        inv = {
+            i["full_name"]: i["totals"].get(p)
+            for i in leaf_items(result["investing"]["items"])
+        }
         assert inv == {"Assets:RealState:House": pytest.approx(-410.23)}
         # Operating = interest + receivable.
-        op = {i["full_name"]: i["totals"].get(p) for i in result["operating"]["items"]}
+        op = {
+            i["full_name"]: i["totals"].get(p)
+            for i in leaf_items(result["operating"]["items"])
+        }
         assert op["Expenses:MortgageInterest"] == pytest.approx(-1660.20)
         assert op["Assets:Receivables:Gabi"] == pytest.approx(-2070.43)
         # No synthesized "Split" anywhere.
         for sec in ("operating", "investing", "financing", "transfers"):
-            names = {i["full_name"] for i in result[sec]["items"]}
+            names = {i["full_name"] for i in flatten_items(result[sec]["items"])}
             assert "Split" not in names
         # Net cash flow equals the actual cash outflow.
         assert result["net_cashflow"][p] == pytest.approx(-4140.86)
@@ -526,6 +575,8 @@ class TestPerCounterpartAttribution:
         )
         result = compute_cashflow([txn], interval="monthly",
                                   operating_currency="BRL", type_map=PC_TYPE_MAP)
+        # ``items`` is a tree, so the subtotal ties to its **top-level** nodes
+        # (the roots) — summing every node would double-count children.
         for sec in ("operating", "investing", "financing", "transfers"):
             for p in result["periods"]:
                 subtotal = round(result[sec]["totals"].get(p, 0.0), 2)
@@ -556,7 +607,10 @@ class TestMultiCashLeg:
                                   operating_currency="BRL", type_map=PC_TYPE_MAP)
         p = "2026-01"
         # All operating, attributed to the single Income counterpart.
-        op = {i["full_name"]: i["totals"].get(p) for i in result["operating"]["items"]}
+        op = {
+            i["full_name"]: i["totals"].get(p)
+            for i in leaf_items(result["operating"]["items"])
+        }
         assert op == {"Income:Salary": pytest.approx(2550.60)}
         # No transfer emitted (the two banks are destinations, not a transfer).
         assert result["transfers"]["totals"].get(p, 0.0) == pytest.approx(0.0)
@@ -578,7 +632,10 @@ class TestMultiCashLeg:
         result = compute_cashflow([txn], interval="monthly",
                                   operating_currency="BRL", type_map=PC_TYPE_MAP)
         p = "2026-01"
-        op = {i["full_name"]: i["totals"].get(p) for i in result["operating"]["items"]}
+        op = {
+            i["full_name"]: i["totals"].get(p)
+            for i in leaf_items(result["operating"]["items"])
+        }
         assert op["Income:Salary"] == pytest.approx(1000.00)
         assert op["Expenses:Food"] == pytest.approx(-50.00)
         assert result["transfers"]["totals"].get(p, 0.0) == pytest.approx(0.0)
@@ -699,7 +756,10 @@ option "operating_currency" "USD"
         result = self._compute()
         # -3500 USD (the ITOT cost) must land in investing, labelled with the
         # investment counterpart — NOT dropped.
-        by_name = {i["full_name"]: i["total"] for i in result["investing"]["items"]}
+        by_name = {
+            i["full_name"]: i["total"]
+            for i in flatten_items(result["investing"]["items"])
+        }
         assert by_name.get("Assets:Brokerage") == pytest.approx(-3500.0)
         # The 5 USD commission is operating.
         assert result["operating"]["total"] == pytest.approx(-5.0)
@@ -712,3 +772,152 @@ option "operating_currency" "USD"
         assert result["closing_balance"][p] == pytest.approx(
             result["opening_balance"][p] + result["net_cashflow"][p], abs=0.01
         )
+
+
+# ------------------------------------------------------------------
+# Hierarchical breakdown — the tree is what disambiguates rows
+# ------------------------------------------------------------------
+
+
+TREE_TYPE_MAP: dict[str, str] = {
+    "Assets:Bank:Itau": "cash",
+    "Assets:Reserva:Bonus": "receivable",
+    "Assets:Reserva:Bonus:2026:Q1": "receivable",
+    "Assets:Reserva:Bonus:2026:Q2": "receivable",
+    "Liabilities:Deferred:Bonus": "payable",
+    "Liabilities:CreditCard:Nubank": "credit-card",
+    "Income:Bonus": "general",
+}
+
+
+class TestHierarchicalBreakdown:
+    """A section's ``items`` is a tree; nesting disambiguates colliding leaves.
+
+    The motivating shape is a deferred-income release: one transaction whose
+    counterparts are ``Assets:Reserva:Bonus``, ``Liabilities:Deferred:Bonus``
+    and ``Income:Bonus`` — three different accounts whose leaf name is the same
+    word.  A flat breakdown rendered all three as "Bonus".
+    """
+
+    def _release(self) -> dict:
+        # Deferred bonus released into cash: 1000 in, reserve down, deferred
+        # liability down, income recognized.
+        txn = _txn(
+            datetime.date(2026, 8, 19),
+            "Saque bonus",
+            [
+                ("Assets:Bank:Itau", "1000.00", "BRL"),
+                ("Assets:Reserva:Bonus", "-1000.00", "BRL"),
+                ("Liabilities:Deferred:Bonus", "1000.00", "BRL"),
+                ("Income:Bonus", "-1000.00", "BRL"),
+            ],
+        )
+        return compute_cashflow([txn], interval="monthly",
+                                operating_currency="BRL", type_map=TREE_TYPE_MAP)
+
+    def test_colliding_leaf_names_are_distinguishable(self) -> None:
+        """Three counterparts named "Bonus" must be tellable apart."""
+        leaves = leaf_items(self._release()["operating"]["items"])
+        assert [i["name"] for i in leaves] == ["Bonus", "Bonus", "Bonus"]
+        # ...and the tree is what separates them.
+        assert {i["full_name"] for i in leaves} == {
+            "Assets:Reserva:Bonus",
+            "Liabilities:Deferred:Bonus",
+            "Income:Bonus",
+        }
+
+    def test_every_root_in_the_section_is_present(self) -> None:
+        """Regression: a section mixes roots and none may be dropped.
+
+        ``build_report_tree`` used to overwrite its result per root, so only the
+        last one survived — which silently changed the section's visible total.
+        """
+        op = self._release()["operating"]
+        assert [r["full_name"] for r in op["items"]] == [
+            "Assets", "Income", "Liabilities",
+        ]
+        # Roots roll up and tie to the section subtotal.
+        p = "2026-08"
+        assert round(sum(r["totals"].get(p, 0.0) for r in op["items"]), 2) == (
+            pytest.approx(op["totals"][p])
+        )
+
+    def test_root_signs_are_not_flipped(self) -> None:
+        """The breakdown must not inherit the Income Statement's ``negate``."""
+        p = "2026-08"
+        by_root = {
+            r["full_name"]: r["totals"].get(p)
+            for r in self._release()["operating"]["items"]
+        }
+        # Reserve drawn down and income earned are inflows; releasing the
+        # deferred liability is the offsetting outflow.
+        assert by_root["Assets"] == pytest.approx(1000.00)
+        assert by_root["Income"] == pytest.approx(1000.00)
+        assert by_root["Liabilities"] == pytest.approx(-1000.00)
+
+    def test_deep_accounts_nest_every_level(self) -> None:
+        """``Assets:Reserva:Bonus:2026:Q1`` keeps all five levels."""
+        txn = _txn(
+            datetime.date(2026, 8, 19),
+            "Saque bonus por trimestre",
+            [
+                ("Assets:Bank:Itau", "1000.00", "BRL"),
+                ("Assets:Reserva:Bonus:2026:Q1", "-600.00", "BRL"),
+                ("Assets:Reserva:Bonus:2026:Q2", "-400.00", "BRL"),
+            ],
+        )
+        result = compute_cashflow([txn], interval="monthly",
+                                  operating_currency="BRL", type_map=TREE_TYPE_MAP)
+        p = "2026-08"
+        node = result["operating"]["items"][0]
+        assert node["full_name"] == "Assets"
+        # Walk the single-child chain down to the two quarters.
+        for expected in ("Reserva", "Bonus", "2026"):
+            assert len(node["children"]) == 1
+            node = node["children"][0]
+            assert node["name"] == expected
+            # Intermediate levels carry no postings of their own — pure rollup.
+            assert node["totals"][p] == pytest.approx(1000.00)
+        quarters = {c["name"]: c["totals"][p] for c in node["children"]}
+        assert quarters == {"Q1": pytest.approx(600.00), "Q2": pytest.approx(400.00)}
+
+    def test_zero_net_counterpart_stays_out(self) -> None:
+        """A counterpart that nets to zero in every period is not emitted.
+
+        The flat breakdown dropped it; the tree must not resurrect it as an
+        empty parent chain.
+        """
+        txn = _txn(
+            datetime.date(2026, 8, 19),
+            "Ida e volta",
+            [
+                ("Assets:Bank:Itau", "0.00", "BRL"),
+                ("Assets:Reserva:Bonus", "500.00", "BRL"),
+                ("Assets:Reserva:Bonus", "-500.00", "BRL"),
+            ],
+        )
+        result = compute_cashflow([txn], interval="monthly",
+                                  operating_currency="BRL", type_map=TREE_TYPE_MAP)
+        names = {i["full_name"] for i in flatten_items(result["operating"]["items"])}
+        assert "Assets:Reserva:Bonus" not in names
+
+    def test_sub_cent_counterpart_stays_out(self) -> None:
+        """A counterpart that rounds to zero must not become an empty node.
+
+        The tree keeps period totals only when the *rounded* value is non-zero,
+        so the drop filter has to round too — otherwise a sub-cent residue
+        yields a node with no totals at all.
+        """
+        txn = _txn(
+            datetime.date(2026, 8, 19),
+            "Residuo",
+            [
+                ("Assets:Bank:Itau", "1000.004", "BRL"),
+                ("Income:Bonus", "-1000.00", "BRL"),
+                ("Liabilities:Deferred:Bonus", "-0.004", "BRL"),
+            ],
+        )
+        result = compute_cashflow([txn], interval="monthly",
+                                  operating_currency="BRL", type_map=TREE_TYPE_MAP)
+        for node in flatten_items(result["operating"]["items"]):
+            assert node["totals"], f"empty node emitted: {node['full_name']}"
