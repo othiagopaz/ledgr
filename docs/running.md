@@ -1,3 +1,8 @@
+---
+type: reference
+last_updated: 2026-08-19
+---
+
 # Running Ledgr
 
 There are two ways to run Ledgr locally. Both serve the backend on a

@@ -126,6 +126,26 @@ def extract_links(text: str) -> list[tuple[str, str]]:
     return list(LINK_RE.findall(text))
 
 
+def strip_code_blocks(text: str) -> str:
+    """Blank out fenced code blocks, preserving line count.
+
+    Links inside a fence are sample content, not navigation — a README
+    template quoting ``[LICENSE](./LICENSE)`` documents a path relative to the
+    repo root, not to ``docs/``, and resolving it as a doc link is a false
+    positive.  Lines are replaced rather than removed so any line numbers
+    derived from the result stay accurate.
+    """
+    out: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            out.append("")
+            continue
+        out.append("" if in_fence else line)
+    return "\n".join(out)
+
+
 def to_docs_relative(resolved: Path) -> str | None:
     try:
         return resolved.relative_to(DOCS).as_posix()
@@ -195,7 +215,7 @@ def check_page_frontmatter_and_size(
 def check_broken_links(
     path: Path, rel: str, text: str, planned: set[str], warnings: list[str]
 ) -> None:
-    for _, target in extract_links(text):
+    for _, target in extract_links(strip_code_blocks(text)):
         resolved = resolve_link(path, target)
         if resolved is None or resolved.exists():
             continue

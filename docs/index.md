@@ -31,6 +31,7 @@ Cross-cutting facts. Read when onboarding or before a PR.
 | [`conventions.md`](conventions.md) | Naming, typing, what's out of scope |
 | [`pr-checklist.md`](pr-checklist.md) | Final check before merging |
 | [`pitfalls.md`](pitfalls.md) | Known failure modes — do not repeat |
+| [`running.md`](running.md) | Running Ledgr: background service on :8420 / :5273, dev mode |
 
 ## Backend
 
