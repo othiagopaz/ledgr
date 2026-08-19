@@ -187,10 +187,12 @@ Consequences to respect:
   their cash effect (`amount = -counterpart.number`); negating flips every row.
 - Counterparts that are zero in **every** period are dropped before the tree is
   built, so no empty parent chains appear.
-- Intermediate levels with no postings of their own still render, as pure
-  rollups: `Assets:Reserva:Bonus:2026:Q1` produces five nested rows. Deep
-  single-child chains render as a ladder — a deliberate choice to keep the
-  rendering identical to the Income Statement's.
+- Intermediate levels with no postings of their own are still emitted, as pure
+  rollups: `Assets:Reserva:Bonus:2026:Q1` yields five nested nodes. The payload
+  always carries the full depth; how much of it is *shown* is the renderer's
+  call — opening a section reveals two levels (the root and its first child),
+  and deeper levels stay folded until clicked, with "Expand All" opening
+  everything. So a deep chart of accounts costs no wall of rows by default.
 - `"Split"` is a synthesized label with no colons; it stays a single node.
 
 ## What must NOT be done in `cashflow.py`

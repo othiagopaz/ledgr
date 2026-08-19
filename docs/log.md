@@ -16,6 +16,7 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 - Fixed a latent bug in `build_report_tree`: it **overwrote** its result once per root, so only the last root survived. The Income Statement never hit it (it filters to one root before calling); the new Cash Flow caller does. Regression test added.
 - Retired the "strip the `Assets:` prefix on investing labels" special case — it existed only to compensate for the flat list.
 - New contract to respect: a section subtotal ties to the **top-level** nodes, not to every node, and the breakdown must never be built with `negate=True`.
+- Reveal depth: clicking a section title opens **two** levels (`Assets` → `Investments`); deeper levels stay folded until the user clicks them, and "Expand All" overrides and opens everything. The payload always carries the full depth — this is purely the renderer's default, so a deep chart of accounts doesn't dump a wall of rows.
 
 ---
 

@@ -82,7 +82,7 @@ export default function CashFlowStatement() {
               section={operating}
               periods={periods}
               currency={currency}
-              defaultExpanded={expandAll}
+              expandAll={expandAll}
               showOther={showOther}
             />
 
@@ -93,7 +93,7 @@ export default function CashFlowStatement() {
                 section={investing}
                 periods={periods}
                 currency={currency}
-                defaultExpanded={expandAll}
+                expandAll={expandAll}
                 showOther={showOther}
               />
             )}
@@ -105,7 +105,7 @@ export default function CashFlowStatement() {
                 section={financing}
                 periods={periods}
                 currency={currency}
-                defaultExpanded={expandAll}
+                expandAll={expandAll}
                 showOther={showOther}
               />
             )}
@@ -117,7 +117,7 @@ export default function CashFlowStatement() {
                 section={transfers}
                 periods={periods}
                 currency={currency}
-                defaultExpanded={expandAll}
+                expandAll={expandAll}
                 showOther={showOther}
               />
             )}
@@ -212,17 +212,18 @@ function CashFlowSectionRows({
   section,
   periods,
   currency,
-  defaultExpanded,
+  expandAll,
   showOther,
 }: {
   label: string;
   section: CashFlowSection;
   periods: string[];
   currency: string;
-  defaultExpanded: boolean;
+  /** The "Expand All" toggle: opens this section and every level below it. */
+  expandAll: boolean;
   showOther: boolean;
 }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useState(expandAll);
 
   return (
     <>
@@ -242,6 +243,7 @@ function CashFlowSectionRows({
             currency={currency}
             depth={0}
             showOther={showOther}
+            expandAll={expandAll}
           />
         ))}
 
@@ -278,6 +280,11 @@ function CashFlowSectionRows({
  * One breakdown row plus its descendants. Mirrors `ReportTreeRows` in the
  * Income Statement, except the drill-down target is `full_name` — the row
  * label is only the leaf segment, so the account path lives in that field.
+ *
+ * Opening a section reveals **two** levels — the account root and its first
+ * child (`Assets` → `Investments`). Anything deeper stays folded until the user
+ * asks for it, so a deep chart of accounts doesn't dump a wall of rows. The
+ * "Expand All" toggle overrides this and opens every level.
  */
 function CashFlowTreeRows({
   node,
@@ -285,14 +292,16 @@ function CashFlowTreeRows({
   currency,
   depth,
   showOther,
+  expandAll,
 }: {
   node: CashFlowNode;
   periods: string[];
   currency: string;
   depth: number;
   showOther: boolean;
+  expandAll: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(expandAll || depth === 0);
   const openDrill = useAppStore((s) => s.openDrill);
   const hasChildren = node.children.length > 0;
 
@@ -349,6 +358,7 @@ function CashFlowTreeRows({
             currency={currency}
             depth={depth + 1}
             showOther={showOther}
+            expandAll={expandAll}
           />
         ))}
     </>
