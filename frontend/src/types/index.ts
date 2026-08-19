@@ -237,9 +237,20 @@ export interface NetWorthResponse {
   planned_series?: NetWorthPoint[];
 }
 
+export interface AccountBalanceChildSeries {
+  account: string;
+  name: string;
+  series: AccountBalancePoint[];
+}
+
 export interface AccountBalanceResponse {
   series: AccountBalancePoint[];
   planned_series?: AccountBalancePoint[];
+  /** Set when `account` is a pure grouping node — `series` is the roll-up of
+   *  `children`, which carry one series per immediate child. */
+  consolidated?: boolean;
+  children?: AccountBalanceChildSeries[];
+  planned_children?: AccountBalanceChildSeries[];
 }
 
 export interface IncomeStatementResponse {

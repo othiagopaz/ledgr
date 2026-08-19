@@ -1722,6 +1722,7 @@ body {
 
 .report-chart { margin-bottom: 12px; }
 .report-chart-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.report-chart-note { font-size: 12px; color: var(--text-secondary); margin: -4px 0 10px; line-height: 1.45; }
 .report-loading,
 .report-empty {
   padding: 32px;

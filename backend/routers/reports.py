@@ -61,6 +61,18 @@ def _compute_income_expense(entries: list, interval: str, oc: str) -> list[dict]
     ]
 
 
+def _child_bucket(posting_account: str, parent: str) -> str:
+    """Map a descendant account to its **immediate** child-of-parent bucket.
+
+    ``Assets:Investments:Personnalite:Float`` under parent
+    ``Assets:Investments`` buckets into ``Assets:Investments:Personnalite`` —
+    grandchildren aggregate into the one-level-down child, keeping the chart
+    legible.  Drill deeper by selecting that child.
+    """
+    rest = posting_account[len(parent) + 1:]
+    return f"{parent}:{rest.split(':')[0]}"
+
+
 def _compute_account_balance(entries: list, account: str, interval: str) -> list[dict]:
     txns = sorted(
         [e for e in entries if isinstance(e, data.Transaction)],
@@ -81,6 +93,112 @@ def _compute_account_balance(entries: list, account: str, interval: str) -> list
         {"period": p, "balance": decimal_to_report_number(b)}
         for p, b in sorted(period_balance.items())
     ]
+
+
+def _compute_account_balance_consolidated(
+    entries: list, account: str, interval: str
+) -> dict[str, Any]:
+    """Consolidated balance of a parent account plus a series per child.
+
+    Used when ``account`` has **no postings of its own** but has descendants —
+    a pure grouping node like ``Assets:Investments``.  Matching it exactly
+    (as ``_compute_account_balance`` does) yields a flat zero line, which is
+    accurate but useless; the balance a reader wants is the roll-up of its
+    children.
+
+    ``consolidated`` is the running sum of every descendant.  ``children`` holds
+    one running series per immediate child (grandchildren aggregated into it,
+    see ``_child_bucket``), so the chart can plot composition against the total.
+    Children are ordered by descending final absolute balance — the largest
+    component first, which is the reading order that matters.
+
+    Returns ``{"series": [...], "children": [{"account", "name", "series"}]}``.
+    """
+    prefix = account + ":"
+    txns = sorted(
+        [e for e in entries if isinstance(e, data.Transaction)],
+        key=lambda t: t.date,
+    )
+
+    total = Decimal(0)
+    child_running: dict[str, Decimal] = {}
+    # period → snapshot of (total, {child: balance})
+    period_total: dict[str, Decimal] = {}
+    period_children: dict[str, dict[str, Decimal]] = {}
+
+    for txn in txns:
+        for p in txn.postings:
+            if p.units is None or not p.account.startswith(prefix):
+                continue
+            total += p.units.number
+            bucket = _child_bucket(p.account, account)
+            child_running[bucket] = (
+                child_running.get(bucket, Decimal(0)) + p.units.number
+            )
+        period = date_to_period(txn.date, interval)
+        period_total[period] = total
+        period_children[period] = dict(child_running)
+
+    periods = sorted(period_total)
+
+    series = [
+        {"period": p, "balance": decimal_to_report_number(period_total[p])}
+        for p in periods
+    ]
+
+    # Drop children that are zero across every period — an account opened but
+    # never moved would otherwise add a flat line at zero.
+    final = child_running
+    contributing = [
+        c for c in final
+        if any(
+            decimal_to_report_number(period_children[p].get(c, Decimal(0))) != 0
+            for p in periods
+        )
+    ]
+    contributing.sort(key=lambda c: -abs(final[c]))
+
+    children = [
+        {
+            "account": c,
+            "name": c[len(prefix):],
+            "series": [
+                {
+                    "period": p,
+                    "balance": decimal_to_report_number(
+                        period_children[p].get(c, Decimal(0))
+                    ),
+                }
+                for p in periods
+            ],
+        }
+        for c in contributing
+    ]
+
+    return {"series": series, "children": children}
+
+
+def _has_own_postings(entries: list, account: str) -> bool:
+    """True if any transaction posts directly to ``account`` itself."""
+    return any(
+        p.account == account
+        for e in entries
+        if isinstance(e, data.Transaction)
+        for p in e.postings
+        if p.units is not None
+    )
+
+
+def _has_descendants(entries: list, account: str) -> bool:
+    """True if any transaction posts to a descendant of ``account``."""
+    prefix = account + ":"
+    return any(
+        p.account.startswith(prefix)
+        for e in entries
+        if isinstance(e, data.Transaction)
+        for p in e.postings
+        if p.units is not None
+    )
 
 
 def _compute_net_worth(entries: list, interval: str, oc: str) -> list[dict]:
@@ -339,7 +457,29 @@ def get_account_balance(
         tags=tags or None,
         payee=payee,
     )
+    # A parent account with no postings of its own (e.g. ``Assets:Investments``)
+    # matches nothing exactly and would chart a flat zero line.  Detect that on
+    # the *unfiltered* ledger — the account filter itself would mask the
+    # distinction — and roll up its children instead.
+    consolidate = not _has_own_postings(
+        ledger.all_entries, account
+    ) and _has_descendants(ledger.all_entries, account)
+
     if view_mode == "comparative":
+        if consolidate:
+            actual = _compute_account_balance_consolidated(
+                get_filtered_entries(ledger, "actual", **fkw), account, interval
+            )
+            planned = _compute_account_balance_consolidated(
+                get_filtered_entries(ledger, "planned", **fkw), account, interval
+            )
+            return {
+                "series": actual["series"],
+                "children": actual["children"],
+                "planned_series": planned["series"],
+                "planned_children": planned["children"],
+                "consolidated": True,
+            }
         return {
             "series": _compute_account_balance(
                 get_filtered_entries(ledger, "actual", **fkw), account, interval
@@ -348,7 +488,12 @@ def get_account_balance(
                 get_filtered_entries(ledger, "planned", **fkw), account, interval
             ),
         }
+
     entries = get_filtered_entries(ledger, view_mode, **fkw)
+    if consolidate:
+        result = _compute_account_balance_consolidated(entries, account, interval)
+        result["consolidated"] = True
+        return result
     return {"series": _compute_account_balance(entries, account, interval)}
 
 

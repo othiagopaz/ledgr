@@ -170,6 +170,19 @@ All pages referenced from `AGENTS.md` or the index have been created. The pre-bo
 
 ---
 
+## 2026-08-19 — Consolidated account balance
+
+- `GET /api/reports/account-balance` now rolls up children when the requested
+  account is a pure grouping node (no postings of its own, e.g.
+  `Assets:Investments`). Previously charted a flat zero line.
+- Response gains `consolidated`, `children`, and `planned_children`; a leaf
+  account's response is unchanged.
+- Chart draws the total as bars (left axis) and each child as a line on an
+  independently-scaled right axis.
+- See [`backend/reports.md`](backend/reports.md) for the invariants.
+
+---
+
 ## 2026-04-21 — Wiki bootstrap
 
 - Restructured from monolithic `AGENTS.md` (549 lines) into a Karpathy-style wiki.

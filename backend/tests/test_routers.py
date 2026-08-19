@@ -817,3 +817,105 @@ class TestAccountCRUD:
         assert checking["ledgr_type"] == "cash"
         assert checking["open_date"] == "2024-01-01"
         assert "BRL" in checking["currencies"]
+
+
+# ------------------------------------------------------------------
+# Consolidated account balance — HTTP level
+# ------------------------------------------------------------------
+
+CONSOLIDATED_FIXTURE = """\
+option "title" "Consolidated Router Test"
+option "operating_currency" "BRL"
+
+2024-01-01 open Assets:Checking            BRL
+  ledgr-type: "cash"
+2024-01-01 open Assets:Investments:Big     BRL
+  ledgr-type: "investment"
+2024-01-01 open Assets:Investments:Small   BRL
+  ledgr-type: "investment"
+2024-01-01 open Equity:Opening             BRL
+
+2024-01-01 * "Seed"
+  Assets:Checking       50000.00 BRL
+  Equity:Opening
+
+2024-01-10 * "Fund big"
+  Assets:Investments:Big  20000.00 BRL
+  Assets:Checking
+
+2024-02-10 * "Fund small"
+  Assets:Investments:Small   300.00 BRL
+  Assets:Checking
+
+2024-03-01 ! "Planned top-up"
+  Assets:Investments:Big   1000.00 BRL
+  Assets:Checking        -1000.00 BRL
+"""
+
+
+@pytest.fixture()
+def consolidated_client(tmp_path: Path) -> TestClient:
+    """TestClient over a ledger where ``Assets:Investments`` is a pure group."""
+    dst = tmp_path / "consolidated.beancount"
+    dst.write_text(CONSOLIDATED_FIXTURE)
+    ledger_mod.init_ledger(str(dst))
+    from main import app
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+class TestConsolidatedAccountBalanceRouter:
+    def test_group_account_returns_children(
+        self, consolidated_client: TestClient
+    ) -> None:
+        r = consolidated_client.get(
+            "/api/reports/account-balance",
+            params={"account": "Assets:Investments"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["consolidated"] is True
+        assert [c["name"] for c in body["children"]] == ["Big", "Small"]
+        assert body["series"][-1]["balance"] == pytest.approx(21300.00)
+
+    def test_leaf_account_response_unchanged(
+        self, consolidated_client: TestClient
+    ) -> None:
+        """A regular account must not grow a `children` key — no regression."""
+        r = consolidated_client.get(
+            "/api/reports/account-balance",
+            params={"account": "Assets:Investments:Big"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert "consolidated" not in body
+        assert "children" not in body
+        assert "series" in body
+
+    def test_consolidated_comparative_splits_actual_and_planned(
+        self, consolidated_client: TestClient
+    ) -> None:
+        r = consolidated_client.get(
+            "/api/reports/account-balance",
+            params={"account": "Assets:Investments", "view_mode": "comparative"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["consolidated"] is True
+        assert "children" in body
+        assert "planned_children" in body
+        # The planned top-up hits Big only, so actual and planned differ.
+        assert body["series"][-1]["balance"] != body["planned_series"][-1]["balance"]
+
+    def test_consolidated_respects_interval(
+        self, consolidated_client: TestClient
+    ) -> None:
+        r = consolidated_client.get(
+            "/api/reports/account-balance",
+            params={"account": "Assets:Investments", "interval": "yearly"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert [p["period"] for p in body["series"]] == ["2024"]
+        for child in body["children"]:
+            assert [p["period"] for p in child["series"]] == ["2024"]

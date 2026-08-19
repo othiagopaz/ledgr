@@ -451,3 +451,191 @@ class TestCashflowViaModule:
         assert "investing" in result
         assert "financing" in result
         assert "transfers" in result
+
+
+# ------------------------------------------------------------------
+# Consolidated account balance — parent accounts with no own postings
+# ------------------------------------------------------------------
+
+CONSOLIDATED_LEDGER = """\
+option "title" "Consolidated Test"
+option "operating_currency" "BRL"
+
+2024-01-01 open Assets:Checking                      BRL
+  ledgr-type: "cash"
+2024-01-01 open Assets:Investments:Big               BRL
+  ledgr-type: "investment"
+2024-01-01 open Assets:Investments:Small             BRL
+  ledgr-type: "investment"
+2024-01-01 open Assets:Investments:Nested:A          BRL
+  ledgr-type: "investment"
+2024-01-01 open Assets:Investments:Nested:B          BRL
+  ledgr-type: "investment"
+2024-01-01 open Assets:Investments:Untouched         BRL
+  ledgr-type: "investment"
+2024-01-01 open Equity:Opening                       BRL
+
+2024-01-01 * "Seed"
+  Assets:Checking        100000.00 BRL
+  Equity:Opening
+
+2024-01-10 * "Fund big"
+  Assets:Investments:Big   40000.00 BRL
+  Assets:Checking
+
+2024-01-11 * "Fund small"
+  Assets:Investments:Small    500.00 BRL
+  Assets:Checking
+
+2024-02-10 * "Fund nested A"
+  Assets:Investments:Nested:A  1000.00 BRL
+  Assets:Checking
+
+2024-02-11 * "Fund nested B"
+  Assets:Investments:Nested:B   250.00 BRL
+  Assets:Checking
+
+2024-03-10 * "Top up big"
+  Assets:Investments:Big    2000.00 BRL
+  Assets:Checking
+"""
+
+
+@pytest.fixture
+def consolidated_entries(tmp_path):
+    """Entries for a ledger where ``Assets:Investments`` is a pure group."""
+    from beancount import loader
+
+    path = tmp_path / "consolidated.beancount"
+    path.write_text(CONSOLIDATED_LEDGER)
+    entries, errors, _ = loader.load_file(str(path))
+    assert not errors
+    return entries
+
+
+class TestConsolidatedAccountBalance:
+    """A parent with no postings of its own rolls up its children.
+
+    Matching such an account exactly yields a flat zero line — accurate but
+    useless.  These tests pin the roll-up and, critically, the reconciliation
+    invariant: the children must sum to the consolidated total in *every*
+    period, or the chart would show two contradictory numbers.
+    """
+
+    def test_detects_group_account(self, consolidated_entries) -> None:
+        from routers.reports import _has_descendants, _has_own_postings
+
+        assert not _has_own_postings(consolidated_entries, "Assets:Investments")
+        assert _has_descendants(consolidated_entries, "Assets:Investments")
+
+    def test_leaf_account_is_not_consolidated(self, consolidated_entries) -> None:
+        from routers.reports import _has_descendants, _has_own_postings
+
+        assert _has_own_postings(consolidated_entries, "Assets:Checking")
+        assert not _has_descendants(consolidated_entries, "Assets:Checking")
+
+    def test_child_bucket_aggregates_grandchildren(self) -> None:
+        from routers.reports import _child_bucket
+
+        assert (
+            _child_bucket("Assets:Investments:Nested:A", "Assets:Investments")
+            == "Assets:Investments:Nested"
+        )
+        assert (
+            _child_bucket("Assets:Investments:Big", "Assets:Investments")
+            == "Assets:Investments:Big"
+        )
+
+    def test_consolidated_total_is_sum_of_descendants(
+        self, consolidated_entries
+    ) -> None:
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments", "monthly"
+        )
+        # 40000 + 500 + 1000 + 250 + 2000
+        assert result["series"][-1]["balance"] == pytest.approx(43750.00)
+
+    def test_children_reconcile_with_total_every_period(
+        self, consolidated_entries
+    ) -> None:
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments", "monthly"
+        )
+        for i, point in enumerate(result["series"]):
+            child_sum = sum(c["series"][i]["balance"] for c in result["children"])
+            assert child_sum == pytest.approx(point["balance"]), (
+                f"period {point['period']} does not reconcile"
+            )
+
+    def test_grandchildren_aggregate_into_one_child_row(
+        self, consolidated_entries
+    ) -> None:
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments", "monthly"
+        )
+        names = {c["name"] for c in result["children"]}
+        assert "Nested" in names
+        assert "Nested:A" not in names
+        nested = next(c for c in result["children"] if c["name"] == "Nested")
+        assert nested["series"][-1]["balance"] == pytest.approx(1250.00)
+
+    def test_children_sorted_by_descending_magnitude(
+        self, consolidated_entries
+    ) -> None:
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments", "monthly"
+        )
+        assert [c["name"] for c in result["children"]] == ["Big", "Nested", "Small"]
+
+    def test_never_moved_child_is_dropped(self, consolidated_entries) -> None:
+        """An account opened but never posted to must not add a flat zero line."""
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments", "monthly"
+        )
+        assert "Untouched" not in {c["name"] for c in result["children"]}
+
+    def test_all_children_share_the_period_axis(self, consolidated_entries) -> None:
+        """Every child series must be index-aligned with the total, so the
+        frontend can zip them into one row per period."""
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments", "monthly"
+        )
+        periods = [p["period"] for p in result["series"]]
+        for child in result["children"]:
+            assert [p["period"] for p in child["series"]] == periods
+
+    def test_child_carries_zero_before_first_movement(
+        self, consolidated_entries
+    ) -> None:
+        """Nested is funded in February — January must read 0, not be missing."""
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments", "monthly"
+        )
+        nested = next(c for c in result["children"] if c["name"] == "Nested")
+        jan = next(p for p in nested["series"] if p["period"] == "2024-01")
+        assert jan["balance"] == 0
+
+    def test_drilling_into_a_child_group_consolidates_too(
+        self, consolidated_entries
+    ) -> None:
+        from routers.reports import _compute_account_balance_consolidated
+
+        result = _compute_account_balance_consolidated(
+            consolidated_entries, "Assets:Investments:Nested", "monthly"
+        )
+        assert {c["name"] for c in result["children"]} == {"A", "B"}
+        assert result["series"][-1]["balance"] == pytest.approx(1250.00)
