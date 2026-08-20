@@ -116,16 +116,19 @@ export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardP
   const viewMode = useAppStore((s) => s.viewMode);
   const filters = useFilterParams();
 
-  // Always fetch combined for the main indicators
+  // Always fetch combined for the main indicators.
+  // `filters` must be passed to the fetch, not just live in the key — keyed-but-
+  // unfiltered meant the Dashboard re-fetched on every filter change and still
+  // loaded (and reported) the entire ledger.
   const accountsQuery = useQuery({
     queryKey: ["accounts", viewMode, filters],
-    queryFn: () => fetchAccounts(viewMode),
+    queryFn: () => fetchAccounts(viewMode, filters),
   });
 
   // Fetch planned-only data to compute the planned portion subtitle
   const plannedAccountsQuery = useQuery({
     queryKey: ["accounts", "planned-for-delta", filters],
-    queryFn: () => fetchAccounts("planned" as ViewMode),
+    queryFn: () => fetchAccounts("planned" as ViewMode, filters),
     enabled: viewMode === "combined",
   });
 
@@ -136,7 +139,7 @@ export default function Dashboard({ onSelectAccount, onOpenReports }: DashboardP
 
   const txnsQuery = useQuery({
     queryKey: ["transactions", viewMode, filters],
-    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode),
+    queryFn: () => fetchTransactions(undefined, undefined, undefined, viewMode, filters),
   });
 
   const accounts = accountsQuery.data?.accounts || [];

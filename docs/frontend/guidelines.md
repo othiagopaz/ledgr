@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-08-07
+last_updated: 2026-08-19
 ---
 
 # Front-end guidelines
@@ -215,6 +215,34 @@ useAppStore.getState().toggleViewMode();
 - **`getState()` for fire-and-forget** — actions called outside React components can use `useAppStore.getState().action()`
 - **Signal pattern** — for cross-component communication without shared data, use a counter that increments (e.g., `newTxnRequestId`)
 
+### Global filters open scoped to the current year
+
+`periodPreset` initialises to `DEFAULT_PERIOD_PRESET` (`'this-year'`), not to
+"All time". On a ledger with years of history, an unbounded first paint makes
+every page load the whole file — the `/api/transactions` payload alone roughly
+doubles, and the row count the browser has to render doubles with it.
+
+Three properties make this work, and each is load-bearing:
+
+- **The scope is the store's *initial* state**, not something a component
+  applies after mounting. The first request a page fires is already bounded —
+  there is no unfiltered fetch to waste, and no double fetch when a filter
+  lands a moment later.
+- **It is visible.** The FilterBar renders the period as an active pill from the
+  first paint (`2026`, plus the resolved range), so a scoped number never looks
+  like a total. The bar shows on every view that filters its data; Budget is the
+  one exclusion, since it has its own month navigation.
+- **It is one click to leave.** The pill's ✕ widens to All time — the pill only
+  earns its place if dismissing it does the useful thing. `clearFilters()`
+  ("Clear all", Cmd+K) returns to the default *year*, never to unbounded, so
+  clearing a filter can't silently turn into a full-ledger load. All time stays
+  an explicit choice: the Period dropdown, or Cmd+K → "Filter: All Time".
+
+`hasActiveFilters()` treats the default year as *not* active (otherwise "Clear
+all" would show permanently with nothing to clear) but does count All time, so
+there is always a way back. Presets resolve at query time via
+`resolvePeriodDates`, so "this year" keeps meaning *now* without a reload.
+
 ## Data fetching (React Query)
 
 ### Global config (`main.tsx`)
@@ -225,10 +253,22 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      staleTime: 30_000,
+      placeholderData: keepPreviousData,
     },
   },
 });
 ```
+
+`staleTime` exists because the ledger only changes when this app writes to it
+(mutations already invalidate the affected keys) or when the file is edited
+outside — which the backend catches with its mtime check on the next read. So a
+remount is not a reason to refetch; without it, every tab switch re-fetched data
+already in cache.
+
+`placeholderData: keepPreviousData` keeps the previous window's data on screen
+while a new filter loads, instead of dropping to a blank "Loading…". Filter
+changes read as instant even when the request is not.
 
 ### Query pattern
 
@@ -244,6 +284,7 @@ const { data, isLoading } = useQuery({
 ### Rules
 
 - **`viewMode` in every query key** — so React Query refetches when the toggle changes (see [`../features/planned-toggle.md`](../features/planned-toggle.md))
+- **Global filters go in the key *and* the fetch** — `useFilterParams()` feeds both. Putting `filters` only in the `queryKey` is a silent bug: the query refetches on every filter change but keeps requesting the whole ledger, so the page shows unfiltered numbers at full cost. This was a real bug in `Dashboard.tsx`. Any view that reads entries takes the global filters — the only deliberate exceptions are the Composer's series/usage lookups, which must see beyond the current window.
 - **Wrap `queryFn` in a lambda** — `() => fetchFoo(args)`, never pass `fetchFoo` directly. React Query passes its own context object as the first argument, which corrupts parameters. This was a real bug — see [`../pitfalls.md`](../pitfalls.md).
 - **Query keys are arrays** — include all parameters that affect the result
 - **Mutations invalidate related queries**:

@@ -87,15 +87,22 @@ function PeriodDropdown({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <Dropdown open={open} onClose={onClose}>
       <div className="filter-dropdown-presets">
-        {PERIOD_PRESETS.map((p) => (
-          <button
-            key={p.value}
-            className={`filter-preset-btn${periodPreset === p.value ? ' active' : ''}`}
-            onClick={() => selectPreset(p.value)}
-          >
-            {p.label}
-          </button>
-        ))}
+        {PERIOD_PRESETS.map((p) => {
+          // "All time" is stored as a null preset (no date bounds), so it is
+          // the active row precisely when no preset and no custom range is set.
+          const active = p.value === 'all-time'
+            ? !periodPreset && !fromDate && !toDate
+            : periodPreset === p.value;
+          return (
+            <button
+              key={p.value}
+              className={`filter-preset-btn${active ? ' active' : ''}`}
+              onClick={() => selectPreset(p.value)}
+            >
+              {p.label}
+            </button>
+          );
+        })}
       </div>
       <div className="filter-dropdown-divider" />
       <div className="filter-dropdown-custom">
@@ -200,21 +207,31 @@ interface FilterButtonProps {
   displayValue: string | null;
   onClick: () => void;
   onClear: () => void;
+  /** Tooltip for the button itself. Defaults to the label. */
+  title?: string;
+  /** Tooltip for the ✕ affordance. */
+  clearTitle?: string;
 }
 
-function FilterButton({ icon, label, active, displayValue, onClick, onClear }: FilterButtonProps) {
+function FilterButton({
+  icon, label, active, displayValue, onClick, onClear, title, clearTitle,
+}: FilterButtonProps) {
   return (
     <button
       className={`filter-btn${active ? ' filter-btn-active' : ''}`}
       onClick={onClick}
+      title={title ?? label}
     >
       {icon}
       <span className="filter-btn-label">
-        {active && displayValue ? displayValue : label}
+        {displayValue ?? label}
       </span>
       {active && (
         <span
           className="filter-btn-clear"
+          role="button"
+          aria-label={clearTitle ?? `Clear ${label.toLowerCase()} filter`}
+          title={clearTitle ?? `Clear ${label.toLowerCase()} filter`}
           onClick={(e) => { e.stopPropagation(); onClear(); }}
         >
           <XIcon size={12} />
@@ -257,13 +274,23 @@ export default function FilterBar() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Period display value
+  // Period display value.
+  //
+  // The pill is always "active" when a window is bounded — including the
+  // default year — so the scope the user is looking at is never invisible.
+  // "This year" renders as the concrete year ("2026") because a date-scoped
+  // number is only trustworthy when its range is legible at a glance.
   const periodActive = !!(periodPreset || fromDate || toDate);
   let periodDisplay: string | null = null;
-  if (periodPreset) {
+  if (periodPreset === 'this-year') {
+    periodDisplay = String(new Date().getFullYear());
+  } else if (periodPreset) {
     periodDisplay = PERIOD_PRESETS.find((p) => p.value === periodPreset)?.label ?? null;
   } else if (fromDate || toDate) {
     periodDisplay = `${fromDate ?? '...'} – ${toDate ?? '...'}`;
+  } else {
+    // Unbounded — say so, rather than falling back to the generic "Period".
+    periodDisplay = 'All time';
   }
 
   // Tag display
@@ -315,8 +342,15 @@ export default function FilterBar() {
           label="Period"
           active={periodActive}
           displayValue={periodDisplay}
+          title={periodActive
+            ? 'Period — dismiss to show all time'
+            : 'Period — showing all time'}
+          clearTitle="Show all time"
           onClick={() => toggleDropdown('period')}
-          onClear={() => clearFilter('periodPreset')}
+          // Dismissing the period pill widens to All time — that is the whole
+          // point of showing the default year as a pill. Going back to the
+          // default year is "Clear all" (or picking This year again).
+          onClear={() => setFilter({ periodPreset: null, fromDate: null, toDate: null })}
         />
         {periodActive && (
           <button

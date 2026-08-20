@@ -3,6 +3,7 @@ import { fetchAccounts } from "../api/client";
 import AccountTree from "./AccountTree";
 import PageHeader from "./PageHeader";
 import { useAppStore } from "../stores/appStore";
+import { useFilterParams } from "../hooks/useFilterParams";
 import type { AccountNode } from "../types";
 
 interface AccountsViewProps {
@@ -14,9 +15,15 @@ export default function AccountsView({ onSelectAccount }: AccountsViewProps) {
   const viewMode = useAppStore((s) => s.viewMode);
   const openAcctModal = useAppStore((s) => s.openAcctModal);
 
+  // Respect the global filters like every other view. Without them this view
+  // loaded the whole ledger *and* cache-missed against the shared ["accounts",
+  // viewMode, filters] key that App/Dashboard already populate — two full
+  // fetches of the same data on a large ledger.
+  const filters = useFilterParams();
+
   const accountsQuery = useQuery({
-    queryKey: ["accounts", viewMode],
-    queryFn: () => fetchAccounts(viewMode),
+    queryKey: ["accounts", viewMode, filters],
+    queryFn: () => fetchAccounts(viewMode, filters),
   });
 
   const accounts = accountsQuery.data?.accounts || [];

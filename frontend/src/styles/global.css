@@ -512,13 +512,44 @@ body {
 .acct-row-selected { background: var(--color-accent-subtle); }
 .acct-row-zero { color: var(--color-text-tertiary); }
 .acct-indent { display: inline-block; flex-shrink: 0; }
+/* Disclosure chevron. A real <button> so it is clickable and focusable
+   independently of the row (the row click opens the register). The hit area
+   fills the row height and is wider than the glyph — the old 16px/10px target
+   was too small to hit reliably. The glyph itself stays small and quiet; only
+   the target grew. */
 .acct-toggle {
-  width: 16px;
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  align-self: stretch;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
   color: var(--color-text-tertiary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
   flex-shrink: 0;
-  text-align: center;
+  cursor: pointer;
+  border-radius: 4px;
 }
+.acct-toggle-empty {
+  cursor: default;
+}
+/* Only the glyph rotates/darkens — keeps the affordance legible without
+   pulling attention from the balances. */
+.acct-toggle-glyph {
+  display: inline-block;
+  transition: transform 0.12s ease, color 0.12s ease;
+}
+button.acct-toggle:hover {
+  background: var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+/* No :focus-visible rule — the button is tabIndex={-1} by design (the tree is
+   the keyboard entry point), so it never receives keyboard focus. */
 .acct-name {
   flex: 1;
   overflow: hidden;

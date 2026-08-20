@@ -14,6 +14,13 @@ interface Tab {
 // newTxnRequestId signal pattern: a counter the palette bumps, carrying the
 // requested action; BudgetView consumes the latest one. See frontend guidelines
 // "Signal pattern".
+/**
+ * Period the app opens with. Scopes every first-paint query to the current
+ * year so a ledger with years of history doesn't pay for all of it on load.
+ * Resolved at query time by `resolvePeriodDates`, so it always means "now".
+ */
+export const DEFAULT_PERIOD_PRESET: PeriodPreset = 'this-year';
+
 export type BudgetNavAction =
   | 'next-month'
   | 'prev-month'
@@ -229,8 +236,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
   setViewMode: (mode) => set({ viewMode: mode }),
 
-  // Global filters — default = all null/empty = no filters = "All time"
-  periodPreset: null,
+  // Global filters.
+  //
+  // Period defaults to the current year (DEFAULT_PERIOD_PRESET) rather than
+  // "All time": on a ledger with years of history, an unbounded first paint
+  // makes every page load the whole file (the /api/transactions payload alone
+  // roughly doubles). The default is a *filter*, not a cap — the Filter Bar
+  // shows it as an active pill from the first render, so it is one click to
+  // widen to All time. `clearFilters()` returns here, not to unbounded; use
+  // the Period dropdown's "All time" to go truly unbounded.
+  periodPreset: DEFAULT_PERIOD_PRESET,
   fromDate: null,
   toDate: null,
   account: null,
@@ -258,26 +273,35 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
   }),
 
+  // "Clear all" resets to the app default (current year), not to unbounded.
+  // Clearing filters should never turn into a full-ledger load by accident;
+  // All time stays an explicit choice in the Period dropdown.
   clearFilters: () => set({
-    periodPreset: null, fromDate: null, toDate: null,
+    periodPreset: DEFAULT_PERIOD_PRESET, fromDate: null, toDate: null,
     account: null, tags: [], payee: null,
   }),
 
   clearFilter: (key) => {
     if (key === 'tags') {
       set({ tags: [] });
-    } else if (key === 'periodPreset') {
-      set({ periodPreset: null, fromDate: null, toDate: null });
-    } else if (key === 'fromDate' || key === 'toDate') {
-      set({ periodPreset: null, fromDate: null, toDate: null });
+    } else if (key === 'periodPreset' || key === 'fromDate' || key === 'toDate') {
+      // Dismissing the period pill returns to the default year, not All time.
+      set({ periodPreset: DEFAULT_PERIOD_PRESET, fromDate: null, toDate: null });
     } else {
       set({ [key]: null });
     }
   },
 
+  // Whether anything differs from the app default. The default year is not
+  // "active" for this purpose — otherwise "Clear all" would show permanently
+  // with nothing left to clear.
   hasActiveFilters: () => {
     const s = get();
-    return !!(s.periodPreset || s.fromDate || s.toDate || s.account || s.tags.length || s.payee);
+    // Any period other than the default counts — including All time
+    // (periodPreset === null), so "Clear all" can bring the year back.
+    const periodIsDefault =
+      s.periodPreset === DEFAULT_PERIOD_PRESET && !s.fromDate && !s.toDate;
+    return !!(!periodIsDefault || s.account || s.tags.length || s.payee);
   },
 
   // Config

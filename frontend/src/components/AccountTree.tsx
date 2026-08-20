@@ -205,7 +205,6 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
             }
             onClick={() => {
               setFocusIndex(i);
-              if (row.hasChildren) toggleExpand(row.path);
               onSelect(row.node.name);
             }}
             onDoubleClick={() => {
@@ -213,9 +212,40 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
             }}
           >
             <span className="acct-indent" style={{ width: row.depth * 16 }} />
-            <span className="acct-toggle">
-              {row.hasChildren ? (row.isExpanded ? "\u25BE" : "\u25B8") : ""}
-            </span>
+            {/* The chevron is its own button: clicking the row opens the
+                account's register (navigating away), so an expand folded into
+                the row click was invisible \u2014 the tree appeared keyboard-only.
+                stopPropagation keeps expanding and opening separate. */}
+            {row.hasChildren ? (
+              <button
+                type="button"
+                className="acct-toggle"
+                aria-expanded={row.isExpanded}
+                aria-label={`${row.isExpanded ? "Collapse" : "Expand"} ${shortName}`}
+                title={row.isExpanded ? "Collapse" : "Expand"}
+                // Out of the tab order on purpose: the tree itself is the
+                // single keyboard entry point (it owns the keydown listener
+                // for arrows/Space), so Tab should not walk 26 chevrons.
+                // Mouse users get the button; keyboard users get the tree.
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFocusIndex(i);
+                  toggleExpand(row.path);
+                  // Hand focus back to the tree. The tree owns the keydown
+                  // listener, so leaving focus on the button would silently
+                  // kill arrow-key navigation after any chevron click.
+                  containerRef.current?.focus();
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <span className="acct-toggle-glyph" aria-hidden="true">
+                  {row.isExpanded ? "\u25BE" : "\u25B8"}
+                </span>
+              </button>
+            ) : (
+              <span className="acct-toggle acct-toggle-empty" aria-hidden="true" />
+            )}
             <span className="acct-name">{shortName}</span>
             {showBadge && (
               <span className={typeBadgeClass(row.node.ledgr_type!)}>

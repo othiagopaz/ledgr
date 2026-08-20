@@ -128,6 +128,21 @@ export default function CommandPalette() {
     },
   });
 
+  // Widening to All time is the escape hatch from the default current-year
+  // scope, so it needs to be reachable from the palette like every other
+  // user-facing action.
+  items.push({
+    id: "action:filter-all-time",
+    label: "Filter: All Time",
+    group: "Actions",
+    action: () => {
+      useAppStore.getState().setFilter({
+        periodPreset: null, fromDate: null, toDate: null,
+      });
+      setCommandPaletteOpen(false);
+    },
+  });
+
   // Views
   items.push({
     id: "view:series",

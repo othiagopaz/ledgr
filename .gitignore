@@ -27,3 +27,7 @@ Ledgr.command
 # Machine-specific Claude Code config (absolute paths, personal permissions)
 .claude/settings.local.json
 .claude/launch.json
+
+# One-off sheet→Beancount migration scripts. Personal, throwaway, and they
+# reference local ledger paths — they stay on this machine, never on origin.
+scripts/migration/

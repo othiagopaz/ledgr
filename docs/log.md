@@ -9,6 +9,25 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-08-19 — Fix: account tree could not be expanded with the mouse
+
+- On the Accounts page the disclosure chevron was a bare `<span>`, and the *row* `onClick` both toggled expand and called `onSelect` — which opens the account's register in a new tab. The expand happened, but the navigation hid it, so the tree looked keyboard-only.
+- The chevron is now its own `<button>` with `stopPropagation`, so expanding and opening are separate actions: chevron expands in place, row opens the register. Its hit area went from a 16px-wide/10px-font glyph to 22px × full row height, with a hover background and `aria-expanded`/`aria-label`.
+- The button is `tabIndex={-1}` and returns focus to the tree on click. The tree owns the keydown listener, so a focused button would have silently killed arrow-key navigation after any chevron click — caught in testing, not in review.
+
+---
+
+## 2026-08-19 — Pages open scoped to the current year
+
+- A larger import made the unbounded first paint expensive: every page loaded the whole ledger. `periodPreset` now initialises to `DEFAULT_PERIOD_PRESET` (`'this-year'`) in `appStore.ts`, so the *first* request each page fires is already bounded — the filter is not applied after an unfiltered load. On the current file that halves the `/api/transactions` payload (495 KB → 262 KB) and the rows rendered (1566 → 834).
+- Shown, not hidden: the FilterBar renders the period as an active pill (`2026` + resolved range) from the first paint, its ✕ widens to All time, and `clearFilters()` returns to the default year rather than unbounded. Added Cmd+K → "Filter: All Time". The bar now also renders on Accounts (previously hidden, which would have left that page silently filtered); Budget stays excluded as it has its own month navigation.
+- Fixed a silent bug found on the way: `Dashboard.tsx` put `filters` in its query *keys* but never passed them to the fetches, so it re-fetched on every filter change and still loaded and reported the entire ledger. `AccountsView` ignored the filters altogether and cache-missed the shared `["accounts", viewMode, filters]` key, costing a second full fetch. Rule added to [`frontend/guidelines.md`](frontend/guidelines.md).
+- Composer's account-usage ranking now reads a trailing 12 months instead of the whole ledger — it was the single largest payload in the app, paid on every open, and recency is the better ranking signal anyway.
+- Added `staleTime: 30_000` and `placeholderData: keepPreviousData` globally: the ledger only changes on our own writes (already invalidated) or an outside edit (caught by the backend mtime check), so remounts no longer refetch, and filter changes keep the previous data on screen instead of blanking.
+- Supersedes the "default = All time" line in [`plans/PLAN-global-filters.md`](plans/PLAN-global-filters.md).
+
+---
+
 ## 2026-08-19 — Cash Flow breakdown is hierarchical
 
 - The Cash Flow was the only report returning a **flat** breakdown, and its rows were labelled with the account's leaf segment alone. Any two counterparts sharing a leaf name rendered identically — a deferred-income release (`Assets:Reserva:Bonus`, `Liabilities:Deferred:Bonus`, `Income:Bonus` in one transaction) produced three rows all reading `"Bonus"`. Now each section's `items` is a tree built by the same `build_report_tree` the Income Statement uses; the nesting disambiguates, so the short label stays.

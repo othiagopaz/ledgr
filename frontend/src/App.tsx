@@ -178,7 +178,11 @@ export default function App() {
 
         <div className="main-content">
           <TabBar />
-          {activeTab?.type !== "accounts" && activeTab?.type !== "budget" && <FilterBar />}
+          {/* Budget has its own month navigation and ignores the global
+              filters, so the bar would be misleading there. Every other view —
+              Accounts included — filters its data, so the bar must be visible:
+              a page scoped to the current year must say so. */}
+          {activeTab?.type !== "budget" && <FilterBar />}
           <div className="register-content">
             {renderMainContent()}
           </div>

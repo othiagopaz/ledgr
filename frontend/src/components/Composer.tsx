@@ -189,12 +189,25 @@ export default function Composer({ onMutated }: ComposerProps) {
   const payeeList = useMemo(() => payeesQ.data?.payees || [], [payeesQ.data]);
   const tagList = useMemo(() => tagsQ.data?.tags || [], [tagsQ.data]);
 
-  // Personal account-usage map for ranking the `>` picker — built once from all
-  // transactions (client-side, React-Query cached; ~one page of JSON). Counts
-  // how often each account is posted to.
+  // Personal account-usage map for ranking the `>` picker. Counts how often
+  // each account is posted to.
+  //
+  // Scoped to the trailing 12 months rather than the whole ledger: on a ledger
+  // with years of history the unbounded fetch was the single largest payload in
+  // the app, paid on every Composer open. Recent usage is also the better
+  // ranking signal — accounts you used years ago should not outrank the ones
+  // you use now. Deliberately independent of the global period filter, so the
+  // picker ranks consistently no matter what window the page is showing.
+  const usageWindow = useMemo(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+    const isoDate = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return { from: isoDate(from), to: isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 1)) };
+  }, []);
   const allTxnsQ = useQuery({
-    queryKey: ["transactions", "all-for-usage"],
-    queryFn: () => fetchTransactions(undefined, undefined, undefined, "combined"),
+    queryKey: ["transactions", "usage", usageWindow.from, usageWindow.to],
+    queryFn: () => fetchTransactions(undefined, usageWindow.from, usageWindow.to, "combined"),
     staleTime: 60_000,
   });
   const accountUsage = useMemo(() => {
