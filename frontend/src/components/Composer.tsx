@@ -76,7 +76,6 @@ export default function Composer({ onMutated }: ComposerProps) {
   const close = useAppStore((s) => s.closeComposer);
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const locale = useAppStore((s) => s.locale);
-  const defaultPaymentAccount = useAppStore((s) => s.defaultPaymentAccount);
   const queryClient = useQueryClient();
 
   // Locale uses comma as the decimal separator? (mirrors parseSmartDate's
@@ -221,13 +220,15 @@ export default function Composer({ onMutated }: ComposerProps) {
   // pre-highlight the `from` slot.
   const [payeeUsual, setPayeeUsual] = useState<string | null>(null);
   const defaultPay = useMemo(() => {
-    // The most-used payment-kind account, as the `to` default when no rule set.
-    if (defaultPaymentAccount) return defaultPaymentAccount;
+    // The most-used payment-kind account, as the `to` default. Derived from
+    // actual usage rather than a configured default: a hand-set preference went
+    // stale the moment spending habits moved, and fast input already ranks by
+    // the same statistic.
     let best: string | null = null, bestN = -1;
     for (const [name, n] of accountUsage)
       if (accountKind(name) === 'pay' && n > bestN) { best = name; bestN = n; }
     return best;
-  }, [defaultPaymentAccount, accountUsage]);
+  }, [accountUsage]);
 
   // Ranked results for the active route slot.
   const routeResults = useMemo<RankedAccount[]>(() => {
@@ -307,14 +308,14 @@ export default function Composer({ onMutated }: ComposerProps) {
     const out: Row[] = [];
     if (acc) {
       out.push({ id: 1, account: acc.value, amount: amtVal, currency: operatingCurrency });
-      out.push({ id: 2, account: acc.secondary || defaultPaymentAccount || '', amount: '', currency: operatingCurrency });
+      out.push({ id: 2, account: acc.secondary || defaultPay || '', amount: '', currency: operatingCurrency });
     } else if (amtVal) {
       // Amount but no route yet — a single account-less row so the preview can
       // show the amount / installment breakdown before accounts are picked.
       out.push({ id: 1, account: '', amount: amtVal, currency: operatingCurrency });
     }
     return out;
-  }, [split, editing, rows, pills, ghostPills, inputValue, operatingCurrency, defaultPaymentAccount, commaDecimal]);
+  }, [split, editing, rows, pills, ghostPills, inputValue, operatingCurrency, defaultPay, commaDecimal]);
 
   const balance = useMemo(() => computeBalance(postings), [postings]);
 
@@ -451,7 +452,7 @@ export default function Composer({ onMutated }: ComposerProps) {
       if (s.account) setPayeeUsual(s.account);   // pre-highlights the route's `from`
       const g: Pill[] = [];
       if (s.account && !pills.some(x => x.type === 'accounts')) {
-        g.push({ type: 'accounts', label: shortName(s.account), value: s.account, secondary: defaultPaymentAccount || '' });
+        g.push({ type: 'accounts', label: shortName(s.account), value: s.account, secondary: defaultPay || '' });
       }
       if (s.amount && !pills.some(x => x.type === 'amount')) {
         g.push({ type: 'amount', label: `$ ${s.amount}`, value: s.amount });
@@ -675,7 +676,8 @@ export default function Composer({ onMutated }: ComposerProps) {
   async function saveOccurrence() {
     const v = validatePostings(); if (v) { setError(v); return; }
     const res = await editTransaction({
-      lineno: txn!.lineno!, date: parseSmartDate(date), flag, payee, narration, tags, links,
+      lineno: txn!.lineno!, filename: txn!.filename,
+      date: parseSmartDate(date), flag, payee, narration, tags, links,
       postings: postingInputs(),
     });
     if (!res.success) { setError(res.errors?.join(", ") || "Failed to edit."); return; }
@@ -764,7 +766,7 @@ export default function Composer({ onMutated }: ComposerProps) {
     if (t.lineno == null) return;
     setSaving(true); setError(null);
     try {
-      const res = await deleteTransaction(t.lineno);
+      const res = await deleteTransaction(t.lineno, t.filename);
       if (!res.success) { setError(res.errors?.join(", ") || "Failed to delete."); return; }
       refreshSeries("Occurrence deleted");
     } catch (e) { setError(e instanceof Error ? e.message : "error"); }

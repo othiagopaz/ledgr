@@ -57,9 +57,6 @@ export default function App() {
       if (opts.locale) {
         setLocale(opts.locale);
       }
-      if (opts.default_payment_account) {
-        useAppStore.getState().setDefaultPaymentAccount(opts.default_payment_account);
-      }
     });
   }, [setOperatingCurrency, setLocale]);
 

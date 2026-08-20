@@ -7,8 +7,10 @@ All endpoints obtain the ledger via ``Depends(get_ledger)`` — no direct
 from __future__ import annotations
 
 import datetime
+import re
 from collections import Counter
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 from beancount.core import data, realization
@@ -18,6 +20,7 @@ from fava.core import FavaLedger
 from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
+from account_rename import RenameError, apply_rename, plan_rename
 from account_types import (
     REQUIRED_TYPE_ROOTS,
     TYPE_LABELS,
@@ -43,9 +46,15 @@ def get_accounts(
     tags: list[str] = Query([]),
     payee: str | None = Query(None),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
+    include_closed: bool = Query(False),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """Account tree with balances, enriched with Open directive metadata."""
+    """Account tree with balances, enriched with Open directive metadata.
+
+    Closed (inactive) accounts are omitted by default: a long-lived ledger
+    accumulates accounts that will never be posted to again, and they crowd out
+    the ones in use. ``include_closed=true`` brings them back.
+    """
     entries = get_filtered_entries(
         ledger, view_mode,
         account=account,
@@ -55,20 +64,67 @@ def get_accounts(
         payee=payee,
     )
 
-    # Build opens map once — threaded through recursive serialization
-    opens_map = {
-        e.account: e for e in ledger.all_entries if isinstance(e, data.Open)
-    }
+    # Built once from all_entries — threaded through recursive serialization.
+    # Deliberately NOT from the filtered set: whether an account is closed, and
+    # whether it was ever used, are facts about the ledger, not about the
+    # current date range.
+    opens_map: dict[str, data.Open] = {}
+    closes_map: dict[str, data.Close] = {}
+    posting_counts: Counter[str] = Counter()
+    for e in ledger.all_entries:
+        if isinstance(e, data.Open):
+            opens_map[e.account] = e
+        elif isinstance(e, data.Close):
+            closes_map[e.account] = e
+        elif isinstance(e, data.Transaction):
+            for p in e.postings:
+                posting_counts[p.account] += 1
 
     real_root = realization.realize(entries)
     top_level = [
-        serialize_account_node(c, opens_map) for c in real_root.values()
+        serialize_account_node(c, opens_map, closes_map, posting_counts)
+        for c in real_root.values()
     ]
     top_level.sort(key=lambda n: ACCOUNT_TYPE_ORDER.get(n["name"], 99))
 
+    if not include_closed:
+        top_level = _prune_closed(top_level)
+
     errors = [str(e) for e in ledger.errors]
 
-    return {"accounts": top_level, "errors": errors}
+    return {
+        "accounts": top_level,
+        "errors": errors,
+        "closed_count": len(closes_map),
+    }
+
+
+def _prune_closed(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop closed accounts, and the structural nodes left holding nothing.
+
+    Two kinds of node get pruned:
+
+    * a **closed account** with no surviving descendants. One that still has a
+      live child stays, or the child would lose its place in the tree.
+    * a **structural node** — no ``open`` directive of its own — once every
+      descendant is gone. ``realization.realize()`` synthesises these from the
+      colon-separated names to hang children off, so `Assets:Vehicle` exists
+      purely because `Assets:Vehicle:KA` does. Deactivating the only real
+      account under it must take the placeholder with it, otherwise the tree
+      shows an empty group the user cannot act on (it has no directive to edit
+      or close) and cannot explain.
+    """
+    kept: list[dict[str, Any]] = []
+    for node in nodes:
+        node["children"] = _prune_closed(node["children"])
+        if node["children"]:
+            kept.append(node)
+            continue
+        is_structural = node["open_date"] is None
+        if node["closed"] or is_structural:
+            continue
+        kept.append(node)
+    return kept
 
 
 @router.get("/api/account-names")
@@ -113,79 +169,27 @@ def get_errors(
 def get_options(
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """Ledger options (currency, title, locale, default payment account)."""
+    """Ledger options (currency, title, locale).
+
+    There is no default-payment-account any more: fast input ranks payment
+    accounts by actual usage, which is both self-maintaining and a better
+    predictor than a preference the user set once and forgot. A stale
+    ``ledgr-option "default-payment-account"`` directive in the file is simply
+    ignored.
+    """
     locale = None
-    default_payment_account = None
     for e in ledger.all_entries:
         if isinstance(e, data.Custom):
             if e.type == "ledgr-locale" and not locale:
                 if e.values and len(e.values) > 0:
                     locale = str(e.values[0].value)
-            elif e.type == "ledgr-option":
-                if e.values and len(e.values) >= 2:
-                    key = str(e.values[0].value)
-                    if key == "default-payment-account":
-                        default_payment_account = str(e.values[1].value)
 
     return {
         "operating_currency": ledger.options.get("operating_currency", []),
         "title": ledger.options.get("title", ""),
         "filename": ledger.options.get("filename", ""),
         "locale": locale,
-        "default_payment_account": default_payment_account,
     }
-
-
-class DefaultPaymentAccountIn(BaseModel):
-    account: str | None = None
-
-
-@router.post("/api/options/default-payment-account")
-def set_default_payment_account(
-    body: DefaultPaymentAccountIn,
-    ledger: FavaLedger = Depends(get_ledger),
-) -> dict[str, Any]:
-    """Set or clear the default payment account."""
-    # Validate account exists if setting (not clearing)
-    if body.account:
-        opens = _get_opens(ledger)
-        if body.account not in opens:
-            raise HTTPException(status_code=400, detail=f"Account '{body.account}' not found")
-
-    # Find existing directive
-    existing_entry = None
-    for e in ledger.all_entries:
-        if (
-            isinstance(e, data.Custom)
-            and e.type == "ledgr-option"
-            and e.values
-            and len(e.values) >= 2
-            and str(e.values[0].value) == "default-payment-account"
-        ):
-            existing_entry = e
-            break
-
-    if body.account:
-        # Build source for the directive
-        date_str = (existing_entry.date.isoformat() if existing_entry
-                    else datetime.date.today().isoformat())
-        source = f'{date_str} custom "ledgr-option" "default-payment-account" "{body.account}"'
-
-        if existing_entry:
-            _, entry_sha = get_entry_slice(existing_entry)
-            ledger.file.save_entry_slice(hash_entry(existing_entry), source, entry_sha)
-        else:
-            with open(str(ledger.beancount_file_path), "a") as f:
-                f.write(f"\n{source}\n")
-    elif existing_entry:
-        # Clear: remove the existing directive
-        _, entry_sha = get_entry_slice(existing_entry)
-        ledger.file.save_entry_slice(hash_entry(existing_entry), "", entry_sha)
-
-    reload_ledger()
-
-    # Return updated options
-    return get_options(ledger)
 
 
 @router.get("/api/tags")
@@ -266,11 +270,34 @@ class AccountUpdateIn(BaseModel):
     ledgr_type: str | None = None
     currencies: list[str] | None = None
     metadata: dict[str, str] | None = None
+    # Opening date. Needed on edit, not just create: a posting dated before the
+    # account's `open` makes the ledger invalid ("Invalid reference to inactive
+    # account"), and moving the opening back is usually the right fix.
+    date: str | None = None
 
 
 class CloseAccountIn(BaseModel):
     name: str
     date: str | None = None
+    # Beancount's `close` only touches the named account, leaving nested
+    # accounts live — which contradicts what the tree shows. Cascade by default.
+    include_children: bool = True
+
+
+class ReopenAccountIn(BaseModel):
+    name: str
+    include_children: bool = True
+
+
+class RenameAccountIn(BaseModel):
+    name: str
+    new_name: str
+    # Renaming a parent normally carries its children along: renaming
+    # Assets:Investments:XP should take :Bonds and :Equities with it. Set false
+    # to move only the account itself and leave the children where they are.
+    include_children: bool = True
+    # When true, report the impact and change nothing.
+    dry_run: bool = False
 
 
 # ------------------------------------------------------------------
@@ -419,11 +446,34 @@ def update_account(
 
     new_currencies = body.currencies if body.currencies is not None else (list(open_entry.currencies) if open_entry.currencies else [])
 
-    updated = data.Open(new_meta, open_entry.date, body.name, new_currencies, None)
+    new_date = open_entry.date
+    if body.date:
+        new_date = datetime.date.fromisoformat(body.date)
+        # Moving the opening forward past an existing posting would invalidate
+        # the ledger, so refuse rather than write a broken directive.
+        first_posting: datetime.date | None = None
+        for entry in ledger.all_entries:
+            if not isinstance(entry, data.Transaction):
+                continue
+            if not any(p.account == body.name for p in entry.postings):
+                continue
+            if first_posting is None or entry.date < first_posting:
+                first_posting = entry.date
+        if first_posting is not None and new_date > first_posting:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot open '{body.name}' on {new_date.isoformat()}: it "
+                    f"already has a posting dated {first_posting.isoformat()}. "
+                    "Pick that date or earlier."
+                ),
+            )
+
+    updated = data.Open(new_meta, new_date, body.name, new_currencies, None)
 
     # Build source text for the updated directive
     source_lines = [
-        f"{open_entry.date.isoformat()} open {body.name}"
+        f"{new_date.isoformat()} open {body.name}"
     ]
     if new_currencies:
         source_lines[0] += "  " + ",".join(new_currencies)
@@ -451,7 +501,18 @@ def close_account(
     body: CloseAccountIn,
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """Close an account (insert a Close directive)."""
+    """Deactivate an account and, by default, everything nested under it.
+
+    Beancount's ``close`` acts on the named account ONLY — a closed parent does
+    not stop its children accepting postings, because `Assets:Invest:XP` and
+    `Assets:Invest:XP:Bonds` are independent accounts that merely share a name
+    prefix. That is the opposite of what the account tree looks like, so closing
+    a parent alone silently leaves the subtree alive.
+
+    Ledgr therefore cascades: retiring `Assets:Investments:Clear` writes a
+    ``close`` for the parent and for every descendant. Pass
+    ``include_children=false`` for the raw Beancount behaviour.
+    """
     opens = _get_opens(ledger)
     if body.name not in opens:
         raise HTTPException(status_code=404, detail=f"Account '{body.name}' not found")
@@ -461,15 +522,204 @@ def close_account(
         raise HTTPException(status_code=400, detail=f"Account '{body.name}' is already closed")
 
     close_date = datetime.date.fromisoformat(body.date) if body.date else datetime.date.today()
-    close_entry = data.Close(
-        data.new_metadata(str(ledger.beancount_file_path), 0),
-        close_date,
-        body.name,
-    )
-    ledger.file.insert_entries([close_entry])
+
+    targets = [body.name]
+    if body.include_children:
+        # Already-closed descendants are skipped, not an error: closing a
+        # subtree where one leaf was retired earlier is a normal thing to do.
+        targets += sorted(
+            a for a in opens
+            if a.startswith(body.name + ":") and a not in closes
+        )
+
+    # A close dated before the account's last posting makes the ledger invalid,
+    # so refuse the whole operation rather than write a directive that breaks it.
+    last_posting: dict[str, datetime.date] = {}
+    for entry in ledger.all_entries:
+        if not isinstance(entry, data.Transaction):
+            continue
+        for posting in entry.postings:
+            if posting.account in targets:
+                current = last_posting.get(posting.account)
+                if current is None or entry.date > current:
+                    last_posting[posting.account] = entry.date
+
+    too_early = {
+        account: date for account, date in last_posting.items() if date > close_date
+    }
+    if too_early:
+        detail = ", ".join(
+            f"{a} (last posting {d.isoformat()})"
+            for a, d in sorted(too_early.items())
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot deactivate from {close_date.isoformat()}: "
+                f"later postings exist in {detail}. Pick a later date."
+            ),
+        )
+
+    entries = [
+        data.Close(
+            data.new_metadata(str(ledger.beancount_file_path), 0),
+            close_date,
+            account,
+        )
+        for account in targets
+    ]
+    ledger.file.insert_entries(entries)
     reload_ledger()
 
-    return {"success": True, "account": body.name, "close_date": close_date.isoformat()}
+    return {
+        "success": True,
+        "account": body.name,
+        "close_date": close_date.isoformat(),
+        "closed_accounts": targets,
+    }
+
+
+@router.post("/api/accounts/reopen")
+def reopen_account(
+    body: ReopenAccountIn,
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Reactivate a closed account by deleting its Close directive.
+
+    Mirrors the cascade in ``close_account``: reactivating a parent brings its
+    nested accounts back too, so deactivate/reactivate is a round trip.
+    """
+    closed = {
+        e.account: e for e in ledger.all_entries if isinstance(e, data.Close)
+    }
+    targets = [body.name] if body.name in closed else []
+    if body.include_children:
+        targets += sorted(
+            a for a in closed if a.startswith(body.name + ":")
+        )
+
+    if not targets:
+        raise HTTPException(
+            status_code=404, detail=f"Account '{body.name}' is not closed"
+        )
+
+    # Delete deepest-first: each delete_entry_slice re-reads the file, and
+    # removing a line shifts the line numbers of everything after it.
+    touched_files: set[str] = set()
+    for account in sorted(targets, key=len, reverse=True):
+        entry = closed[account]
+        filename = entry.meta.get("filename") if entry.meta else None
+        if filename:
+            touched_files.add(str(filename))
+        _, entry_sha = get_entry_slice(entry)
+        ledger.file.delete_entry_slice(hash_entry(entry), entry_sha)
+        reload_ledger()
+        closed = {
+            e.account: e
+            for e in get_ledger().all_entries
+            if isinstance(e, data.Close)
+        }
+
+    # `insert_entries` separates directives with a blank line, and deleting the
+    # directive leaves that spacing behind — so a deactivate/reactivate cycle
+    # grew the file by one blank line each time. Collapse runs of 3+ blank
+    # lines (2 is legitimate spacing between sections) in the files we touched.
+    for path_str in touched_files:
+        path = Path(path_str)
+        if not path.exists():
+            continue
+        original = path.read_text(encoding="utf-8")
+        collapsed = re.sub(r"\n{4,}", "\n\n\n", original)
+        if collapsed != original:
+            path.write_text(collapsed, encoding="utf-8")
+    if touched_files:
+        reload_ledger()
+
+    return {"success": True, "account": body.name, "reopened_accounts": targets}
+
+
+@router.post("/api/accounts/rename")
+def rename_account(
+    body: RenameAccountIn,
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Rename an account across every ledger file, transactions included.
+
+    Beancount and Fava have no rename primitive, and the account name appears in
+    every directive that references it — hundreds of postings spread over the
+    main file and every ``include``. See ``account_rename`` for why this is a
+    text-level rewrite and how it stays atomic.
+    """
+    opens = _get_opens(ledger)
+    if body.name not in opens:
+        raise HTTPException(status_code=404, detail=f"Account '{body.name}' not found")
+
+    if body.new_name == body.name:
+        raise HTTPException(status_code=400, detail="New name is identical to the current one")
+
+    _validate_account_name(body.new_name)
+
+    # The root determines which ledgr-types are legal, so moving between roots
+    # would silently invalidate the account's type.
+    if body.new_name.split(":")[0] != body.name.split(":")[0]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot change the root of an account "
+                f"({body.name.split(':')[0]} → {body.new_name.split(':')[0]}). "
+                "Create the account under the new root instead."
+            ),
+        )
+
+    if body.new_name in opens:
+        raise HTTPException(
+            status_code=400, detail=f"Account '{body.new_name}' already exists"
+        )
+
+    main_file = Path(str(ledger.beancount_file_path))
+    known = list(opens.keys())
+
+    if body.dry_run:
+        plan = plan_rename(
+            main_file,
+            body.name,
+            body.new_name,
+            include_children=body.include_children,
+            known_accounts=known,
+        )
+        return {"success": True, "dry_run": True, "plan": plan.as_dict()}
+
+    # Count the errors the ledger already has, so pre-existing ones don't get
+    # blamed on the rename and trigger a pointless rollback.
+    errors_before = len(ledger.errors)
+
+    def validate() -> list[str]:
+        reload_ledger()
+        current = get_ledger().errors
+        if len(current) <= errors_before:
+            return []
+        return [getattr(e, "message", str(e)) for e in current[errors_before:]]
+
+    try:
+        plan = apply_rename(
+            main_file,
+            body.name,
+            body.new_name,
+            include_children=body.include_children,
+            validate=validate,
+        )
+    except RenameError as exc:
+        # apply_rename already restored every file before raising.
+        reload_ledger()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    plan.renamed_accounts = sorted(
+        a for a in known
+        if a == body.name
+        or (body.include_children and a.startswith(body.name + ":"))
+    )
+
+    return {"success": True, "dry_run": False, "plan": plan.as_dict()}
 
 
 @router.get("/api/account-types")

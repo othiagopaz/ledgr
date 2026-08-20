@@ -1,0 +1,12 @@
+;; Included file — the same accounts appear here too.
+2023-05-01 * "old groceries"
+  Expenses:Food        50.00 BRL
+  Assets:Bank:Main    -50.00 BRL
+
+2023-06-01 * "old invest"
+  Assets:Invest:XP     300.00 BRL
+  Assets:Bank:Main    -300.00 BRL
+
+2023-07-01 * "old bonds"
+  Assets:Invest:XP:Bonds   100.00 BRL
+  Assets:Invest:XP        -100.00 BRL

@@ -37,6 +37,7 @@ export default function InlineEditor({
     ? parseFloat(existingPosting.amount)
     : 0;
 
+  const [error, setError] = useState<string | null>(null);
   const [flag, setFlag] = useState(transaction?.flag || "*");
   const [date, setDate] = useState(() => {
     if (transaction?.date) {
@@ -146,7 +147,13 @@ export default function InlineEditor({
     };
 
     try {
+      setError(null);
       await onSave(input);
+    } catch (err) {
+      // The parent throws when the write is refused (unbalanced, account not
+      // open yet, account inactive). Without this the editor just sat there
+      // and Enter looked broken.
+      setError(err instanceof Error ? err.message : "Could not save.");
     } finally {
       setSaving(false);
     }
@@ -180,6 +187,7 @@ export default function InlineEditor({
   const datePlaceholder = getDatePlaceholder(operatingCurrency);
 
   return (
+    <>
     <tr className={`inline-editor${isEditing ? " inline-editor-editing" : " inline-editor-new"}`}>
       <td>
         <input
@@ -314,5 +322,11 @@ export default function InlineEditor({
         ) : null}
       </td>
     </tr>
+    {error && (
+      <tr className="inline-editor-error">
+        <td colSpan={9}>{error}</td>
+      </tr>
+    )}
+    </>
   );
 }

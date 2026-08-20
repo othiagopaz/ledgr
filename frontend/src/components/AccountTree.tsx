@@ -82,7 +82,6 @@ function typeBadgeClass(ledgrType: string): string {
 }
 
 export default function AccountTree({ accounts, selectedAccount, onSelect, onEdit }: Props) {
-  const defaultPaymentAccount = useAppStore((s) => s.defaultPaymentAccount);
   const [expandedSet, setExpandedSet] = useState<Set<string>>(() => {
     return new Set(accounts.map((a) => a.name));
   });
@@ -201,7 +200,8 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
               `${row.depth === 0 ? " acct-row-top" : ""}` +
               `${isFocused ? " acct-row-focused" : ""}` +
               `${isSelected ? " acct-row-selected" : ""}` +
-              `${zero && row.depth > 0 ? " acct-row-zero" : ""}`
+              `${zero && row.depth > 0 ? " acct-row-zero" : ""}` +
+              `${row.node.closed ? " acct-row-closed" : ""}`
             }
             onClick={() => {
               setFocusIndex(i);
@@ -252,10 +252,56 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
                 {row.node.ledgr_type}
               </span>
             )}
-            {row.node.name === defaultPaymentAccount && (
-              <span className="type-badge type-badge--default">default</span>
+            {row.node.closed && (
+              <span
+                className="type-badge type-badge--inactive"
+                title={
+                  row.node.close_date
+                    ? `Inactive since ${row.node.close_date}`
+                    : "Inactive"
+                }
+              >
+                inactive
+              </span>
             )}
+            {/* Nothing has ever posted here or below it — a candidate to
+                deactivate. Only worth flagging while the account is still
+                active; on a closed one it is noise. */}
+            {!row.node.closed &&
+              row.node.subtree_posting_count === 0 &&
+              row.node.open_date !== null && (
+                <span
+                  className="type-badge type-badge--unused"
+                  title="No transactions ever — double-click to deactivate"
+                >
+                  unused
+                </span>
+              )}
             <BalanceDisplay balances={row.node.balance} />
+            {/* Explicit edit affordance. Double-click also works, but the row's
+                own onClick opens the register first, so the double-click was
+                effectively invisible — same trap the chevron had. Its own
+                button with stopPropagation keeps editing and navigating apart.
+                tabIndex={-1} for the reason the chevron uses: the tree owns the
+                keydown listener (E edits the focused row), so Tab must not walk
+                every row's button. */}
+            {onEdit && row.node.open_date !== null && (
+              <button
+                type="button"
+                className="acct-edit"
+                tabIndex={-1}
+                aria-label={`Edit ${shortName}`}
+                title="Edit account (E)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFocusIndex(i);
+                  onEdit(row.node);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <span aria-hidden="true">✎</span>
+              </button>
+            )}
           </div>
         );
       })}

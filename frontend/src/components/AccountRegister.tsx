@@ -109,11 +109,11 @@ export default function AccountRegister({ account, transactions, openingBalance,
     }
   }, [newTxnRequestId, NEW_ROW_INDEX]);
 
-  async function handleDelete(lineno: number) {
+  async function handleDelete(lineno: number, filename?: string | null) {
     if (deletingLineno !== null) return;
     setDeletingLineno(lineno);
     try {
-      const result = await deleteTransaction(lineno);
+      const result = await deleteTransaction(lineno, filename);
       if (result.success) {
         onMutated();
       }
@@ -124,26 +124,39 @@ export default function AccountRegister({ account, transactions, openingBalance,
 
   async function handleNewSave(input: TransactionInput) {
     const result = await addTransaction(input);
-    if (result.success) {
-      // Remember the date for the next new transaction
-      setLastUsedDate(input.date);
-      setEditingRowIndex(null);
-      // Increment key to force remount → clears all fields
-      setNewRowKey((k) => k + 1);
-      onMutated();
-      // Refocus register so keyboard nav works immediately after save
-      requestAnimationFrame(() => registerRef.current?.focus());
+    if (!result.success) {
+      // Throwing is how the inline editor learns it failed: it awaits onSave
+      // and shows the message. Swallowing this made a rejected write look like
+      // a dead Enter key — nothing saved, nothing said.
+      throw new Error(
+        result.errors?.join(", ") || "Could not save this transaction.",
+      );
     }
+    // Remember the date for the next new transaction
+    setLastUsedDate(input.date);
+    setEditingRowIndex(null);
+    // Increment key to force remount → clears all fields
+    setNewRowKey((k) => k + 1);
+    onMutated();
+    // Refocus register so keyboard nav works immediately after save
+    requestAnimationFrame(() => registerRef.current?.focus());
   }
 
-  async function handleEditSave(lineno: number, input: TransactionInput) {
-    const result = await editTransaction({ ...input, lineno });
-    if (result.success) {
-      setEditingRowIndex(null);
-      onMutated();
-      // Refocus register so keyboard nav works immediately after save
-      requestAnimationFrame(() => registerRef.current?.focus());
+  async function handleEditSave(
+    lineno: number,
+    input: TransactionInput,
+    filename?: string | null,
+  ) {
+    const result = await editTransaction({ ...input, lineno, filename });
+    if (!result.success) {
+      throw new Error(
+        result.errors?.join(", ") || "Could not save this transaction.",
+      );
     }
+    setEditingRowIndex(null);
+    onMutated();
+    // Refocus register so keyboard nav works immediately after save
+    requestAnimationFrame(() => registerRef.current?.focus());
   }
 
   const openTxnModal = useAppStore((s) => s.openTxnModal);
@@ -219,7 +232,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
             amount: p.amount ? parseFloat(p.amount) : undefined,
             currency: p.currency,
           })),
-        });
+        }, row.txn.filename);
       }
     } else if ((e.key === "e" || e.key === "E") && selectedRowIndex !== null && selectedRowIndex < rows.length) {
       e.preventDefault();
@@ -227,7 +240,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
     } else if (e.key === "Delete" && selectedRowIndex !== null && selectedRowIndex < rows.length) {
       const row = rows[selectedRowIndex];
       if (row.txn.lineno != null && confirm("Delete this transaction?")) {
-        handleDelete(row.txn.lineno);
+        handleDelete(row.txn.lineno, row.txn.filename);
       }
     }
   }
@@ -276,7 +289,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
                   currentAccount={account}
                   transaction={row.txn}
                   onSave={(input: TransactionInput) =>
-                    handleEditSave(row.txn.lineno!, input)
+                    handleEditSave(row.txn.lineno!, input, row.txn.filename)
                   }
                   onCancel={exitEditMode}
                 />
@@ -381,7 +394,7 @@ export default function AccountRegister({ account, transactions, openingBalance,
                         setSelectedRowIndex(i);
                         setEditingRowIndex(null);
                         if (confirm("Delete this transaction?")) {
-                          handleDelete(row.txn.lineno!);
+                          handleDelete(row.txn.lineno!, row.txn.filename);
                         }
                         requestAnimationFrame(() => registerRef.current?.focus());
                       }}

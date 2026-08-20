@@ -53,6 +53,9 @@ class TransactionIn(BaseModel):
 
 class EditTransactionIn(TransactionIn):
     lineno: int
+    # Source file of the entry. Required to disambiguate `lineno`, which repeats
+    # across `include`d files. Optional for backwards compatibility.
+    filename: str | None = None
 
 
 # ------------------------------------------------------------------
@@ -119,15 +122,30 @@ def _validate_balance(
 
 
 def _find_entry_by_lineno(
-    entries: list, lineno: int
+    entries: list, lineno: int, filename: str | None = None
 ) -> data.Transaction | None:
-    """Find a Transaction entry by its line number in the source file."""
+    """Find a Transaction by source position.
+
+    ``lineno`` on its own is **not** a unique identifier. A ledger split across
+    ``include`` files repeats every line number once per file — on a real
+    8-file ledger 52% of them collide. Matching on lineno alone returns
+    whichever entry the loader ordered first, so an edit meant for
+    ``2025.beancount`` line 1239 could be written to ``2019.beancount`` line
+    1239 instead: the user's own transaction stays unchanged (looking like the
+    edit "did not persist") while an unrelated year silently gains a stray
+    entry.
+
+    ``filename`` disambiguates. It stays optional so older clients still work,
+    but any caller that has it should pass it.
+    """
     for entry in entries:
-        if (
-            isinstance(entry, data.Transaction)
-            and entry.meta.get("lineno") == lineno
-        ):
-            return entry
+        if not isinstance(entry, data.Transaction):
+            continue
+        if entry.meta.get("lineno") != lineno:
+            continue
+        if filename is not None and entry.meta.get("filename") != filename:
+            continue
+        return entry
     return None
 
 
@@ -181,6 +199,58 @@ def get_transactions(
     }
 
 
+def _validate_active_accounts(
+    ledger: FavaLedger,
+    postings: list[data.Posting],
+    txn_date: datetime.date,
+) -> list[str]:
+    """Reject postings to an account that is not open on ``txn_date``.
+
+    Beancount reports both cases as "Invalid reference to inactive account" —
+    its "inactive" covers an account that is **not yet open** as well as one
+    that has been closed. It only reports them at load time though, *after* the
+    transaction has been written, leaving a validation error in the user's
+    ledger while the API already answered ``success: true``. Checking first
+    keeps the file clean.
+
+    Two windows are rejected:
+
+    * ``txn_date`` **before** the ``open`` date — the account did not exist yet.
+      Easy to hit by backdating: a `2026-01-01 open` with a posting dated
+      2025-12-11 breaks the ledger.
+    * ``txn_date`` **on or after** a ``close`` date — the account is retired.
+
+    A ``close`` dated after the transaction is fine: the account was live then.
+    """
+    opens: dict[str, datetime.date] = {}
+    closes: dict[str, datetime.date] = {}
+    for entry in ledger.all_entries:
+        if isinstance(entry, data.Open):
+            opens[entry.account] = entry.date
+        elif isinstance(entry, data.Close):
+            closes[entry.account] = entry.date
+
+    errors = []
+    for posting in postings:
+        open_date = opens.get(posting.account)
+        if open_date is not None and txn_date < open_date:
+            errors.append(
+                f"Account '{posting.account}' only opens on "
+                f"{open_date.isoformat()}, so it cannot take a posting dated "
+                f"{txn_date.isoformat()}. Move the account's opening date back, "
+                "or use a later date."
+            )
+            continue
+        close_date = closes.get(posting.account)
+        if close_date is not None and txn_date >= close_date:
+            errors.append(
+                f"Account '{posting.account}' is inactive since "
+                f"{close_date.isoformat()} and cannot take new postings. "
+                "Reactivate it first, or pick another account."
+            )
+    return errors
+
+
 @router.post("/api/transactions")
 def add_transaction(
     body: TransactionIn,
@@ -193,6 +263,10 @@ def add_transaction(
     balance_errors = _validate_balance(bc_postings, ledger.options)
     if balance_errors:
         return {"success": False, "errors": balance_errors}
+
+    inactive_errors = _validate_active_accounts(ledger, bc_postings, txn_date)
+    if inactive_errors:
+        return {"success": False, "errors": inactive_errors}
 
     meta = data.new_metadata(str(ledger.beancount_file_path), 0)
     txn = data.Transaction(
@@ -221,11 +295,14 @@ def edit_transaction(
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Edit a transaction via FavaLedger.file.save_entry_slice."""
-    entry = _find_entry_by_lineno(ledger.all_entries, body.lineno)
+    entry = _find_entry_by_lineno(
+        ledger.all_entries, body.lineno, body.filename
+    )
     if entry is None:
+        where = f" in {body.filename}" if body.filename else ""
         return {
             "success": False,
-            "errors": [f"No transaction found at line {body.lineno}"],
+            "errors": [f"No transaction found at line {body.lineno}{where}"],
         }
 
     txn_date = datetime.date.fromisoformat(body.date)
@@ -238,7 +315,13 @@ def edit_transaction(
     # Start with fresh metadata, then re-apply all ledgr-* keys from the
     # original entry so that series metadata (ledgr-series, ledgr-series-type,
     # ledgr-series-seq, ledgr-series-total) is preserved through edits.
-    new_meta = data.new_metadata(str(ledger.beancount_file_path), body.lineno)
+    # Metadata must name the entry's OWN file. Using the main ledger path here
+    # was harmless while lookups were ambiguous anyway, but it is wrong: the
+    # entry lives wherever it lives.
+    new_meta = data.new_metadata(
+        str(entry.meta.get("filename") or ledger.beancount_file_path),
+        body.lineno,
+    )
     for k, v in entry.meta.items():
         if isinstance(k, str) and k.startswith("ledgr-"):
             new_meta[k] = v
@@ -269,14 +352,20 @@ def edit_transaction(
 @router.delete("/api/transactions/{lineno}")
 def delete_transaction(
     lineno: int,
+    filename: str | None = Query(None),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """Delete a transaction via FavaLedger.file.delete_entry_slice."""
-    entry = _find_entry_by_lineno(ledger.all_entries, lineno)
+    """Delete a transaction via FavaLedger.file.delete_entry_slice.
+
+    ``filename`` disambiguates ``lineno`` across ``include``d files — see
+    ``_find_entry_by_lineno``.
+    """
+    entry = _find_entry_by_lineno(ledger.all_entries, lineno, filename)
     if entry is None:
+        where = f" in {filename}" if filename else ""
         return {
             "success": False,
-            "errors": [f"No transaction found at line {lineno}"],
+            "errors": [f"No transaction found at line {lineno}{where}"],
         }
 
     try:

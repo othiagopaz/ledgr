@@ -493,6 +493,9 @@ body {
   height: 24px;
   cursor: pointer;
   border-bottom: 1px solid var(--color-border-subtle);
+  /* Positioning context for .acct-edit, which is taken out of the flow so it
+     cannot shift the balance column. */
+  position: relative;
 }
 .acct-row:hover { background: var(--color-bg-secondary); }
 .acct-row-top {
@@ -511,6 +514,10 @@ body {
 }
 .acct-row-selected { background: var(--color-accent-subtle); }
 .acct-row-zero { color: var(--color-text-tertiary); }
+/* Inactive (closed) accounts are only visible when the user asks for them, so
+   they read as dimmed-but-legible rather than hidden. */
+.acct-row-closed { opacity: 0.55; }
+.acct-row-closed .acct-name { text-decoration: line-through; }
 .acct-indent { display: inline-block; flex-shrink: 0; }
 /* Disclosure chevron. A real <button> so it is clickable and focusable
    independently of the row (the row click opens the register). The hit area
@@ -550,6 +557,43 @@ button.acct-toggle:hover {
 }
 /* No :focus-visible rule — the button is tabIndex={-1} by design (the tree is
    the keyboard entry point), so it never receives keyboard focus. */
+
+/* Per-row edit button. Sits after the balance and stays invisible until the row
+   is hovered or focused: 123 accounts x a permanently visible icon is noise,
+   and the balances are what the page is for. Space is reserved either way
+   (visibility, not display) so revealing it never shifts the row. */
+.acct-edit {
+  /* Absolutely positioned, NOT part of the flex row: as an in-flow element it
+     pushed the balance left on hover, so the numbers jumped out of their
+     column every time the pointer crossed a row. It now floats over the
+     right-hand padding and the balances never move. */
+  position: absolute;
+  /* Inside the row's 12px right padding, clear of the balance column so the
+     glyph never sits on top of a digit. */
+  right: 1px;
+  top: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-tertiary);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  visibility: hidden;
+}
+.acct-row:hover .acct-edit,
+.acct-row-focused .acct-edit {
+  visibility: visible;
+}
+button.acct-edit:hover {
+  color: var(--color-text-primary);
+}
 .acct-name {
   flex: 1;
   overflow: hidden;
@@ -1089,6 +1133,15 @@ button.acct-toggle:hover {
   border-top: 1px solid var(--midnight-200);
   border-bottom: 1px solid var(--midnight-200);
 }
+/* Why the write was refused. Sits directly under the editor row so the reason
+   is next to the input that caused it — a rejected save used to be silent. */
+.inline-editor-error td {
+  padding: 5px 10px;
+  background: var(--color-error-bg);
+  color: var(--color-error-fg);
+  font-size: 12px;
+  border-bottom: 1px solid var(--midnight-200);
+}
 .inline-editor td {
   padding: 4px 8px;
   border-bottom: none;
@@ -1550,7 +1603,8 @@ button.acct-toggle:hover {
 .type-badge--credit-card,
 .type-badge--loan,
 .type-badge--payable,
-.type-badge--default {
+.type-badge--inactive,
+.type-badge--unused {
   display: inline-block;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1598,17 +1652,6 @@ button.acct-toggle:hover {
   letter-spacing: 0;
 }
 
-.default-account-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  cursor: pointer;
-}
-.default-account-check input[type="checkbox"] { margin: 0; accent-color: var(--color-accent); }
-.default-account-check .acct-optional { font-size: 12px; }
-
 .metadata-row { display: flex; gap: 6px; margin-bottom: 5px; align-items: center; }
 .metadata-key-input {
   flex: 1;
@@ -1640,6 +1683,37 @@ button.acct-toggle:hover {
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1px solid var(--color-border-default);
+}
+/* Rename impact preview — the number of rewrites the user is agreeing to. */
+.rename-plan {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 4px;
+  background: var(--color-bg-tertiary);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.rename-plan p { margin: 0; }
+.rename-plan-accounts {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.acct-modal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+/* Header actions on the Accounts page sit in a row. */
+.accounts-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .btn-close-account {
   background: none;

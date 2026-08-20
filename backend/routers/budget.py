@@ -7,7 +7,8 @@ three-bucket per-account aggregation in ``budgets.py``.  It does not touch the
 
 ``allocated`` is **always** taken from Fava's ``ledger.budgets.calculate()`` —
 Ledgr never recomputes a budget amount.  Mutations reuse the ``custom``-
-directive write pattern proven in ``accounts.py::set_default_payment_account``.
+directive write pattern proven in ``accounts.py`` (find the existing entry →
+``save_entry_slice``; none found → append).
 """
 
 from __future__ import annotations

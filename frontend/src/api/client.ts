@@ -12,6 +12,10 @@ import type {
   AccountInput,
   AccountUpdateInput,
   CloseAccountInput,
+  CloseAccountResponse,
+  ReopenAccountResponse,
+  RenameAccountInput,
+  RenameAccountResponse,
   AccountTypesResponse,
   AccountWarningsResponse,
   SeriesListResponse,
@@ -33,6 +37,20 @@ async function get<T>(url: string): Promise<T> {
   return res.json();
 }
 
+/** POST with JSON body, surfacing FastAPI's `detail` as the error message. */
+async function post<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(BASE + url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 function appendFilters(params: URLSearchParams, f?: GlobalFilters): void {
   if (!f) return;
   if (f.account) params.set("account", f.account);
@@ -47,10 +65,12 @@ function appendFilters(params: URLSearchParams, f?: GlobalFilters): void {
 export async function fetchAccounts(
   viewMode: ViewMode = "combined",
   filters?: GlobalFilters,
+  includeClosed = false,
 ): Promise<AccountsResponse> {
   const params = new URLSearchParams();
   if (viewMode !== "combined") params.set("view_mode", viewMode);
   appendFilters(params, filters);
+  if (includeClosed) params.set("include_closed", "true");
   const qs = params.toString();
   return get(`/api/accounts${qs ? "?" + qs : ""}`);
 }
@@ -98,9 +118,12 @@ export async function editTransaction(
 }
 
 export async function deleteTransaction(
-  lineno: number
+  lineno: number,
+  filename?: string | null,
 ): Promise<MutationResponse> {
-  const res = await fetch(BASE + `/api/transactions/${lineno}`, {
+  // `filename` disambiguates `lineno`, which repeats across included files.
+  const qs = filename ? `?filename=${encodeURIComponent(filename)}` : "";
+  const res = await fetch(BASE + `/api/transactions/${lineno}${qs}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -164,7 +187,7 @@ export async function updateAccount(
 
 export async function closeAccount(
   input: CloseAccountInput
-): Promise<{ success: boolean; account: string; close_date: string }> {
+): Promise<CloseAccountResponse> {
   const res = await fetch(BASE + "/api/accounts/close", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -177,27 +200,31 @@ export async function closeAccount(
   return res.json();
 }
 
+export async function reopenAccount(
+  name: string,
+): Promise<ReopenAccountResponse> {
+  return post("/api/accounts/reopen", { name });
+}
+
+/**
+ * Rename an account and every posting that references it.
+ *
+ * Pass `dry_run` to get the impact (how many occurrences, in which files)
+ * without writing anything — the UI always previews before committing, because
+ * a rename reaches across the main ledger and every included file.
+ */
+export async function renameAccount(
+  input: RenameAccountInput,
+): Promise<RenameAccountResponse> {
+  return post("/api/accounts/rename", input);
+}
+
 export async function fetchPayees(): Promise<{ payees: string[] }> {
   return get("/api/payees");
 }
 
 export async function fetchTags(): Promise<{ tags: string[] }> {
   return get("/api/tags");
-}
-
-export async function setDefaultPaymentAccount(
-  account: string | null
-): Promise<OptionsResponse> {
-  const res = await fetch(BASE + "/api/options/default-payment-account", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ account }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || `${res.status} ${res.statusText}`);
-  }
-  return res.json();
 }
 
 export async function fetchErrors(): Promise<ErrorsResponse> {

@@ -49,6 +49,33 @@ def cashflow_file(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
+def multifile_file(tmp_path: Path) -> Path:
+    """Copy the multifile fixture — main file plus its include — into a tmp dir.
+
+    Account renaming has to reach into ``include``d files, so the fixture is
+    deliberately split: the same accounts appear in both, and a rename that only
+    rewrites the main file leaves the ledger broken.
+    """
+    src = FIXTURES_DIR / "multifile.beancount"
+    dst = tmp_path / "multifile.beancount"
+    shutil.copy(src, dst)
+    (tmp_path / "included").mkdir(exist_ok=True)
+    shutil.copy(
+        FIXTURES_DIR / "included" / "history.beancount",
+        tmp_path / "included" / "history.beancount",
+    )
+    return dst
+
+
+@pytest.fixture()
+def multifile_ledger(multifile_file: Path) -> FavaLedger:
+    """A FavaLedger instance loaded from the multifile fixture."""
+    fava = FavaLedger(str(multifile_file))
+    fava.load_file()
+    return fava
+
+
+@pytest.fixture()
 def ledger(minimal_file: Path) -> FavaLedger:
     """A FavaLedger instance loaded from the minimal fixture."""
     fava = FavaLedger(str(minimal_file))

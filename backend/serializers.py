@@ -70,16 +70,23 @@ _INTERNAL_META_KEYS = frozenset({"filename", "lineno", "ledgr-type"})
 def serialize_account_node(
     real_acct: realization.RealAccount,
     opens_map: dict[str, data.Open] | None = None,
+    closes_map: dict[str, data.Close] | None = None,
+    posting_counts: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Recursively serialize a ``RealAccount`` into a JSON-friendly dict.
 
     When ``opens_map`` is provided, enriches nodes with Open directive data:
     ``ledgr_type``, ``open_date``, ``currencies``, and ``metadata``.
 
+    ``closes_map`` marks accounts carrying a ``Close`` directive as inactive, and
+    ``posting_counts`` reports how many postings name the account — the account
+    list uses both to keep a large catalog of long-dead accounts readable.
+
     Returns the shape expected by ``AccountNode`` on the frontend.
     """
     children = [
-        serialize_account_node(c, opens_map) for c in real_acct.values()
+        serialize_account_node(c, opens_map, closes_map, posting_counts)
+        for c in real_acct.values()
     ]
     children.sort(key=lambda n: n["name"])
 
@@ -105,6 +112,14 @@ def serialize_account_node(
             if k not in _INTERNAL_META_KEYS
         }
 
+    close_entry = closes_map.get(acct_name) if closes_map else None
+    own_postings = posting_counts.get(acct_name, 0) if posting_counts else 0
+    # A parent with no postings of its own is still "used" when a child is, so
+    # the unused badge only fires on a genuinely dead subtree.
+    subtree_postings = own_postings + sum(
+        c.get("subtree_posting_count", 0) for c in children
+    )
+
     return {
         "name": acct_name,
         "type": acct_type,
@@ -115,6 +130,10 @@ def serialize_account_node(
         "balance": balance_list,
         "children": children,
         "is_leaf": len(children) == 0,
+        "closed": close_entry is not None,
+        "close_date": close_entry.date.isoformat() if close_entry else None,
+        "posting_count": own_postings,
+        "subtree_posting_count": subtree_postings,
     }
 
 
@@ -159,6 +178,12 @@ def serialize_transaction(txn: data.Transaction) -> dict[str, Any]:
         "tags": list(txn.tags) if txn.tags else [],
         "links": list(txn.links) if txn.links else [],
         "lineno": txn.meta.get("lineno") if txn.meta else None,
+        # `lineno` alone does NOT identify a transaction: a ledger split over
+        # `include` files has the same line number in several of them (52% of
+        # linenos collide on a real 8-file ledger). Edits and deletes must key
+        # on the pair, or they hit whichever file the loader happened to order
+        # first — silently rewriting an unrelated entry in another year.
+        "filename": txn.meta.get("filename") if txn.meta else None,
         "postings": [serialize_posting(p) for p in txn.postings],
         "metadata": _extract_ledgr_metadata(txn.meta) if txn.meta else {},
     }

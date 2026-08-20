@@ -192,7 +192,7 @@ budget" affordance; clicking promotes them to a real envelope. Rules:
 ## 7. Writing directives — CRUD
 
 Mutations reuse the `custom`-directive file pattern from
-`accounts.py::set_default_payment_account` (find → `save_entry_slice`; create →
+the `custom` directive pattern in `accounts.py` (find → `save_entry_slice`; create →
 append; clear → empty slice), then `ledger.load_file()` so `ledger.budgets`
 re-parses. See [`../backend/modules.md`](../backend/modules.md).
 

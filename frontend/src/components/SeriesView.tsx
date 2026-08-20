@@ -260,6 +260,7 @@ export default function SeriesView() {
       for (const txn of toReconcile) {
         await editTransaction({
           lineno: txn.lineno!,
+          filename: txn.filename,
           date: txn.date,
           flag: '*',
           payee: txn.payee,
@@ -285,6 +286,7 @@ export default function SeriesView() {
     const newFlag = txn.flag === '*' ? '!' : '*';
     await editTransaction({
       lineno: txn.lineno,
+      filename: txn.filename,
       date: txn.date,
       flag: newFlag,
       payee: txn.payee,

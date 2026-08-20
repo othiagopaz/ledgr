@@ -1,11 +1,91 @@
 ---
 type: log
-last_updated: 2026-08-19
+last_updated: 2026-08-20
 ---
 
 # Wiki Log
 
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
+
+---
+
+## 2026-08-20 — A refused write was silent in the register
+
+- Reported as "adiciono a linha, dou Enter, não salva, nada acontece". `handleNewSave` and `handleEditSave` were written as `if (result.success) { …commit… }` with no else, so a rejected write produced no commit, no message and no closed editor.
+- Latent for a while, but the validation added earlier today (unbalanced, account not open yet, account inactive) made `success: false` common, which is what surfaced it.
+- Both handlers now throw on failure; `InlineEditor` catches around `await onSave(...)` and renders the reason in a row under the editor, next to the input that caused it.
+- `saveResult.test.ts` pins the contract so the silent-failure shape cannot return. Frontend suite at 117.
+
+---
+
+## 2026-08-20 — "Inactive account" also means *not yet open*
+
+- A user-created transaction dated 2025-12-11 against `Income:Salary:Additional` (whose `open` is 2026-01-01) left "Invalid reference to inactive account" in the ledger. Beancount uses "inactive" for **both** not-yet-open and closed, so the guard added earlier that same day — which only checked `Close` dates — missed this half entirely.
+- `_validate_active_accounts` now rejects both bounds: `txn_date < open_date` and `txn_date >= close_date`. The not-yet-open message names the opening date and says what to do about it.
+- **The opening date is now editable.** It was create-only, which meant the natural fix (move the opening back) was impossible through the UI and the ledger stayed invalid. `PUT /api/accounts` takes `date`; moving it forward past an existing posting is refused with a 400. Sent only when changed.
+- `TestOpeningDateEdit` + `TestPostingBeforeAccountOpens` — 6 tests. Backend suite at 489.
+
+---
+
+## 2026-08-20 — Edits hit the wrong file on a multi-file ledger
+
+- Reported as "editing a transaction's category doesn't persist". It did persist — into the wrong file. `_find_entry_by_lineno` matched on `lineno` only, and **52% of line numbers collide** across the 8 files of a real ledger. An edit aimed at `2025.beancount:1239` was written to `2019.beancount:1239`: the user's own entry untouched, and a stray 2025 transaction injected into the 2019 history (found two, inflating a bank balance by R$720).
+- Entries are now keyed on `(filename, lineno)`. `serialize_transaction` exposes `filename`, and every caller passes it — `AccountRegister` (edit, delete, flag toggle), `Composer` (occurrence edit/delete) and `SeriesView` (bulk reconcile, quick reconcile). The last one was the worst exposure, since it edits in bulk.
+- Also fixed: `edit_transaction` rebuilt metadata with `ledger.beancount_file_path`, so a rewritten entry claimed to live in the main file. It now keeps its own.
+- A wrong/unknown `filename` now fails loudly instead of silently editing a neighbouring file's entry.
+- `TestCrossFileEntryIdentity` — 5 tests over a fixture whose include deliberately reproduces the line-number collision. Verified the suite fails without the fix.
+- The two damaged entries were repaired in place: the stray copies removed and the intended recategorisation applied to the real 2025 transactions.
+
+---
+
+## 2026-08-20 — Removed default-payment-account
+
+- Fast input ranks payment accounts by actual usage, which is self-maintaining and a better predictor than a preference set once and forgotten. The checkbox, the `POST /api/options/default-payment-account` endpoint, the `default_payment_account` response field, the store slice, the `default` badge in the account tree and the orphan CSS are all gone.
+- `Composer`'s `defaultPay` already had a usage-derived fallback, so dropping the manual override just makes that path unconditional.
+- A stale `ledgr-option "default-payment-account"` directive left in a ledger is simply ignored — nothing rewrites the user's file.
+
+---
+
+## 2026-08-20 — Empty structural parents now disappear too
+
+- Deactivating `Assets:Vehicle:KA` left `Assets:Vehicle` visible in the tree. It is not an account: `realization.realize()` synthesises intermediate nodes from the colon-separated names, so it existed only to hang `:KA` off (`open_date: null`, `posting_count: 0`). The row had no directive to edit and nothing to deactivate — unactionable and unexplainable.
+- `_prune_closed` now also drops a structural node once it has no visible children. Structural nodes with live children stay (all 22 of them in a real ledger) since they carry the subtotals.
+- Also fixed: a deactivate/reactivate cycle grew the file by a blank line each time, because `insert_entries` separates directives with one and `delete_entry_slice` leaves the spacing behind. Runs of 4+ newlines are collapsed after a reopen. Cosmetic, but it accumulated.
+- Confirmed reactivating preserves the **original** `open` date: reopen only deletes the `close` directive, it never rewrites `open`. So the account is live from its original opening again and the inactive window vanishes entirely.
+
+---
+
+## 2026-08-20 — Inactive accounts: writes blocked, reads untouched
+
+- Confirmed by testing every endpoint that deactivating affects **writes only**. An inactive account keeps appearing in the Income Statement, Balance Sheet (while it has a balance), Cash Flow, its register, and autocomplete. The account tree is the single surface that hides it.
+- It leaves the Balance Sheet when its balance hits zero — a property of the balance, not of being inactive. An open zero-balance account is equally absent.
+- **Fixed a real hole**: `POST /api/transactions` happily wrote postings to a closed account and returned `success: true`, leaving "Invalid reference to inactive account" in the ledger for Beancount to report on the next load. `_validate_active_accounts` now refuses first, naming the close date. The MCP server inherits it (same endpoint). Same class of bug as the unbalanced-write already recorded in [`pitfalls.md`](pitfalls.md).
+- Backdated postings stay allowed — the account was live at that date, so correcting history on a retired account still works.
+- `TestInactiveAccountPostings` — 5 tests. Backend suite at 480.
+
+---
+
+## 2026-08-20 — Deactivation cascades over the subtree
+
+- **Beancount's `close` does not cascade** — verified by experiment, not assumption: closing `Assets:Invest:XP` and then posting to `Assets:Invest:XP:Bonds` the next month loads with zero errors. To Beancount those are independent accounts sharing a name prefix; the tree's implied containment does not exist.
+- Since that contradicts what the account tree shows, `POST /api/accounts/close` now **cascades to every descendant** by default (`include_children=false` for the raw behaviour), and `/reopen` cascades symmetrically so the round trip is clean. Motivated by a real case: retiring `Assets:Investments:Clear` should retire `Clear:Equities` with it — both zeroed and idle since 2021.
+- Prefix-anchored on `name + ":"`, so `Clear` does not drag `ClearOther` along. Already-closed descendants are skipped, not an error.
+- New guard: a close dated **before** the last posting of any cascade target is refused with a 400 naming the accounts and dates, instead of writing a directive that invalidates the ledger.
+- Reopen deletes **deepest-first** with a reload between deletions — `delete_entry_slice` works off line numbers, and removing a line shifts everything after it.
+- A never-opened parent (22 of them in a real ledger: `Assets:Bank`, `Expenses:Daily`, …) cannot be deactivated: Beancount rejects it and the endpoint 404s first. The tree hides the edit affordance on those nodes since there is no directive to act on.
+- `TestDeactivationCascade` — 7 endpoint tests. Backend suite at 475.
+
+---
+
+## 2026-08-20 — Account management: edit, rename, deactivate
+
+- New page [`features/account-management.md`](features/account-management.md). Registered in [`index.md`](index.md).
+- **Deactivate is Beancount's `Close`**, not a Ledgr flag: `GET /api/accounts` prunes closed accounts by default, `include_closed=true` restores them, and `closed_count` always comes back so the toggle can be offered without fetching the hidden set. A separate `ledgr-hidden` metadata flag was considered and rejected — two notions of "not shown" is worse than one, and `Close` is what other Beancount tooling understands.
+- **`POST /api/accounts/rename` is the first sanctioned write outside `FavaLedger.file`.** Rationale and the atomicity contract are in [`backend/modules.md`](backend/modules.md). Short version: an account name appears in ~930 postings across 8 files on a real ledger, and `save_entry_slice` (one entry per call) cannot do that atomically — a failure mid-way leaves the ledger half-renamed. The rewrite snapshots every file first, re-parses after, and restores everything if the error count grew.
+- **Boundary anchoring is load-bearing**: `Assets:Investments:XP` must not match inside `…:XP:Bonds` or `…:XPTruco`. The unanchored version of this bug already corrupted account names once during the spreadsheet migration. Covered by tests on both sides (`test_account_rename.py`, `utils/accountRename.test.ts`).
+- Rename is **two-step in the UI**: `dry_run` returns the impact, the user confirms, then it writes. Editing the target clears the plan so a stale preview cannot be confirmed. Root changes and existing targets are refused with a 400.
+- New `multifile` fixture (main file + `include`) — a single-file fixture would never catch a rename that misses included files.
+- Verified against a copy of a real 5,546-entry ledger: 930 rewrites over 8 files, entry count and net worth unchanged, zero errors, and neighbouring `Liabilities:Credit-Card:Santander` untouched. Rollback verified byte-identical across all 8 files.
 
 ---
 

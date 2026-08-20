@@ -6,9 +6,12 @@ import {
   createAccount,
   updateAccount,
   closeAccount,
+  reopenAccount,
+  renameAccount,
   addTransaction,
-  setDefaultPaymentAccount,
 } from "../api/client";
+import type { AccountNode, RenamePlan } from "../types";
+import { renamedTo, validateRenameTarget } from "../utils/accountRename";
 import { useAppStore } from "../stores/appStore";
 import { today, parseSmartDate } from "../utils/dateUtils";
 import { formatDateFull, getDatePlaceholder } from "../utils/format";
@@ -35,6 +38,16 @@ interface MetadataRow {
 }
 
 let nextMetaId = 1;
+
+/** Every descendant of a node, depth-first. `children` is one level only. */
+function flattenDescendants(node: AccountNode): AccountNode[] {
+  const out: AccountNode[] = [];
+  for (const child of node.children) {
+    out.push(child);
+    out.push(...flattenDescendants(child));
+  }
+  return out;
+}
 
 interface AccountModalProps {
   onMutated: () => void;
@@ -88,22 +101,29 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
     "Equity:OpeningBalances"
   );
 
-  // ── Default payment account ──────────────────────────────────────────────
-
-  const currentDefault = useAppStore((s) => s.defaultPaymentAccount);
-  const accountName = isEditing ? account!.name : name;
-  const accountRoot = accountName.split(":")[0];
-  const showDefaultOption = isEditing && (accountRoot === "Assets" || accountRoot === "Liabilities");
-  const [isDefault, setIsDefault] = useState(
-    isEditing ? account!.name === currentDefault : false
-  );
-
   // ── Close account section (edit only) ────────────────────────────────────
 
   const [showCloseSection, setShowCloseSection] = useState(false);
   const [closeDate, setCloseDate] = useState(
     formatDateFull(today(), operatingCurrency)
   );
+
+  // ── Rename section (edit only) ───────────────────────────────────────────
+  //
+  // A rename rewrites every posting that names the account, across the main
+  // ledger and every include — hundreds of lines on a real ledger. So it is a
+  // two-step flow: ask the backend for the impact (dry run), show it, and only
+  // write once the user has seen the number.
+
+  // Every account nested under this one, flattened. Deactivating cascades over
+  // these, and renaming a parent optionally carries them along, so both
+  // sections need the real count — `account.children` is only one level deep.
+  const descendants = isEditing ? flattenDescendants(account!) : [];
+
+  const [showRenameSection, setShowRenameSection] = useState(false);
+  const [renameTo, setRenameTo] = useState(isEditing ? account!.name : "");
+  const [renameChildren, setRenameChildren] = useState(true);
+  const [renamePlan, setRenamePlan] = useState<RenamePlan | null>(null);
 
   // ── UI state ─────────────────────────────────────────────────────────────
 
@@ -205,11 +225,15 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
         .filter(Boolean);
 
       if (isEditing) {
+        const parsedOpen = parseSmartDate(openDate);
         const result = await updateAccount({
           name: account!.name,
           ledgr_type: ledgrType || undefined,
           currencies: currencyList.length > 0 ? currencyList : undefined,
           metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          // Only send it when the user actually moved it, so an unchanged edit
+          // never rewrites the directive's date.
+          date: parsedOpen !== account!.open_date ? parsedOpen : undefined,
         });
         if (!result.success) {
           setError(result.errors?.join(", ") || "Failed to update account.");
@@ -256,18 +280,6 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
         }
       }
 
-      // Handle default payment account toggle
-      if (showDefaultOption) {
-        const wasDefault = account!.name === currentDefault;
-        if (isDefault && !wasDefault) {
-          const opts = await setDefaultPaymentAccount(account!.name);
-          useAppStore.getState().setDefaultPaymentAccount(opts.default_payment_account);
-        } else if (!isDefault && wasDefault) {
-          const opts = await setDefaultPaymentAccount(null);
-          useAppStore.getState().setDefaultPaymentAccount(opts.default_payment_account);
-        }
-      }
-
       onMutated();
       closeAcctModal();
     } catch (err) {
@@ -277,7 +289,7 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
     }
   }
 
-  // ── Close account ─────────────────────────────────────────────────────────
+  // ── Deactivate / reactivate ──────────────────────────────────────────────
 
   async function handleClose() {
     if (saving) return;
@@ -287,6 +299,74 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
     try {
       const parsedDate = parseSmartDate(closeDate);
       await closeAccount({ name: account!.name, date: parsedDate });
+      onMutated();
+      closeAcctModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleReopen() {
+    if (saving) return;
+    setError(null);
+    setSaving(true);
+
+    try {
+      await reopenAccount(account!.name);
+      onMutated();
+      closeAcctModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Rename ────────────────────────────────────────────────────────────────
+
+  /** Step 1: ask the backend what the rename would touch. Writes nothing. */
+  async function handleRenamePreview() {
+    if (saving) return;
+    setError(null);
+    setRenamePlan(null);
+
+    const target = renameTo.trim();
+    const problem = validateRenameTarget(target, account!.name, accountNames);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await renameAccount({
+        name: account!.name,
+        new_name: target,
+        include_children: renameChildren,
+        dry_run: true,
+      });
+      setRenamePlan(res.plan);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Step 2: commit. The backend rolls the whole ledger back if it breaks. */
+  async function handleRenameConfirm() {
+    if (saving || !renamePlan) return;
+    setError(null);
+    setSaving(true);
+
+    try {
+      await renameAccount({
+        name: account!.name,
+        new_name: renamePlan.new_name,
+        include_children: renameChildren,
+      });
       onMutated();
       closeAcctModal();
     } catch (err) {
@@ -395,23 +475,24 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
               />
             </div>
 
-            {!isEditing && (
-              <div className="form-field" style={{ flex: "0 0 130px" }}>
-                <label>Open Date</label>
-                <input
-                  type="text"
-                  value={openDate}
-                  onChange={(e) => setOpenDate(e.target.value)}
-                  onBlur={() => {
-                    const parsed = parseSmartDate(openDate);
-                    if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
-                      setOpenDate(formatDateFull(parsed, operatingCurrency));
-                    }
-                  }}
-                  placeholder={datePlaceholder}
-                />
-              </div>
-            )}
+            {/* Editable on edit too: a posting dated before the account's
+                `open` makes the ledger invalid, and moving the opening back is
+                normally the fix. */}
+            <div className="form-field" style={{ flex: "0 0 130px" }}>
+              <label>Open Date</label>
+              <input
+                type="text"
+                value={openDate}
+                onChange={(e) => setOpenDate(e.target.value)}
+                onBlur={() => {
+                  const parsed = parseSmartDate(openDate);
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+                    setOpenDate(formatDateFull(parsed, operatingCurrency));
+                  }
+                }}
+                placeholder={datePlaceholder}
+              />
+            </div>
           </div>
 
           {/* Metadata key-value section */}
@@ -523,23 +604,147 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
             </div>
           )}
 
-          {/* Default payment account (edit mode, Assets/Liabilities only) */}
-          {showDefaultOption && (
-            <div className="acct-section">
-              <label className="default-account-check">
-                <input
-                  type="checkbox"
-                  checked={isDefault}
-                  onChange={(e) => setIsDefault(e.target.checked)}
-                />
-                Default payment account
-                <span className="acct-optional"> — used by fast input for the &gt; shortcut</span>
-              </label>
+          {/* Rename section (edit only) */}
+          {isEditing && (
+            <div className="close-account-section">
+              {!showRenameSection ? (
+                <button
+                  type="button"
+                  className="btn-close-account"
+                  onClick={() => {
+                    setShowRenameSection(true);
+                    setRenameTo(account!.name);
+                    setRenamePlan(null);
+                  }}
+                >
+                  Rename Account…
+                </button>
+              ) : (
+                <div className="close-account-form">
+                  <div className="form-row">
+                    <div className="form-field">
+                      <label>New Account Name</label>
+                      <input
+                        type="text"
+                        value={renameTo}
+                        onChange={(e) => {
+                          setRenameTo(e.target.value);
+                          // Any edit invalidates the preview the user saw.
+                          setRenamePlan(null);
+                        }}
+                        placeholder={account!.name}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {descendants.length > 0 && (
+                    <label className="acct-modal-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={renameChildren}
+                        onChange={(e) => {
+                          setRenameChildren(e.target.checked);
+                          setRenamePlan(null);
+                        }}
+                      />
+                      <span>
+                        Also rename the {descendants.length} account
+                        {descendants.length === 1 ? "" : "s"} nested under it
+                      </span>
+                    </label>
+                  )}
+
+                  {renamePlan && (
+                    <div className="rename-plan">
+                      <p>
+                        Rewrites <strong>{renamePlan.total_occurrences}</strong>{" "}
+                        reference
+                        {renamePlan.total_occurrences === 1 ? "" : "s"} across{" "}
+                        <strong>{renamePlan.file_count}</strong> file
+                        {renamePlan.file_count === 1 ? "" : "s"}, including every
+                        transaction. The ledger is restored automatically if
+                        anything fails.
+                      </p>
+                      {renamePlan.renamed_accounts.length > 1 && (
+                        <ul className="rename-plan-accounts">
+                          {renamePlan.renamed_accounts.map((a) => (
+                            <li key={a}>
+                              {a} →{" "}
+                              {renamedTo(a, renamePlan.old_name, renamePlan.new_name)}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    {!renamePlan ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleRenamePreview}
+                        disabled={saving}
+                      >
+                        {saving ? "Checking…" : "Preview Impact"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={handleRenameConfirm}
+                        disabled={saving}
+                      >
+                        {saving ? "Renaming…" : "Confirm Rename"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        setShowRenameSection(false);
+                        setRenamePlan(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  {/* The shared error line lives at the bottom of the modal,
+                      below the deactivate section — far out of view when the
+                      user is working here. A failed rename read as "nothing
+                      happened", so surface it next to the button that failed. */}
+                  {error && <div className="error-msg">{error}</div>}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Close account section (edit only) */}
-          {isEditing && (
+          {/* Deactivate / reactivate (edit only) */}
+          {isEditing && account!.closed && (
+            <div className="close-account-section">
+              <p className="close-account-warning">
+                This account is inactive
+                {account!.close_date ? ` since ${account!.close_date}` : ""} and
+                hidden from the account list by default.
+                {descendants.some((d) => d.closed) &&
+                  ` Reactivating also brings back ${
+                    descendants.filter((d) => d.closed).length
+                  } nested account(s).`}
+              </p>
+              <button
+                type="button"
+                className="btn"
+                onClick={handleReopen}
+                disabled={saving}
+              >
+                {saving ? "Reactivating…" : "Reactivate Account"}
+              </button>
+            </div>
+          )}
+
+          {isEditing && !account!.closed && (
             <div className="close-account-section">
               {!showCloseSection ? (
                 <button
@@ -547,17 +752,42 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
                   className="btn-close-account"
                   onClick={() => setShowCloseSection(true)}
                 >
-                  Close Account…
+                  Deactivate Account…
                 </button>
               ) : (
                 <div className="close-account-form">
                   <p className="close-account-warning">
-                    ⚠ Closing an account with a non-zero balance will produce
-                    a Beancount validation warning.
+                    Deactivating writes a Beancount <code>close</code> directive:
+                    the account stops accepting new postings and drops out of the
+                    account list. Existing transactions are untouched, and you
+                    can reactivate later. A non-zero balance at the close date
+                    will produce a Beancount validation warning.
                   </p>
+
+                  {/* Beancount's own `close` would leave the children live,
+                      which contradicts the tree. Ledgr retires the whole
+                      subtree, so say exactly which accounts that is. */}
+                  {descendants.length > 0 && (
+                    <div className="rename-plan">
+                      <p>
+                        Also deactivates the{" "}
+                        <strong>{descendants.length}</strong> account
+                        {descendants.length === 1 ? "" : "s"} nested under this
+                        one:
+                      </p>
+                      <ul className="rename-plan-accounts">
+                        {descendants.map((d) => (
+                          <li key={d.name}>
+                            {d.name.slice(account!.name.length + 1)}
+                            {d.closed ? " (already inactive)" : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="form-row">
                     <div className="form-field" style={{ flex: "0 0 130px" }}>
-                      <label>Close Date</label>
+                      <label>Inactive From</label>
                       <input
                         type="text"
                         value={closeDate}
@@ -578,7 +808,7 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
                           onClick={handleClose}
                           disabled={saving}
                         >
-                          {saving ? "Closing…" : "Confirm Close"}
+                          {saving ? "Deactivating…" : "Confirm Deactivate"}
                         </button>
                         <button
                           type="button"

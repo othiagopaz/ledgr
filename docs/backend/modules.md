@@ -1,6 +1,6 @@
 ---
 type: module
-last_updated: 2026-04-21
+last_updated: 2026-08-20
 ---
 
 # Backend modules — `ledger.py`, `serializers.py`, file mutations
@@ -87,3 +87,22 @@ ledger.file.delete_entry_slice(entry_hash, sha256sum)
 ### Why this matters
 
 Manual file writes bypass Beancount's parser, so syntax errors don't surface until the next reload. `FavaLedger.file` validates and atomically writes. See [`../pitfalls.md`](../pitfalls.md) for the failure mode this has already produced.
+
+### The one exception: `account_rename.py`
+
+Renaming an account is the **only** sanctioned write outside `FavaLedger.file`. It earns the exception because the alternative is less safe, not more:
+
+- `save_entry_slice` rewrites **one entry at a time**, each keyed by its own hash and sha256. An account name appears in every directive that references it — on a real ledger that is ~930 postings across 8 files (main + every `include`).
+- Entry-by-entry is therefore **not atomic**. A failure on the 400th write leaves the ledger half-renamed, which is strictly worse than not starting.
+
+What makes the text-level rewrite acceptable:
+
+1. **Snapshot first** — every affected file is read into memory before a single byte is written.
+2. **Validate after** — the ledger is re-parsed and compared against the error count from *before* the rename, so pre-existing errors aren't blamed on it.
+3. **Roll back on any failure** — all files are restored from the snapshot. Verified byte-identical by `test_failed_validation_restores_every_file`.
+
+The failure mode is "nothing happened", never "half renamed".
+
+This does **not** breach [`../principles/beancount-first.md`](../principles/beancount-first.md): a rename changes account *names*, not amounts, dates, or structure. No accounting is performed. Beancount and Fava have no rename primitive at all — there is nothing to delegate to.
+
+**Anchoring is load-bearing.** Naive replacement of `Assets:Investments:XP` also hits `Assets:Investments:XP:Bonds` and `Assets:Investments:XPTruco`. Every pattern is anchored on account-name boundaries; `include_children` decides whether the subtree comes along. This exact bug has already corrupted account names once — see [`../pitfalls.md`](../pitfalls.md).

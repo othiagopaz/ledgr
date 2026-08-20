@@ -16,6 +16,13 @@ export interface AccountNode {
   balance: Balance[];
   children: AccountNode[];
   is_leaf: boolean;
+  /** Carries a Beancount Close directive — inactive, hidden from the tree by default. */
+  closed: boolean;
+  close_date: string | null;
+  /** Postings naming this account exactly. */
+  posting_count: number;
+  /** Postings naming this account or anything beneath it — 0 means a dead subtree. */
+  subtree_posting_count: number;
 }
 
 export interface Posting {
@@ -37,6 +44,9 @@ export interface Transaction {
   tags: string[];
   links: string[];
   lineno: number | null;
+  /** Source file of this entry. With `lineno` it uniquely identifies it —
+      line numbers repeat across `include`d files. */
+  filename: string | null;
   postings: Posting[];
   metadata: Record<string, string | number>;
 }
@@ -44,6 +54,8 @@ export interface Transaction {
 export interface AccountsResponse {
   accounts: AccountNode[];
   errors: string[];
+  /** How many accounts are closed, whether or not they are in `accounts`. */
+  closed_count: number;
 }
 
 export interface TransactionsResponse {
@@ -74,6 +86,7 @@ export interface TransactionInput {
 
 export interface EditTransactionInput extends TransactionInput {
   lineno: number;
+  filename?: string | null;
 }
 
 export interface MutationResponse {
@@ -98,7 +111,6 @@ export interface OptionsResponse {
   title: string;
   filename: string;
   locale: string | null;
-  default_payment_account: string | null;
 }
 
 // Fast Input types
@@ -516,11 +528,60 @@ export interface AccountUpdateInput {
   ledgr_type?: string;
   currencies?: string[];
   metadata?: Record<string, string>;
+  /** New opening date. Only send when changed. */
+  date?: string;
 }
 
 export interface CloseAccountInput {
   name: string;
   date?: string;
+  /**
+   * Cascade to nested accounts (default true on the server).
+   *
+   * Beancount's `close` only touches the named account, so a closed parent
+   * leaves its children accepting postings — the opposite of what the tree
+   * looks like. Ledgr cascades so retiring a sleeve retires the whole sleeve.
+   */
+  include_children?: boolean;
+}
+
+export interface CloseAccountResponse {
+  success: boolean;
+  account: string;
+  close_date: string;
+  /** Every account that received a `close` directive. */
+  closed_accounts: string[];
+}
+
+export interface ReopenAccountResponse {
+  success: boolean;
+  account: string;
+  reopened_accounts: string[];
+}
+
+export interface RenameAccountInput {
+  name: string;
+  new_name: string;
+  /** Carry nested accounts along: renaming a parent moves its children too. */
+  include_children?: boolean;
+  /** Report the impact without writing. */
+  dry_run?: boolean;
+}
+
+export interface RenamePlan {
+  old_name: string;
+  new_name: string;
+  include_children: boolean;
+  total_occurrences: number;
+  file_count: number;
+  files: { path: string; occurrences: number }[];
+  renamed_accounts: string[];
+}
+
+export interface RenameAccountResponse {
+  success: boolean;
+  dry_run: boolean;
+  plan: RenamePlan;
 }
 
 export interface AccountTypeOption {

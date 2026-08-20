@@ -1,0 +1,34 @@
+;; Fixture for cross-file operations (account rename).
+;; The point of this fixture is that account names appear in BOTH the main file
+;; and an include, which is where a naive rename silently misses half the work.
+option "operating_currency" "BRL"
+
+include "included/history.beancount"
+
+2020-01-01 open Assets:Bank:Main       BRL
+  ledgr-type: "cash"
+2020-01-01 open Assets:Invest:XP       BRL
+  ledgr-type: "investment"
+2020-01-01 open Assets:Invest:XP:Bonds BRL
+  ledgr-type: "investment"
+2020-01-01 open Assets:Invest:XPTruco  BRL
+  ledgr-type: "investment"
+2020-01-01 open Expenses:Food          BRL
+2020-01-01 open Income:Salary          BRL
+2020-01-01 open Equity:Opening-Balances BRL
+
+2024-02-01 * "salary"
+  Assets:Bank:Main    1000.00 BRL
+  Income:Salary      -1000.00 BRL
+
+2024-02-02 * "invest"
+  Assets:Invest:XP     500.00 BRL
+  Assets:Bank:Main    -500.00 BRL
+
+2024-02-03 * "bonds"
+  Assets:Invest:XP:Bonds  200.00 BRL
+  Assets:Invest:XP       -200.00 BRL
+
+2024-02-04 * "unrelated lookalike"
+  Assets:Invest:XPTruco   10.00 BRL
+  Assets:Bank:Main       -10.00 BRL

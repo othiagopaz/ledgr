@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAccountNames } from "../api/client";
+import { fetchAccountNames, fetchAccounts } from "../api/client";
+import type { AccountNode } from "../types";
 import { useAppStore } from "../stores/appStore";
 
 interface PaletteItem {
@@ -24,7 +25,7 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { setCommandPaletteOpen, openTab, toggleTheme, openComposer, requestBudgetNav } = useAppStore();
+  const { setCommandPaletteOpen, openTab, toggleTheme, openComposer, requestBudgetNav, tabs, activeTabId } = useAppStore();
 
   const accountNamesQuery = useQuery({
     queryKey: ["account-names"],
@@ -74,6 +75,56 @@ export default function CommandPalette() {
     group: "Actions",
     action: () => {
       useAppStore.getState().openAcctModal();
+      setCommandPaletteOpen(false);
+    },
+  });
+
+  // Account management. Rename and deactivate act on the account the user is
+  // looking at (the open register tab), so they only appear when there is one —
+  // a palette entry that can only fail is worse than no entry.
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const focusedAccount =
+    activeTab?.type === "register" ? activeTab.account || null : null;
+
+  if (focusedAccount) {
+    const openAccountModal = async () => {
+      // The modal needs the full AccountNode (closed state, children, type),
+      // and the palette only has the name — fetch the tree and find it.
+      const { accounts } = await fetchAccounts("combined", undefined, true);
+      const find = (nodes: AccountNode[]): AccountNode | null => {
+        for (const n of nodes) {
+          if (n.name === focusedAccount) return n;
+          const hit = find(n.children);
+          if (hit) return hit;
+        }
+        return null;
+      };
+      const node = find(accounts);
+      if (node) useAppStore.getState().openAcctModal(node);
+      setCommandPaletteOpen(false);
+    };
+
+    items.push({
+      id: "action:rename-account",
+      label: `Rename Account — ${focusedAccount}`,
+      group: "Actions",
+      action: openAccountModal,
+    });
+    items.push({
+      id: "action:deactivate-account",
+      label: `Deactivate Account — ${focusedAccount}`,
+      group: "Actions",
+      action: openAccountModal,
+    });
+  }
+
+  items.push({
+    id: "action:toggle-inactive-accounts",
+    label: "Toggle Inactive Accounts",
+    group: "Actions",
+    action: () => {
+      useAppStore.getState().toggleShowClosedAccounts();
+      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
       setCommandPaletteOpen(false);
     },
   });

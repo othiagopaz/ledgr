@@ -68,15 +68,16 @@ interface AppState {
   openDrill: (target: DrillTarget) => void;
   closeDrill: () => void;
 
-  // Default payment account (from ledgr-option)
-  defaultPaymentAccount: string | null;
-  setDefaultPaymentAccount: (account: string | null) => void;
-
   // Account modal
   acctModalOpen: boolean;
   acctModalAccount: AccountNode | null; // null = create, non-null = edit
   openAcctModal: (account?: AccountNode) => void;
   closeAcctModal: () => void;
+
+  // Accounts view: show inactive (closed) accounts. Off by default — a
+  // long-lived ledger accumulates accounts that will never be posted to again.
+  showClosedAccounts: boolean;
+  toggleShowClosedAccounts: () => void;
 
 
   // UI
@@ -207,15 +208,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   openDrill: (target) => set({ drillTarget: target }),
   closeDrill: () => set({ drillTarget: null }),
 
-  // Default payment account
-  defaultPaymentAccount: null,
-  setDefaultPaymentAccount: (account) => set({ defaultPaymentAccount: account }),
-
   // Account modal
   acctModalOpen: false,
   acctModalAccount: null,
   openAcctModal: (account) => set({ acctModalOpen: true, acctModalAccount: account || null }),
   closeAcctModal: () => set({ acctModalOpen: false, acctModalAccount: null }),
+
+  showClosedAccounts: false,
+  toggleShowClosedAccounts: () =>
+    set((s) => ({ showClosedAccounts: !s.showClosedAccounts })),
 
   // UI
   theme: 'light',
