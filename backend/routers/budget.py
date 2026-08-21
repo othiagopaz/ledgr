@@ -172,13 +172,19 @@ def _build_budget_response(
         # (Income:Salary:Additional → Assets:Investments, no cash leg) or
         # reinvested interest (Income:Interest → Assets:Investments) inflate the
         # accrual Income Statement but never land in your bank, so budgeting
-        # against them is a lie. Expenses stay accrual (a credit-card purchase
-        # must drain its envelope at purchase, before the bill is paid).
+        # against them is a lie.
+        #
+        # Expenses are subject to the same rule, but the rule itself admits
+        # accrual: `consumes_budget_cash` accepts a `credit-card` or `payable`
+        # leg, so a card purchase still drains its envelope at purchase, before
+        # the bill is paid. What it does exclude is the accounting-only expense
+        # — appropriating a prepaid, depreciation, a write-off, an unrealised
+        # loss — which consumes no cash and would make the ZBB unclosable.
         realized, pending = sum_account_postings(
             entries,
             account,
             oc,
-            require_cash_counterpart=(section in ("allocations", "income")),
+            require_cash_counterpart=True,
             type_map=type_map,
         )
 

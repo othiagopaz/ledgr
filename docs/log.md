@@ -9,6 +9,18 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-08-20 — The Budget's cash rule now covers expenses
+
+- An expense that consumes no cash was still budgetable, so the ZBB could never close: `unallocated` sat permanently off by the non-cash amount. Found via a consortium admin-fee appropriation (`Expenses → Assets:Prepaid`, no cash leg), and it generalises to depreciation, write-offs, unrealised losses and monetary correction.
+- `require_cash_counterpart` now applies to **every** section, and the rule itself was widened: `consumes_budget_cash` accepts `cash` **or** a deferred-cash type (`credit-card` / `payable`). Without that widening, extending the rule would have removed all R$53k of card spend from the Budget — a card purchase has no cash leg at purchase time.
+- `prepaid` is deliberately excluded from deferred cash: its cash left, and was budgeted, at prepayment. Counting the monthly appropriation again would double-count.
+- `accounts_with_activity` applies the same rule, so accounting-only expenses no longer surface as ghosts either. That fixed a latent inconsistency: reinvested interest was already refused by the envelope sums but still offered as a ghost.
+- `payable` joins `investment`/`loan` as a budgetable allocation type — settling what you owe is a planned outflow, exactly like paying down a loan. It was rejected with a 400 before.
+- Side effect, reviewed and kept: widening the accepted types is global, so a **credit** on a card statement (refund/cashback, `Income → Liabilities:Credit-Card`) now counts as budget income where it previously fell into the "Cash timing" line. Symmetric with expenses — if a card debit drains an envelope, a card credit fills one — and it reduces the bill you will actually pay. Two transactions on a real ledger (R$3.36 current, R$907.09 from migrated 2019 history).
+- Measured on a real ledger: 4 accounts / R$14,082.24 of accounting-only expense left the Budget; card spend untouched. `TestExpenseCashRule` + `TestPayableIsAnAllocationEnvelope` — 9 tests. Backend suite at 498.
+
+---
+
 ## 2026-08-20 — A refused write was silent in the register
 
 - Reported as "adiciono a linha, dou Enter, não salva, nada acontece". `handleNewSave` and `handleEditSave` were written as `if (result.success) { …commit… }` with no else, so a rejected write produced no commit, no message and no closed editor.

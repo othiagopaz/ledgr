@@ -200,8 +200,13 @@ class TestActivityHelpers:
             to_date=datetime.date(2024, 9, 1),
         )
         active = accounts_with_activity(entries, "BRL", "combined", type_map)
+        # Card purchase → deferred cash, so it is budgetable and ghosts.
         assert "Expenses:Subscriptions" in active
-        assert "Income:Interest" in active
+        # Reinvested interest (Income:Interest → Assets:Investments, no cash
+        # leg) must NOT ghost: `sum_account_postings` already refuses to count
+        # it, so offering it as an envelope would promise income that never
+        # reaches the bank. The ghost list now applies the same cash rule.
+        assert "Income:Interest" not in active
         # Cash funding account excluded.
         assert "Assets:Bank:Checking" not in active
 
@@ -1073,3 +1078,155 @@ class TestInvalidMonth:
     def test_bad_month_format(self, budget_client: TestClient) -> None:
         r = budget_client.get("/api/budget?month=2024-13")
         assert r.status_code == 400
+
+
+# ------------------------------------------------------------------
+# The cash rule applies to expenses too
+# ------------------------------------------------------------------
+
+NONCASH_FIXTURE = """\
+option "operating_currency" "BRL"
+
+2026-01-01 open Assets:Bank:Main            BRL
+  ledgr-type: "cash"
+2026-01-01 open Assets:Prepaid:AdminFee     BRL
+  ledgr-type: "prepaid"
+2026-01-01 open Assets:Vehicle:Moto         BRL
+  ledgr-type: "investment"
+2026-01-01 open Liabilities:Card            BRL
+  ledgr-type: "credit-card"
+2026-01-01 open Liabilities:Payables:Vendor BRL
+  ledgr-type: "payable"
+2026-01-01 open Income:Salary               BRL
+2026-01-01 open Expenses:Meals              BRL
+2026-01-01 open Expenses:AdminFee           BRL
+2026-01-01 open Expenses:Depreciation       BRL
+2026-01-01 open Expenses:Services           BRL
+
+2026-01-05 * "salary"
+  Assets:Bank:Main    5000.00 BRL
+  Income:Salary      -5000.00 BRL
+
+; cash expense — budgetable
+2026-01-10 * "lunch, paid from the bank"
+  Expenses:Meals        100.00 BRL
+  Assets:Bank:Main     -100.00 BRL
+
+; card expense — no cash yet, but budgetable (deliberate accrual)
+2026-01-11 * "dinner on the card"
+  Expenses:Meals         80.00 BRL
+  Liabilities:Card      -80.00 BRL
+
+; payable — invoice received, cash follows later. Budgetable.
+2026-01-12 * "consultant invoice"
+  Expenses:Services            300.00 BRL
+  Liabilities:Payables:Vendor -300.00 BRL
+
+; appropriating a prepaid — accounting only, must NOT be budgetable
+2026-01-15 * "admin fee appropriated"
+  Expenses:AdminFee         64.68 BRL
+  Assets:Prepaid:AdminFee  -64.68 BRL
+
+; depreciation — accounting only, must NOT be budgetable
+2026-01-31 * "depreciation"
+  Expenses:Depreciation    200.00 BRL
+  Assets:Vehicle:Moto     -200.00 BRL
+"""
+
+
+@pytest.fixture()
+def noncash_ledger(tmp_path: Path) -> FavaLedger:
+    dst = tmp_path / "noncash.beancount"
+    dst.write_text(NONCASH_FIXTURE)
+    fava = FavaLedger(str(dst))
+    fava.load_file()
+    return fava
+
+
+class TestExpenseCashRule:
+    """An expense is budgetable only when the transaction moves cash.
+
+    Cash and deferred cash (card / payable) qualify. Accounting-only expenses —
+    appropriating a prepaid, depreciation, write-offs, unrealised losses — do
+    not: they reduce profit without consuming cash, so an envelope for them
+    would ask for money that never moves and the ZBB could never close.
+    """
+
+    def _active(self, ledger: FavaLedger) -> set[str]:
+        type_map = build_account_type_map(ledger.all_entries)
+        entries = get_filtered_entries(
+            ledger,
+            "combined",
+            from_date=datetime.date(2026, 1, 1),
+            to_date=datetime.date(2026, 2, 1),
+        )
+        return accounts_with_activity(entries, "BRL", "combined", type_map)
+
+    def test_cash_expense_is_budgetable(self, noncash_ledger: FavaLedger) -> None:
+        assert "Expenses:Meals" in self._active(noncash_ledger)
+
+    def test_payable_expense_is_budgetable(self, noncash_ledger: FavaLedger) -> None:
+        """An invoice received but unpaid is this month's expense."""
+        assert "Expenses:Services" in self._active(noncash_ledger)
+
+    def test_prepaid_appropriation_is_not_budgetable(
+        self, noncash_ledger: FavaLedger
+    ) -> None:
+        """Its cash left when the prepayment was made — counting again doubles."""
+        assert "Expenses:AdminFee" not in self._active(noncash_ledger)
+
+    def test_depreciation_is_not_budgetable(
+        self, noncash_ledger: FavaLedger
+    ) -> None:
+        assert "Expenses:Depreciation" not in self._active(noncash_ledger)
+
+    def test_sums_exclude_the_noncash_expense(
+        self, noncash_ledger: FavaLedger
+    ) -> None:
+        """Not just the ghost list — the envelope total must exclude it too."""
+        type_map = build_account_type_map(noncash_ledger.all_entries)
+        entries = get_filtered_entries(
+            noncash_ledger,
+            "combined",
+            from_date=datetime.date(2026, 1, 1),
+            to_date=datetime.date(2026, 2, 1),
+        )
+        realized, _ = sum_account_postings(
+            entries, "Expenses:AdminFee", "BRL",
+            require_cash_counterpart=True, type_map=type_map,
+        )
+        assert realized == Decimal(0)
+
+    def test_card_expense_still_counts_on_accrual(
+        self, noncash_ledger: FavaLedger
+    ) -> None:
+        """The card is the deliberate exception: 100 cash + 80 card = 180."""
+        type_map = build_account_type_map(noncash_ledger.all_entries)
+        entries = get_filtered_entries(
+            noncash_ledger,
+            "combined",
+            from_date=datetime.date(2026, 1, 1),
+            to_date=datetime.date(2026, 2, 1),
+        )
+        realized, _ = sum_account_postings(
+            entries, "Expenses:Meals", "BRL",
+            require_cash_counterpart=True, type_map=type_map,
+        )
+        assert realized == Decimal("180.00")
+
+
+class TestPayableIsAnAllocationEnvelope:
+    """Settling what you owe is a planned outflow, like paying down a loan."""
+
+    def test_payable_is_budgetable_allocation(self) -> None:
+        tmap = {"Liabilities:Payables:Vendor": "payable"}
+        assert is_budgetable_allocation("Liabilities:Payables:Vendor", tmap)
+
+    def test_prepaid_is_not(self) -> None:
+        tmap = {"Assets:Prepaid:AdminFee": "prepaid"}
+        assert not is_budgetable_allocation("Assets:Prepaid:AdminFee", tmap)
+
+    def test_receivable_is_not(self) -> None:
+        """That cash leaves and comes back — it is not an allocation."""
+        tmap = {"Assets:Receivables:X": "receivable"}
+        assert not is_budgetable_allocation("Assets:Receivables:X", tmap)

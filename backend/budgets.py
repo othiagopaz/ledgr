@@ -26,7 +26,11 @@ from decimal import Decimal
 
 from beancount.core import data
 
-from account_types import is_budgetable_allocation, is_cash_account
+from account_types import (
+    consumes_budget_cash,
+    is_budgetable_allocation,
+    is_cash_account,
+)
 
 # Roots that map to each Budget section.  Income and Expenses are P&L roots;
 # Assets/Liabilities envelopes are *allocation* lines (savings contributions,
@@ -88,13 +92,19 @@ def sum_account_postings(
     Income-account sign normalization is applied by the caller, not here — the
     raw posting numbers are returned (credits to ``Income:*`` are negative).
 
-    ``require_cash_counterpart`` (allocation envelopes only): count a matching
-    posting only when its transaction has at least one **cash** counter-leg —
-    i.e. the money actually moved from/to a bank account.  This mirrors the
-    Cash Flow Statement's "investing" rule: a contribution
+    ``require_cash_counterpart``: count a matching posting only when its
+    transaction actually moves budgetable cash — a ``cash`` leg, or a
+    deferred-cash leg (``credit-card`` / ``payable``) whose cash follows later.
+    See ``consumes_budget_cash``.
+
+    This mirrors the Cash Flow Statement: a contribution
     (``Assets:Cash → Assets:Investments``) counts, but interest/dividends
-    (``Income:Interest → Assets:Investments``, no cash leg) do not.  Requires
-    ``type_map`` to resolve ``ledgr-type``.
+    (``Income:Interest → Assets:Investments``, no cash leg) do not. Applied to
+    **every** section, it also keeps accounting-only expenses out of the
+    Budget — appropriating a prepaid expense, depreciation, an asset write-off,
+    an unrealised loss. Those reduce profit without consuming cash, so an
+    envelope for them would ask for money that never moves and the ZBB could
+    never close. Requires ``type_map`` to resolve ``ledgr-type``.
     """
     realized = Decimal(0)
     pending = Decimal(0)
@@ -104,12 +114,11 @@ def sum_account_postings(
         if not isinstance(e, data.Transaction) or e.flag not in ("*", "!"):
             continue
         if require_cash_counterpart:
-            # The transaction must move cash. A cash leg can be the budgeted
-            # posting itself (e.g. budgeting a cash account) or any other leg.
-            has_cash = any(
-                is_cash_account(p.account, tmap) for p in e.postings
-            )
-            if not has_cash:
+            # The transaction must move cash — either actual cash, or a
+            # deferred-cash instrument (card / payable) whose cash follows
+            # later. Either leg qualifies: the budgeted posting itself (e.g.
+            # budgeting a cash account) or any other leg.
+            if not consumes_budget_cash(e.postings, tmap):
                 continue
         for p in e.postings:
             if p.units is None or p.units.currency != oc:
@@ -179,6 +188,11 @@ def accounts_with_activity(
     active: set[str] = set()
     for e in entries:
         if not isinstance(e, data.Transaction) or e.flag not in flags:
+            continue
+        # Same cash rule as the envelope sums: an accounting-only transaction
+        # must not surface as a ghost either, or the user would be prompted to
+        # budget something that never consumes cash.
+        if not consumes_budget_cash(e.postings, tmap):
             continue
         for p in e.postings:
             if p.units is None or p.units.currency != oc:

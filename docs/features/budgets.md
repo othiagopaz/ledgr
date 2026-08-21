@@ -84,22 +84,80 @@ Budgeted accounts group into three sections by account root **and** ledgr-type:
 |---|---|
 | **income** | `Income:*` |
 | **expenses** | `Expenses:*` |
-| **allocations** | `Assets`/`Liabilities` accounts that are `investment`- or `loan`-typed |
+| **allocations** | `Assets`/`Liabilities` accounts that are `investment`-, `loan`- or `payable`-typed |
 
-**Only `investment` and `loan` allocation types are budgetable.** cash,
-receivable, prepaid, credit-card and payable are financial movements /
-instruments, not budget envelopes — excluded from rows, ghosts and the closure,
-and **rejected with 400** at write time. `Equity` is rejected too. The check is
+### Two filters, and they answer different questions
+
+A posting reaches the Budget only if **both** pass. Confusing them is the
+easiest way to misread why a row is missing:
+
+| Filter | Scope | Question |
+|---|---|---|
+| `consumes_budget_cash` | the whole **transaction** | did money move (or will it, via card/payable)? |
+| `budgetable_section` | the individual **posting** | is this account an envelope at all? |
+
+The transaction filter runs first, and it is all-or-nothing: if no leg touches
+`cash` / `credit-card` / `payable`, **nothing** from that transaction enters any
+section. Only then does each posting get routed by its own root and ledgr-type.
+
+```
+Does the TRANSACTION touch cash / credit-card / payable?
+│
+├── NO ──► nothing from it enters the Budget
+│          (asset write-down, depreciation, prepaid appropriation,
+│           unrealised loss, monetary correction / TR)
+│
+└── YES ─► route each POSTING by root + ledgr-type:
+           ├── Income:*                        → income
+           ├── Expenses:*                      → expenses
+           ├── investment / loan / payable      → allocations
+           └── cash / receivable / prepaid /
+               credit-card                      → no section
+                                                  (the means of payment,
+                                                   not the destination)
+```
+
+The consequence worth internalising: **the counterpart pair tells you nothing.**
+Two transactions can be `Expenses:Financial:Fees` against
+`Assets:Investments:XP` for the same amount and land differently —
+
+```beancount
+; brokerage fee paid from the bank → BOTH postings count
+2026-01-10 * "corretagem"
+  Expenses:Financial:Fees        50.00 BRL   ; → expenses
+  Assets:Investments:XP         100.00 BRL   ; → allocations
+  Assets:Bank:Main             -150.00 BRL   ; the cash leg
+
+; same fee, deducted inside the broker → NEITHER counts
+2026-01-20 * "corretagem descontada da posicao"
+  Expenses:Financial:Fees        50.00 BRL
+  Assets:Investments:XP         -50.00 BRL   ; no cash anywhere
+```
+
+A real example of the second shape: writing an asset down on sale.
+`Assets:Vehicle:KA` is `investment` (a budgetable type) yet the write-down never
+appears, because its transaction has no cash leg — while the *sale* of the same
+asset, in its own transaction, does appear. Same account, two transactions, two
+outcomes. This is also why the rule lives on the transaction and not on the
+account: pay that same fee from the bank tomorrow and it budgets normally, with
+nothing to reconfigure.
+
+**Only `investment`, `loan` and `payable` allocation types are budgetable.**
+Settling a payable is a planned cash outflow, exactly like paying down a loan.
+cash (the pool itself), receivable (money that leaves and comes back) and
+prepaid (cash already spent — see §4) are financial movements / instruments,
+not budget envelopes — excluded from rows, ghosts and the closure, and
+**rejected with 400** at write time. `Equity` is rejected too. The check is
 **descendant-aware** (`is_budgetable_allocation`): budgeting a parent account
 whose own ledgr-type is absent is allowed when a descendant is `investment`/
 `loan` — e.g. budgeting `Liabilities:Loans` works because its typed child
 `Liabilities:Loans:KA` carries the postings (which roll up). This mirrors the
 Cash Flow Statement, which classifies by the typed posting account.
 
-## 4. The budget is a CASH plan — Income and Allocations require a cash leg
+## 4. The budget is a CASH plan — every section requires a cash leg
 
-The budget plans **spendable cash**, so **Income and Allocations count a posting
-only when its transaction touches a `ledgr-type: "cash"` account**
+The budget plans **spendable cash**, so **every section counts a posting only
+when its transaction moves budgetable cash**
 (`sum_account_postings(..., require_cash_counterpart=True)`) — the same rule the
 Cash Flow Statement uses.
 
@@ -108,13 +166,33 @@ Cash Flow Statement uses.
   no cash leg) or reinvested interest (`Income:Interest → Assets:Investments`)
   inflates the accrual Income Statement but is **not budget income** — budgeting
   against it would plan cash that never exists. It earns no income row.
+
+  Deferred cash counts here too, symmetrically with expenses: a credit on the
+  card statement (`Income:Interest → Liabilities:Credit-Card`, a refund or
+  cashback) is budget income, because it reduces the bill you are going to pay.
+  If a card *debit* drains an envelope, a card *credit* should fill one.
 - **Allocations** — count cash↔investment/loan **both ways**: a contribution out
   (`Assets:Cash → Assets:Investments`) and a withdrawal back in
   (`Assets:Investments → Assets:Cash`, a negative allocation that funds a
   shortfall). broker→broker transfers (no cash leg) are excluded.
-- **Expenses** — the one deliberate accrual: counted regardless of funding, so a
-  credit-card purchase drains its envelope at purchase, before the bill is paid.
-  This is what lets you budget card spend; its timing gap surfaces in §5.
+- **Expenses** — subject to the same rule, but the rule admits accrual:
+  `consumes_budget_cash` accepts a **deferred-cash** leg (`credit-card` /
+  `payable`, see `DEFERRED_CASH_TYPES`) as well as `cash`. So a card purchase
+  still drains its envelope at purchase, before the bill is paid — that is what
+  lets you budget card spend, and its timing gap surfaces in §5. An invoice
+  received but unpaid (`payable`) works the same way: the expense is this
+  month's, the cash follows.
+
+  What the rule **excludes** is the accounting-only expense — appropriating a
+  prepaid expense, depreciation, an asset write-off, an unrealised loss, a
+  monetary correction. Those reduce profit without consuming cash, so an
+  envelope for them would ask for money that never moves and the ZBB could
+  never close. They also never surface as ghosts.
+
+  Tested against a real ledger: 4 accounts / R$14k of accounting-only expense
+  left the Budget, while R$53k of card spend stayed. `prepaid` is deliberately
+  not a deferred-cash type: its cash left (and was budgeted) at prepayment, so
+  counting the monthly appropriation again would double-count.
 
 ## 5. The summary — the cash bridge
 

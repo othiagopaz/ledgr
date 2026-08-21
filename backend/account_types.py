@@ -62,11 +62,30 @@ OPERATING_WORKING_CAPITAL_TYPES: frozenset[str] = (
 )
 
 # Asset/Liability types that are valid Budget *allocation* envelopes — money
-# you deliberately set aside (investment contributions, debt paydown). Every
-# other Asset/Liability type (cash, receivable, prepaid, credit-card, payable)
-# is a financial movement / instrument, not an allocation target, and is kept
-# out of the Budget entirely. See docs/features/budgets.md.
-BUDGETABLE_ALLOCATION_TYPES: frozenset[str] = frozenset({"investment", "loan"})
+# you deliberately set aside or deliberately pay down. ``payable`` qualifies for
+# the same reason ``loan`` does: settling what you owe is a planned cash
+# outflow. ``cash`` (the pool itself), ``receivable`` (money that leaves and
+# comes back) and ``prepaid`` (cash already spent, see
+# ``DEFERRED_CASH_TYPES``) are financial movements, not allocation targets, and
+# stay out of the Budget entirely. See docs/features/budgets.md.
+BUDGETABLE_ALLOCATION_TYPES: frozenset[str] = frozenset({
+    "investment", "loan", "payable",
+})
+
+# Types whose counterpart means "the cash has not left yet, but it will".
+#
+# The Budget plans spendable cash, so a posting normally only counts when its
+# transaction touches a ``cash`` account. Credit cards and payables are the
+# deliberate exception: a card purchase has to drain its envelope at purchase,
+# before the bill is paid, and an invoice you have received but not settled is
+# an expense of this month with the cash following later. Budgeting them on
+# accrual is the honest reading — the timing gap surfaces on the Budget's
+# "Cash timing" line.
+#
+# ``prepaid`` is deliberately NOT here: its cash already left (and was budgeted)
+# when the prepayment was made, so counting the monthly appropriation again
+# would double-count. Same for ``receivable``: that cash leaves and returns.
+DEFERRED_CASH_TYPES: frozenset[str] = frozenset({"credit-card", "payable"})
 
 # All valid types for Assets accounts.
 VALID_ASSET_TYPES: frozenset[str] = frozenset({
@@ -157,6 +176,34 @@ def build_account_type_map(entries: list) -> dict[str, str]:
 def is_cash_account(account: str, type_map: dict[str, str]) -> bool:
     """Return True if account's ledgr-type is in CASH_TYPES."""
     return type_map.get(account) in CASH_TYPES
+
+
+def is_deferred_cash_account(account: str, type_map: dict[str, str]) -> bool:
+    """True when the account means "cash has not left yet, but it will".
+
+    Credit cards and payables — see ``DEFERRED_CASH_TYPES``.
+    """
+    return type_map.get(account) in DEFERRED_CASH_TYPES
+
+
+def consumes_budget_cash(postings: list, type_map: dict[str, str]) -> bool:
+    """True when a transaction's postings represent real budgetable spending.
+
+    The Budget plans spendable cash. A transaction qualifies when it touches
+    either actual cash or a deferred-cash instrument (card / payable). What this
+    filters out is the accounting-only movement: appropriating a prepaid
+    expense, booking depreciation, writing an asset off, recognising an
+    unrealised loss, or indexing a balance. Those reduce profit without ever
+    consuming cash, so budgeting them would ask for money that never moves —
+    and the ZBB could never close.
+
+    ``postings`` is any iterable of objects exposing ``.account``.
+    """
+    return any(
+        is_cash_account(p.account, type_map)
+        or is_deferred_cash_account(p.account, type_map)
+        for p in postings
+    )
 
 
 def is_investment_account(account: str, type_map: dict[str, str]) -> bool:
