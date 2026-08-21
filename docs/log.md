@@ -9,6 +9,14 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-08-20 — Unbudgeted envelopes seed from realized
+
+- Clicking "Set budget" on a ghost row opened an empty input, with the number the user almost certainly wanted sitting in the next column. It now seeds from `realized`.
+- Seeds from the **raw** `realized`, matching what that column renders — an earlier draft added `pending` when the Planned toggle was on, which would have seeded a figure visible nowhere on screen.
+- Already-budgeted envelopes still seed from their own `allocated`: editing one must not silently retarget it to this month's spend.
+
+---
+
 ## 2026-08-20 — The Budget's cash rule now covers expenses
 
 - An expense that consumes no cash was still budgetable, so the ZBB could never close: `unallocated` sat permanently off by the non-cash amount. Found via a consortium admin-fee appropriation (`Expenses → Assets:Prepaid`, no cash leg), and it generalises to depreciation, write-offs, unrealised losses and monetary correction.

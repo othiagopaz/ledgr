@@ -55,7 +55,15 @@ export default function BudgetEnvelopeRow({
 
   function startEdit() {
     if (editing) return; // already editing — don't reset the draft
-    setDraft(envelope.allocated ? String(envelope.allocated) : '');
+    // An unbudgeted envelope seeds from what was actually spent — that figure
+    // is almost always the number you want and it is right there in the next
+    // column, so retyping it is busywork. Uses `realized` raw, matching what
+    // that column displays (it does not add pending), so the seed is never a
+    // number the user cannot see. An already-budgeted envelope seeds from its
+    // own allocation instead: editing one must not silently retarget it to this
+    // month's spend. The input is pre-selected, so either seed is one keystroke
+    // from being replaced.
+    setDraft(String(envelope.allocated || envelope.realized || ''));
     setEditing(true);
   }
 

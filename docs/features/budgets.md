@@ -299,6 +299,13 @@ re-parses. See [`../backend/modules.md`](../backend/modules.md).
 - Inline editing (`BudgetEnvelopeRow`): click the allocated cell → number input;
   Enter/blur commits, Escape cancels. `startEdit` is guarded so a click inside
   the open input doesn't reset the draft.
+- **An unbudgeted envelope seeds its draft from `realized`.** The number you
+  want is almost always what you already spent, and it is displayed in the very
+  next column — retyping it is busywork. Seeds from the raw `realized` so the
+  value always matches what that column shows (it does not add `pending`).
+  Already-budgeted envelopes keep seeding from their own `allocated`: editing
+  one must not silently retarget it to this month's spend. The input is
+  pre-selected, so either seed is one keystroke from being replaced.
 - **Cmd+K** (AGENTS.md hard rule — every action present): "Go to Budget",
   "Budget: Add Envelope", "Budget: Next/Previous Month", "Budget: Copy From Last
   Month". These use a store signal (`budgetNavRequestId` / `budgetNavConsumedId`
