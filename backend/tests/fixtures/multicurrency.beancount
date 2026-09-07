@@ -5,6 +5,11 @@ option "operating_currency" "USD"
   ledgr-type: "cash"
 2024-01-01 open Assets:Brokerage      ITOT
   ledgr-type: "investment"
+; Accrued vacation: a commodity with no cost and no price, so it genuinely
+; has no operating-currency value. This is what the "other currencies"
+; bucket is for — unlike ITOT above, whose cost in USD is known.
+2024-01-01 open Assets:Vacation       VACHR
+  ledgr-type: "receivable"
 2024-01-01 open Income:Salary         USD
 2024-01-01 open Income:Dividends      USD
 2024-01-01 open Income:PTO            VACHR
@@ -30,8 +35,11 @@ option "operating_currency" "USD"
   Expenses:Food             200.00 USD
   Assets:Bank:Checking
 
+; Held at cost. Without the `{35.00 USD}` this transaction does not balance
+; (100 ITOT against -3500.00 USD is two unrelated currencies) and the whole
+; fixture loads with an error — which it silently did for a long time.
 2024-02-01 * "Buy shares"
-  Assets:Brokerage           100 ITOT
+  Assets:Brokerage           100 ITOT {35.00 USD}
   Assets:Bank:Checking    -3500.00 USD
 
 2024-02-15 * "Employer" "February Salary"
@@ -45,3 +53,7 @@ option "operating_currency" "USD"
 2024-02-20 * "Restaurant" "Dinner"
   Expenses:Food             150.00 USD
   Liabilities:CreditCard
+
+2024-02-29 * "Employer" "Vacation balance carried into an asset"
+  Assets:Vacation              5 VACHR
+  Income:PTO                  -5 VACHR

@@ -17,6 +17,7 @@ from beancount.ops import summarize
 from fava.core import FavaLedger
 
 from cashflow import compute_cashflow, date_to_period
+from routers import reports as reports_router
 from serializers import (
     attach_other_currencies_to_balance_tree,
     attach_other_currencies_to_report_tree,
@@ -35,84 +36,22 @@ from serializers import (
 class TestBalanceSheet:
     @staticmethod
     def _compute_balance_sheet(ledger: FavaLedger, as_of_date: str | None = None) -> dict:
-        """Compute balance sheet using the same logic as the router."""
-        closed = summarize.cap_opt(ledger.all_entries, ledger.options)
+        """Compute the balance sheet through the **router's own** code path.
 
+        Deliberately delegates rather than reimplementing. This helper used to
+        be a ~75-line copy of ``_compute_balance_sheet``, which meant the
+        accounting invariant below was asserted against the test's copy and
+        not against the report Ledgr actually serves — a real violation in
+        ``routers/reports.py`` could sail through this suite. It did: the
+        shipped report broke the equation on any held-at-cost position while
+        this test stayed green.
+        """
+        entries = ledger.all_entries
         if as_of_date:
             cutoff = datetime.date.fromisoformat(as_of_date)
-            closed = [e for e in closed if e.date <= cutoff]
-
-        real_root = realization.realize(closed)
+            entries = [e for e in entries if e.date <= cutoff]
         oc = ledger.options["operating_currency"][0]
-
-        def section_total(root_type: str) -> float:
-            node = realization.get(real_root, root_type)
-            if node is None:
-                return 0.0
-            bal = realization.compute_balance(node)
-            total = Decimal(0)
-            for pos in bal:
-                if pos.units.currency == oc:
-                    total += pos.units.number
-            return decimal_to_report_number(total)
-
-        def section_other_total(root_type: str) -> list[dict]:
-            node = realization.get(real_root, root_type)
-            if node is None:
-                return []
-            bal = realization.compute_balance(node)
-            by_curr: dict[str, Decimal] = {}
-            for pos in bal:
-                if pos.units.currency != oc:
-                    c = pos.units.currency
-                    by_curr[c] = by_curr.get(c, Decimal(0)) + pos.units.number
-            return format_other_balances(by_curr)
-
-        def build_section(root_type: str) -> list[dict]:
-            node = realization.get(real_root, root_type)
-            if node is None:
-                return []
-            account_balance: dict[str, Decimal] = {}
-            account_balance_other: dict[str, dict[str, Decimal]] = {}
-            for child in realization.iter_children(node):
-                if child.account:
-                    # Own postings only — build_balance_tree rolls up children
-                    bal = child.balance
-                    for pos in bal:
-                        curr = pos.units.currency
-                        if curr == oc:
-                            account_balance[child.account] = (
-                                account_balance.get(child.account, Decimal(0))
-                                + pos.units.number
-                            )
-                        else:
-                            if child.account not in account_balance_other:
-                                account_balance_other[child.account] = {}
-                            account_balance_other[child.account][curr] = (
-                                account_balance_other[child.account].get(curr, Decimal(0))
-                                + pos.units.number
-                            )
-            all_accts = set(account_balance.keys()) | set(account_balance_other.keys())
-            tree = build_balance_tree(all_accts, account_balance)
-            attach_other_currencies_to_balance_tree(tree, account_balance_other)
-            return tree
-
-        return {
-            "assets": build_section("Assets"),
-            "liabilities": build_section("Liabilities"),
-            "equity": build_section("Equity"),
-            "totals": {
-                "assets": section_total("Assets"),
-                "liabilities": section_total("Liabilities"),
-                "equity": section_total("Equity"),
-            },
-            "operating_currency": oc,
-            "other_totals": {
-                "assets": section_other_total("Assets"),
-                "liabilities": section_other_total("Liabilities"),
-                "equity": section_other_total("Equity"),
-            },
-        }
+        return reports_router._compute_balance_sheet(entries, ledger.options, oc)
 
     def test_accounting_equation(self, ledger: FavaLedger) -> None:
         """The fundamental accounting invariant: A + L + E = 0.
@@ -325,21 +264,31 @@ class TestMultiCurrencyBalanceSheet:
         result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
         assert result["operating_currency"] == "USD"
 
-    def test_other_totals_present(self, multicurrency_ledger: FavaLedger) -> None:
+    def test_other_totals_hold_only_valueless_commodities(
+        self, multicurrency_ledger: FavaLedger
+    ) -> None:
+        """"Other currencies" is for commodities with no OC value — not for
+        anything whose cost happens to be in another currency.
+
+        `5 VACHR` has no cost and no price, so it belongs there. The 100 ITOT
+        cost 3500.00 USD and must NOT: leaving it here strands its USD cost
+        outside the totals and breaks the accounting equation above.
+        """
         result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
         assert "other_totals" in result
-        # The fixture has ITOT in Assets:Brokerage
-        asset_others = result["other_totals"]["assets"]
-        currencies = [item["currency"] for item in asset_others]
-        assert "ITOT" in currencies
+        currencies = [i["currency"] for i in result["other_totals"]["assets"]]
+        assert "VACHR" in currencies
+        assert "ITOT" not in currencies
 
-    def test_oc_totals_exclude_non_oc(self, multicurrency_ledger: FavaLedger) -> None:
-        """OC totals must not include ITOT or VACHR amounts."""
+    def test_oc_total_counts_held_at_cost_at_its_cost(
+        self, multicurrency_ledger: FavaLedger
+    ) -> None:
+        """A position held at cost counts toward the OC total at that cost."""
         result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
-        # Assets total should only contain USD balances
-        # Checking: 10000 + 5000 - 200 - 3500 + 5000 = 16300 USD
-        # (100 ITOT in Brokerage excluded from OC total)
-        assert result["totals"]["assets"] == pytest.approx(16300.0, abs=0.01)
+        # USD cash: 10000 + 5000 - 200 - 3500 + 5000 = 16300
+        # plus 100 ITOT {35.00 USD}                  =  3500
+        # (5 VACHR has no cost and no price — excluded)
+        assert result["totals"]["assets"] == pytest.approx(19800.0, abs=0.01)
 
 
 class TestMultiCurrencyIncomeStatement:

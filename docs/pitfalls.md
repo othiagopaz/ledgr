@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-08-20
+last_updated: 2026-09-07
 ---
 
 # Known failure modes — do not repeat
@@ -34,6 +34,11 @@ Real incidents and their fixes. Add new entries as you encounter them — with e
 | Closing an account with a date before its last posting | Ledger becomes invalid | Check the last posting date of every cascade target first and refuse with a 400 |
 | Deleting several directives without re-reading between them | `delete_entry_slice` works off line numbers, and removing one line shifts the rest | Delete deepest-first and reload the ledger between deletions |
 | Declaring an opening balance that an imported prior year already closes | Doubles every balance and inflates net worth by the whole prior year | When a new earlier year is imported, empty the following year's `OPENING_BALANCES` — its closing balances *are* the next year's opening |
+| Handing a `CostSpec` to `convert.get_weight` | It only honours a **booked** `Cost` and silently falls through to the *price*. Since price minus cost **is** the capital gain, `_validate_balance` refused every correct investment entry — a sale by exactly its own gain, and a plain purchase outright (`10 PETR4 {33.00 BRL}` weighed as `10 PETR4`, never as 330.00 BRL). The guard written to protect the ledger was the only thing blocking investments | Resolve the spec with Beancount's own `booking_full.convert_costspec_to_cost` before computing the residual, and stand down when the lot can only be identified by booking (`{}`, a bare date or label, `{*}`) — see `_resolve_cost` and [`features/commodities.md`](features/commodities.md) |
+| Checking balance by summing `amount` per currency | Same bug, cruder: a weight is units x cost or units x price, not the amount. The MCP's `_balance_error` rejected every share trade *and every FX purchase* — it could not record a currency exchange at all | Stand down when any posting carries a `cost` or `price` and let the backend resolve the lot. The cheap sum still guards the plain two-leg case |
+| Splitting a Balance Sheet into OC vs "other" by `units` alone | `100 ITOT {35.00 USD}` has units in ITOT, a currency the OC total skips, so the 3500.00 USD paid for it leaves the equation: `total_assets == total_liabilities + total_equity` fails by exactly the cost of the position | Reduce with `convert.get_cost` first. "Other currencies" is for commodities with no OC value (`VACHR`), not for anything whose cost is known — see [`features/commodities.md`](features/commodities.md) §9 |
+| A test helper that reimplements the code it tests | `TestBalanceSheet._compute_balance_sheet` was a ~75-line copy of the router, so the accounting invariant was asserted against the *test's* version. The shipped report broke the equation on any held-at-cost position while the suite stayed green | Delegate to the real function. A test that owns a second copy of the logic can only prove the copy right |
+| A fixture that is quietly invalid | `multicurrency.beancount` bought `100 ITOT` against `-3500.00 USD` with no cost — two unrelated currencies, so it never balanced and the file always loaded with an error. Nothing asserted otherwise, so it taught the wrong pattern for a long time and no test ever exercised a real cost basis | Assert `GET /api/errors` returns 0 on every fixture that models something non-trivial — see `TestHeldAtCostWrites::test_fixture_is_valid` |
 
 ## Frontend
 

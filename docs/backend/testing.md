@@ -1,6 +1,6 @@
 ---
 type: pattern
-last_updated: 2026-08-06
+last_updated: 2026-09-07
 ---
 
 # Backend testing
@@ -50,3 +50,9 @@ def ledger(tmp_path):
 
 - Fava/Beancount internal logic (they have their own test suites)
 - Trivial serialization (fields passed through without transformation)
+
+## Two rules learned the hard way
+
+**A test helper must call the code, never re-implement it.** `TestBalanceSheet._compute_balance_sheet` was a ~75-line copy of the router's function, so the accounting invariant above was asserted against the test's own version. The shipped Balance Sheet violated the invariant on any held-at-cost position while this suite stayed green. It now delegates to `routers.reports._compute_balance_sheet`.
+
+**A fixture that models something non-trivial must be asserted valid.** `multicurrency.beancount` bought `100 ITOT` against `-3500.00 USD` with no cost basis — two unrelated currencies, so it never balanced and always loaded with an error. Nothing checked, so it silently taught the wrong pattern and no test ever exercised a real cost basis. Assert `GET /api/errors` returns 0, as `TestHeldAtCostWrites::test_fixture_is_valid` does for `commodities.beancount`.

@@ -1,6 +1,6 @@
 ---
 type: index
-last_updated: 2026-08-20
+last_updated: 2026-09-07
 ---
 
 > Migration from the monolithic `AGENTS.md` completed 2026-04-21 — every page referenced from `AGENTS.md` or other pages now exists. See [`log.md`](log.md).
@@ -64,6 +64,7 @@ Cross-cutting features that touch backend + frontend.
 | [`features/budgets.md`](features/budgets.md) | Zero-based monthly envelopes over Fava budget directives |
 | [`features/mcp-server.md`](features/mcp-server.md) | MCP tools for driving Ledgr from an LLM; reuse-or-spawn backend |
 | [`features/account-management.md`](features/account-management.md) | Editing, renaming and deactivating accounts; keeping a large catalog readable |
+| [`features/commodities.md`](features/commodities.md) | Lots, cost basis, booking methods, prices and exchange — how Beancount/Fava do it and what Ledgr still lacks |
 
 ## Brand
 

@@ -9,8 +9,10 @@ Tests verify:
 
 from __future__ import annotations
 
+import datetime
 import os
 import shutil
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -53,6 +55,20 @@ def client(tmp_path: Path) -> TestClient:
     ledger_mod.init_ledger(str(dst))
 
     # Import app AFTER setting up the ledger
+    from main import app
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture()
+def commodities_client(tmp_path: Path) -> TestClient:
+    """A TestClient over the commodities fixture — lots, FX and vacation days."""
+    src = FIXTURES_DIR / "commodities.beancount"
+    dst = tmp_path / "test.beancount"
+    shutil.copy(src, dst)
+
+    ledger_mod.init_ledger(str(dst))
+
     from main import app
 
     return TestClient(app, raise_server_exceptions=False)
@@ -1509,3 +1525,297 @@ class TestPostingBeforeAccountOpens:
         })
         assert r.json()["success"] is True
         assert client.get("/api/errors").json()["count"] == 0
+
+
+# ------------------------------------------------------------------
+# Held at cost — writing investments
+# ------------------------------------------------------------------
+
+
+class TestHeldAtCostWrites:
+    """A posting held at cost balances by its **cost**, not its price.
+
+    ``_validate_balance`` used to hand Beancount's ``get_weight`` a
+    ``CostSpec``, which it does not recognise: it fell through to the price
+    instead. Since the gap between price and cost *is* the capital gain, every
+    correct sale looked off by exactly its own gain and was refused — the
+    guard meant to protect the ledger was the thing blocking investments.
+    """
+
+    def test_fixture_is_valid(self, commodities_client: TestClient) -> None:
+        """The fixture itself must load clean, or nothing below means much."""
+        assert commodities_client.get("/api/errors").json()["count"] == 0
+
+    def test_buy_at_cost_is_accepted(self, commodities_client: TestClient) -> None:
+        r = commodities_client.post("/api/transactions", json={
+            "date": "2020-12-01",
+            "narration": "Buy 10 PETR4",
+            "postings": [
+                {
+                    "account": "Assets:Broker:PETR4",
+                    "amount": 10, "currency": "PETR4",
+                    "cost": "33.00", "cost_currency": "BRL",
+                },
+                {
+                    "account": "Assets:Bank:Checking",
+                    "amount": "-330.00", "currency": "BRL",
+                },
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert commodities_client.get("/api/errors").json()["count"] == 0
+
+    def test_sell_with_explicit_gain_is_accepted(
+        self, commodities_client: TestClient
+    ) -> None:
+        """The case that was refused: cost 25.00, price 40.00, gain 600.00."""
+        r = commodities_client.post("/api/transactions", json={
+            "date": "2020-12-01",
+            "narration": "Sell 40 PETR4",
+            "postings": [
+                {
+                    "account": "Assets:Broker:PETR4",
+                    "amount": -40, "currency": "PETR4",
+                    "cost": "25.00", "cost_currency": "BRL",
+                    "price": "40.00", "price_currency": "BRL",
+                },
+                {
+                    "account": "Assets:Bank:Checking",
+                    "amount": "1600.00", "currency": "BRL",
+                },
+                {"account": "Income:Gains", "amount": "-600.00", "currency": "BRL"},
+            ],
+        })
+        body = r.json()
+        assert body["success"] is True, body
+        assert commodities_client.get("/api/errors").json()["count"] == 0
+
+    def test_sell_with_elided_gain_is_accepted(
+        self, commodities_client: TestClient
+    ) -> None:
+        """Beancount interpolates the gain; the guard must not pre-empt it."""
+        r = commodities_client.post("/api/transactions", json={
+            "date": "2020-12-01",
+            "narration": "Sell 40 PETR4, gain elided",
+            "postings": [
+                {
+                    "account": "Assets:Broker:PETR4",
+                    "amount": -40, "currency": "PETR4",
+                    "cost": "25.00", "cost_currency": "BRL",
+                    "price": "40.00", "price_currency": "BRL",
+                },
+                {
+                    "account": "Assets:Bank:Checking",
+                    "amount": "1600.00", "currency": "BRL",
+                },
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert commodities_client.get("/api/errors").json()["count"] == 0
+
+    def test_gain_in_the_cost_currency_is_accepted(
+        self, commodities_client: TestClient
+    ) -> None:
+        """Gold bought in USD realises its gain in USD, not in the OC."""
+        r = commodities_client.post("/api/transactions", json={
+            "date": "2020-12-01",
+            "narration": "Sell 1 XAU",
+            "postings": [
+                {
+                    "account": "Assets:Vault:XAU",
+                    "amount": -1, "currency": "XAU",
+                    "cost": "1700.00", "cost_currency": "USD",
+                    "price": "2000.00", "price_currency": "USD",
+                },
+                {"account": "Assets:Bank:USD", "amount": "2000.00", "currency": "USD"},
+                {"account": "Income:Gains", "amount": "-300.00", "currency": "USD"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert commodities_client.get("/api/errors").json()["count"] == 0
+
+    def test_fx_purchase_at_price_is_accepted(
+        self, commodities_client: TestClient
+    ) -> None:
+        r = commodities_client.post("/api/transactions", json={
+            "date": "2020-12-01",
+            "narration": "Buy USD",
+            "postings": [
+                {
+                    "account": "Assets:Bank:USD",
+                    "amount": "100.00", "currency": "USD",
+                    "price": "5.20", "price_currency": "BRL",
+                },
+                {
+                    "account": "Assets:Bank:Checking",
+                    "amount": "-520.00", "currency": "BRL",
+                },
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert commodities_client.get("/api/errors").json()["count"] == 0
+
+    def test_wrong_gain_is_still_refused(
+        self, commodities_client: TestClient
+    ) -> None:
+        """The guard must still catch a real imbalance on a sale.
+
+        Cost 25.00 x 40 = 1000.00 out, 1600.00 cash in, so the gain is
+        600.00. Declaring 500.00 leaves 100.00 unaccounted for.
+        """
+        count_before = commodities_client.get("/api/transactions").json()["count"]
+        r = commodities_client.post("/api/transactions", json={
+            "date": "2020-12-01",
+            "narration": "Sell 40 PETR4, wrong gain",
+            "postings": [
+                {
+                    "account": "Assets:Broker:PETR4",
+                    "amount": -40, "currency": "PETR4",
+                    "cost": "25.00", "cost_currency": "BRL",
+                    "price": "40.00", "price_currency": "BRL",
+                },
+                {
+                    "account": "Assets:Bank:Checking",
+                    "amount": "1600.00", "currency": "BRL",
+                },
+                {"account": "Income:Gains", "amount": "-500.00", "currency": "BRL"},
+            ],
+        })
+        body = r.json()
+        assert body["success"] is False
+        assert any("balance" in e.lower() for e in body["errors"])
+        # And nothing was written.
+        after = commodities_client.get("/api/transactions").json()
+        assert after["count"] == count_before
+        assert all(
+            t["narration"] != "Sell 40 PETR4, wrong gain"
+            for t in after["transactions"]
+        )
+
+    def test_cost_does_not_excuse_a_plain_imbalance(
+        self, commodities_client: TestClient
+    ) -> None:
+        """Having *a* cost posting must not switch the guard off wholesale."""
+        r = commodities_client.post("/api/transactions", json={
+            "date": "2020-12-01",
+            "narration": "Buy 10 PETR4, wrong cash",
+            "postings": [
+                {
+                    "account": "Assets:Broker:PETR4",
+                    "amount": 10, "currency": "PETR4",
+                    "cost": "33.00", "cost_currency": "BRL",
+                },
+                {
+                    "account": "Assets:Bank:Checking",
+                    "amount": "-999.00", "currency": "BRL",
+                },
+            ],
+        })
+        body = r.json()
+        assert body["success"] is False
+        assert any("balance" in e.lower() for e in body["errors"])
+
+
+class TestValidateBalanceUnits:
+    """Direct tests for the balance guard's cost handling."""
+
+    @staticmethod
+    def _postings(specs: list[dict]) -> list:
+        from routers.transactions import PostingIn, _build_bc_postings
+
+        return _build_bc_postings([PostingIn(**s) for s in specs])
+
+    @staticmethod
+    def _validate(bc_postings: list) -> list[str]:
+        from beancount.parser import options
+
+        from routers.transactions import _validate_balance
+
+        # `infer_tolerances` reads real option keys, so hand it the defaults
+        # rather than a bare dict.
+        return _validate_balance(bc_postings, dict(options.OPTIONS_DEFAULTS))
+
+    def test_sale_at_cost_balances(self) -> None:
+        assert self._validate(self._postings([
+            {
+                "account": "A:X", "amount": "-10", "currency": "X",
+                "cost": "20.00", "cost_currency": "BRL",
+                "price": "28.00", "price_currency": "BRL",
+            },
+            {"account": "A:Cash", "amount": "280.00", "currency": "BRL"},
+            {"account": "I:Gains", "amount": "-80.00", "currency": "BRL"},
+        ])) == []
+
+    def test_sale_off_by_the_gain_is_caught(self) -> None:
+        assert self._validate(self._postings([
+            {
+                "account": "A:X", "amount": "-10", "currency": "X",
+                "cost": "20.00", "cost_currency": "BRL",
+                "price": "28.00", "price_currency": "BRL",
+            },
+            {"account": "A:Cash", "amount": "280.00", "currency": "BRL"},
+            {"account": "I:Gains", "amount": "-70.00", "currency": "BRL"},
+        ]))
+
+    def test_total_cost_is_spread_over_the_units(self) -> None:
+        """``{{2500.00 BRL}}`` on 100 units is 25.00 each — weight 2500.00."""
+        from beancount.core import data
+
+        from routers.transactions import _resolve_cost
+
+        bc = self._postings([
+            {"account": "A:X", "amount": "100", "currency": "X"},
+            {"account": "A:Cash", "amount": "-2500.00", "currency": "BRL"},
+        ])
+        total_spec = data.CostSpec(None, Decimal("2500.00"), "BRL", None, None, False)
+        bc[0] = bc[0]._replace(cost=total_spec)
+        assert _resolve_cost(bc[0]).cost.number == Decimal("25.00")
+        assert self._validate(bc) == []
+
+    def test_unresolvable_lot_defers_to_the_loader(self) -> None:
+        """``{}``, ``{date}`` and ``{"label"}`` are only knowable after booking.
+
+        Their weight depends on the account's real inventory, so the guard
+        must stand down rather than guess — exactly as it does for an elided
+        amount.
+        """
+        from beancount.core import data
+
+        from routers.transactions import _resolve_cost
+
+        bc = self._postings([
+            {"account": "A:X", "amount": "-10", "currency": "X",
+             "price": "28.00", "price_currency": "BRL"},
+            {"account": "A:Cash", "amount": "280.00", "currency": "BRL"},
+            {"account": "I:Gains", "amount": "-80.00", "currency": "BRL"},
+        ])
+        for spec in (
+            data.CostSpec(None, None, None, None, None, False),          # {}
+            data.CostSpec(None, None, None, datetime.date(2020, 3, 1), None, False),
+            data.CostSpec(None, None, None, None, "april-lot", False),
+            data.CostSpec(None, None, None, None, None, True),           # {*}
+        ):
+            bc[0] = bc[0]._replace(cost=spec)
+            assert _resolve_cost(bc[0]) is None
+            assert self._validate(bc) == []
+
+    def test_total_cost_on_zero_units_defers(self) -> None:
+        """A total cost is divided by the units, so zero units has no answer.
+
+        Beancount's own converter raises ``DivisionByZero`` here, which would
+        surface as a 500. Defer instead.
+        """
+        from beancount.core import data
+
+        from routers.transactions import _resolve_cost
+
+        bc = self._postings([
+            {"account": "A:X", "amount": "0", "currency": "X"},
+            {"account": "A:Cash", "amount": "0.00", "currency": "BRL"},
+        ])
+        bc[0] = bc[0]._replace(
+            cost=data.CostSpec(None, Decimal("2500.00"), "BRL", None, None, False)
+        )
+        assert _resolve_cost(bc[0]) is None
+        assert self._validate(bc) == []

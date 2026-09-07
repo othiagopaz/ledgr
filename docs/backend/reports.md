@@ -1,6 +1,6 @@
 ---
 type: pattern
-last_updated: 2026-08-19
+last_updated: 2026-09-07
 ---
 
 # Accounting reports — correct Fava usage
@@ -34,7 +34,9 @@ closed    = summarize.cap_opt(ledger.all_entries, ledger.options)
 real_root = realization.realize(closed)
 ```
 
-**Invariant**: `total_assets == total_liabilities + total_equity`. This MUST pass on every generated Balance Sheet (both `combined` and `actual` view modes). Tested in `test_routers.py` — see [`testing.md`](testing.md).
+**Invariant**: `total_assets == total_liabilities + total_equity`. This MUST pass on every generated Balance Sheet (both `combined` and `actual` view modes). Tested in `backend/tests/test_reports.py` and `backend/tests/test_routers.py` — see [`testing.md`](testing.md).
+
+`cap_opt` is necessary but not sufficient: every section is also reduced with `convert.get_cost` before the operating currency is split from the rest. A position held at cost has its OC value locked inside a non-OC `units` currency, and without the reduction that value leaves the equation. See [`../features/commodities.md`](../features/commodities.md) §9 — and note that the test helper must **call** this function rather than reimplement it, which is how the violation went unnoticed.
 
 ## Time series (charts)
 
