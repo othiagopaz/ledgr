@@ -1,0 +1,117 @@
+option "title" "Commodities Test Ledger"
+option "operating_currency" "BRL"
+
+;; Commodities held at cost (lots), commodities converted at a price (FX),
+;; and a non-monetary commodity (vacation days). Every transaction here is
+;; valid Beancount — the suite asserts this fixture loads with zero errors.
+
+2020-01-01 commodity BRL
+  name: "Real"
+2020-01-01 commodity USD
+  name: "US Dollar"
+2020-01-01 commodity PETR4
+  name: "Petrobras PN"
+  asset-class: "equity"
+2020-01-01 commodity XAU
+  name: "Gold (troy ounce)"
+  asset-class: "commodity"
+2020-01-01 commodity VACDAY
+  name: "Accrued vacation days"
+
+; The 5th field of `open` is the booking method — how Beancount picks the lot
+; when a reduction does not name one.
+2020-01-01 open Assets:Bank:Checking   BRL
+  ledgr-type: "cash"
+2020-01-01 open Assets:Bank:USD        USD
+  ledgr-type: "cash"
+2020-01-01 open Assets:Broker:PETR4    PETR4  "FIFO"
+  ledgr-type: "investment"
+2020-01-01 open Assets:Vault:XAU       XAU    "HIFO"
+  ledgr-type: "investment"
+2020-01-01 open Assets:Vacation        VACDAY
+  ledgr-type: "receivable"
+2020-01-01 open Income:Salary          BRL
+2020-01-01 open Income:VacationAccrued VACDAY
+2020-01-01 open Expenses:VacationTaken VACDAY
+; Capital gains are denominated in the COST currency, so this account must
+; not be restricted to the operating currency — gold bought in USD realises
+; its gain in USD.
+2020-01-01 open Income:Gains
+2020-01-01 open Equity:OpeningBalances BRL
+
+2020-01-01 * "Opening Balance"
+  Assets:Bank:Checking    100000.00 BRL
+  Equity:OpeningBalances
+
+; ── Held at cost ────────────────────────────────────────────────────
+; Per-unit cost.
+2020-02-01 * "Broker" "Buy PETR4 lot 1"
+  Assets:Broker:PETR4        100 PETR4 {20.00 BRL}
+  Assets:Bank:Checking   -2000.00 BRL
+
+; Total cost — Beancount divides it across the units (25.00 BRL each).
+2020-03-01 * "Broker" "Buy PETR4 lot 2, total cost"
+  Assets:Broker:PETR4        100 PETR4 {{2500.00 BRL}}
+  Assets:Bank:Checking   -2500.00 BRL
+
+; A labelled lot, so it can be reduced by name later.
+2020-04-01 * "Broker" "Buy PETR4 lot 3, labelled"
+  Assets:Broker:PETR4         50 PETR4 {30.00 BRL, "april-lot"}
+  Assets:Bank:Checking   -1500.00 BRL
+
+; ── Converted at a price ────────────────────────────────────────────
+; No cost basis: the USD balance keeps no memory of the 5.00 rate, so an FX
+; gain here is never realised anywhere.
+2020-05-01 * "Bank" "Buy USD"
+  Assets:Bank:USD          1000.00 USD @ 5.00 BRL
+  Assets:Bank:Checking    -5000.00 BRL
+
+; Gold bought in USD: the cost currency is not the operating currency.
+2020-06-01 * "Dealer" "Buy gold"
+  Assets:Vault:XAU              2 XAU {1700.00 USD}
+  Assets:Bank:USD         -3400.00 USD
+
+; ── A non-monetary commodity ────────────────────────────────────────
+2020-07-01 * "Employer" "Vacation accrual"
+  Assets:Vacation             2.5 VACDAY
+  Income:VacationAccrued
+
+2020-07-20 * "Vacation taken"
+  Expenses:VacationTaken      2 VACDAY
+  Assets:Vacation
+
+; ── Sales: the gain is the residual, and it is interpolated ─────────
+; Lot named by its cost.
+2020-08-01 * "Broker" "Sell 50 PETR4 from lot 1"
+  Assets:Broker:PETR4        -50 PETR4 {20.00 BRL} @ 28.00 BRL
+  Assets:Bank:Checking    1400.00 BRL
+  Income:Gains
+
+; Lot named by its date.
+2020-09-01 * "Broker" "Sell 50 PETR4 by lot date"
+  Assets:Broker:PETR4        -50 PETR4 {2020-03-01} @ 26.00 BRL
+  Assets:Bank:Checking    1300.00 BRL
+  Income:Gains
+
+; Lot named by its label.
+2020-09-15 * "Broker" "Sell 20 PETR4 by label"
+  Assets:Broker:PETR4        -20 PETR4 {"april-lot"} @ 31.00 BRL
+  Assets:Bank:Checking     620.00 BRL
+  Income:Gains
+
+; No lot named — the account's FIFO booking method resolves it.
+2020-10-01 * "Broker" "Sell 60 PETR4, FIFO"
+  Assets:Broker:PETR4        -60 PETR4 {} @ 24.00 BRL
+  Assets:Bank:Checking    1440.00 BRL
+  Income:Gains
+
+; Gain realised in USD, the cost currency.
+2020-11-01 * "Dealer" "Sell 1 XAU"
+  Assets:Vault:XAU             -1 XAU {} @ 1850.00 USD
+  Assets:Bank:USD          1850.00 USD
+  Income:Gains
+
+; ── Market prices ───────────────────────────────────────────────────
+2020-12-31 price PETR4    35.00 BRL
+2020-12-31 price USD       5.20 BRL
+2020-12-31 price XAU    1900.00 USD

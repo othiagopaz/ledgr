@@ -10,7 +10,7 @@ import datetime
 from decimal import Decimal
 from typing import Any
 
-from beancount.core import data, realization
+from beancount.core import convert, data, inventory, realization
 from beancount.ops import summarize
 from fastapi import APIRouter, Depends, Query
 from fava.core import FavaLedger
@@ -327,6 +327,26 @@ def _compute_balance_sheet(entries: list, options, oc: str) -> dict[str, Any]:
     closed = summarize.cap_opt(entries, options)
     real_root = realization.realize(closed)
 
+    def _at_cost(bal: inventory.Inventory) -> inventory.Inventory:
+        """Collapse held-at-cost positions into their cost amount.
+
+        A balance sheet is stated at historical cost, and that is also the
+        only basis on which `total_assets == total_liabilities + total_equity`
+        can hold: `100 ITOT {35.00 USD}` reduces to `3500.00 USD`, whereas its
+        *units* are 100 ITOT — a currency the operating-currency total skips,
+        so the 3500 USD paid for it silently leaves the equation. Measured on
+        the multicurrency fixture: off by exactly the cost of the shares.
+
+        Positions without a cost (plain cash, VACHR) pass through untouched,
+        so this only ever moves an amount from the "other currencies" bucket
+        into the operating-currency total when its cost is actually known.
+
+        Note this is cost, not market value. Unrealised gains are deliberately
+        absent — they have no double-entry counterpart, so at market value the
+        equation cannot balance at all. See docs/features/commodities.md.
+        """
+        return bal.reduce(convert.get_cost)
+
     def _build_section(root_type: str, negate: bool = False) -> tuple[list[dict], dict[str, dict[str, Decimal]]]:
         node = realization.get(real_root, root_type)
         if node is None:
@@ -335,7 +355,7 @@ def _compute_balance_sheet(entries: list, options, oc: str) -> dict[str, Any]:
         account_balance_other: dict[str, dict[str, Decimal]] = {}
         for child in realization.iter_children(node):
             if child.account:
-                bal = child.balance
+                bal = _at_cost(child.balance)
                 for pos in bal:
                     curr = pos.units.currency
                     if curr == oc:
@@ -359,7 +379,7 @@ def _compute_balance_sheet(entries: list, options, oc: str) -> dict[str, Any]:
         node = realization.get(real_root, root_type)
         if node is None:
             return 0.0
-        bal = realization.compute_balance(node)
+        bal = _at_cost(realization.compute_balance(node))
         total = Decimal(0)
         for pos in bal:
             if pos.units.currency == oc:
@@ -370,7 +390,7 @@ def _compute_balance_sheet(entries: list, options, oc: str) -> dict[str, Any]:
         node = realization.get(real_root, root_type)
         if node is None:
             return []
-        bal = realization.compute_balance(node)
+        bal = _at_cost(realization.compute_balance(node))
         by_curr: dict[str, Decimal] = {}
         for pos in bal:
             if pos.units.currency != oc:

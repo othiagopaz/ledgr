@@ -258,11 +258,23 @@ def _balance_error(postings: list[dict[str, Any]]) -> str | None:
 
     Kept intentionally simple (a per-currency sum) rather than importing
     Beancount here — the authoritative check lives in the backend.
+
+    That simplicity is exactly why anything held at cost or converted at a
+    price is out of scope here: those postings balance by their **weight**
+    (units x cost, or units x price), not by their amount, so a per-currency
+    sum of amounts is not the arithmetic Beancount performs. Summing them
+    anyway rejects every correct entry it sees — a share sale by its capital
+    gain, an FX purchase by both legs in full. Those go to the backend, which
+    resolves the lot and checks the real residual.
     """
     if not postings:
         return "A transaction needs at least two postings."
     if any(p.get("amount") is None for p in postings):
         return None  # elided amount — let Beancount auto-balance
+    if any(
+        p.get("cost") is not None or p.get("price") is not None for p in postings
+    ):
+        return None  # weight != amount — only the backend can check this
 
     residual: dict[str, Decimal] = {}
     for p in postings:

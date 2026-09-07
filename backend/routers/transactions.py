@@ -11,7 +11,8 @@ from decimal import Decimal
 from typing import Any
 
 from beancount.core import amount as amt_mod, data, interpolate
-from beancount.parser import printer
+from beancount.core.number import MISSING
+from beancount.parser import booking_full, printer
 from fastapi import APIRouter, Depends, Query
 from fava.beans.funcs import hash_entry
 from fava.core import FavaLedger
@@ -82,6 +83,47 @@ def _build_bc_postings(postings: list[PostingIn]) -> list[data.Posting]:
     return bc_postings
 
 
+def _resolve_cost(posting: data.Posting) -> data.Posting | None:
+    """Return ``posting`` with its ``CostSpec`` resolved to a real ``Cost``.
+
+    A posting held at cost balances by its **cost**, not by its units and not
+    by its price — see ``convert.get_weight``. But ``get_weight`` only honours
+    a booked ``Cost``; handed the ``CostSpec`` that ``_build_bc_postings``
+    produces it silently falls through to the *price*. Since the gap between
+    price and cost **is** the capital gain, a correct sale then looks off by
+    exactly its own gain. Resolving the spec first is what makes the residual
+    below mean what it says.
+
+    Returns ``None`` when the spec cannot be resolved without booking it
+    against the account's real inventory — an empty ``{}``, a lot named only
+    by date or label, or a merge (``{*}``). Those weights are only knowable
+    after booking, so the caller must defer to the loader.
+    """
+    cost = posting.cost
+    if not isinstance(cost, data.CostSpec):
+        return posting
+    if not cost.currency:
+        return None
+    per, total = cost.number_per, cost.number_total
+    if not isinstance(per, Decimal) and not isinstance(total, Decimal):
+        return None
+    if isinstance(total, Decimal):
+        # A total cost is divided by the units to get the per-unit cost, so
+        # there have to be units to divide by — otherwise Beancount's own
+        # converter raises DivisionByZero and the endpoint 500s.
+        if posting.units is None or not posting.units.number:
+            return None
+        if per is None:
+            # Beancount's converter expects ``MISSING``, not ``None``, for an
+            # absent per-unit component alongside a total. Its own parser
+            # stores ``MISSING`` in this field, so the `Decimal | None`
+            # annotation is narrower than the real domain.
+            posting = posting._replace(
+                cost=cost._replace(number_per=MISSING)  # type: ignore[arg-type]
+            )
+    return booking_full.convert_costspec_to_cost(posting)
+
+
 def _validate_balance(
     bc_postings: list[data.Posting], options_map: dict
 ) -> list[str]:
@@ -94,21 +136,28 @@ def _validate_balance(
       Beancount auto-balances it (a single such posting) or raises its own
       error at load time (two or more). We do not pre-reject these; letting
       the loader own that path keeps legitimate elided-amount entries working.
-    * When every posting is fully specified, the transaction must balance to
-      zero per currency, within the per-currency tolerance that Beancount
-      infers from the amounts' precision (``infer_tolerances``). Anything
-      outside tolerance is a real imbalance and must not be written.
+    * A posting whose lot can only be identified by booking it against the
+      account's inventory is incomplete in the same way — see
+      ``_resolve_cost``. Same treatment: defer.
+    * Otherwise the transaction must balance to zero per currency **at
+      cost**, within the per-currency tolerance that Beancount infers from
+      the amounts' precision (``infer_tolerances``). Anything outside
+      tolerance is a real imbalance and must not be written.
     """
     # If any posting has an elided amount, defer to Beancount's booking —
     # it interpolates the missing weight (or errors) at load time.
     if any(p.units is None for p in bc_postings):
         return []
 
-    residual = interpolate.compute_residual(bc_postings)
+    resolved = [_resolve_cost(p) for p in bc_postings]
+    if any(p is None for p in resolved):
+        return []
+
+    residual = interpolate.compute_residual(resolved)
     if residual.is_empty():
         return []
 
-    tolerances = interpolate.infer_tolerances(bc_postings, options_map)
+    tolerances = interpolate.infer_tolerances(resolved, options_map)
     errors: list[str] = []
     for position in residual.get_positions():
         currency = position.units.currency

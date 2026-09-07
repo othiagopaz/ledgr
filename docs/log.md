@@ -1,11 +1,23 @@
 ---
 type: log
-last_updated: 2026-08-20
+last_updated: 2026-09-07
 ---
 
 # Wiki Log
 
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
+
+---
+
+## 2026-09-07 — Commodities: the balance guard was blocking every investment
+
+- New page [`features/commodities.md`](features/commodities.md): the whole inventory/lot/exchange model as Beancount 3.2.0 and Fava 1.30 actually implement it (verified by running them, not from memory), and a per-layer inventory of what Ledgr is missing.
+- **The bug.** `_validate_balance` handed Beancount a `CostSpec`, which `convert.get_weight` does not recognise — it falls through to the *price*. Price minus cost is the capital gain, so a correct sale looked off by exactly its own gain, and a plain purchase was refused outright (`10 PETR4 {33.00 BRL}` weighed as `10 PETR4`). Beancount loaded the same entry with zero errors. Now resolved with Beancount's own `booking_full.convert_costspec_to_cost`; an unresolvable lot (`{}`, a bare date or label, `{*}`) defers to the loader, exactly as an elided amount already did.
+- **Same bug in the MCP**, cruder: `_balance_error` summed `amount` per currency, so it rejected every share trade *and every FX purchase* — it could not record a currency exchange at all. It now stands down whenever a posting carries a cost or price.
+- **Balance Sheet.** Splitting OC vs "other" by units alone stranded a held-at-cost position's known cost outside the totals, so the invariant declared in [`backend/reports.md`](backend/reports.md) failed by exactly that cost. Sections now reduce with `convert.get_cost`. Market value is deliberately not applied: at market value the equation *cannot* balance (unrealised gains have no counterpart), which is why the at-value view belongs behind an explicit conversion selector.
+- **Why nobody noticed.** `TestBalanceSheet._compute_balance_sheet` was a ~75-line copy of the router, so the invariant was asserted against the test's own version; it now delegates to the real function. And `multicurrency.beancount` bought `100 ITOT` against `-3500.00 USD` with no cost — it never balanced, always loaded with an error, and nothing asserted otherwise.
+- New fixture `commodities.beancount` (lots, total cost, labels, FIFO/HIFO, gains in a non-OC currency, FX, vacation days, prices) with a test pinning that it loads clean. Backend suite 498 → 519; the 9 new tests that matter all fail with the fix reverted.
+- Four new entries in [`pitfalls.md`](pitfalls.md). Still open and documented, not fixed: `_compute_net_worth` drops any non-OC posting, so buying shares permanently lowers net worth by the cash spent.
 
 ---
 
