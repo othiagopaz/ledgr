@@ -100,24 +100,24 @@ export default function HoldingsTable() {
     <div className="report-statement">
       {lensNote && <div className="report-chart-note">{lensNote}</div>}
 
-      {data.fx_result && (
-        <div
-          className="holdings-fx"
-          title="Market value of the currency_accounts pair — realised and unrealised FX result together. Equity balances carry the opposite sign: a negative here is a gain."
-        >
-          <span className="holdings-fx-label">FX result</span>
-          <span className="holdings-fx-account">({data.fx_result.account})</span>
-          <span
-            className={`holdings-fx-value ${
-              // Equity is credit-negative: −500 in Equity:CurrencyTrading is a
-              // 500 gain, so the colour follows the inverted sign.
-              signClassOf(String(-Number(data.fx_result.market_value)))
-            }`}
+      {data.fx_result && (() => {
+        // The API returns the market value of the Equity:CurrencyTrading pair
+        // in Beancount's equity sign (credit-negative). Readers think in gains,
+        // so the card shows the gain: −500 in equity is a +500 FX result.
+        const gain = String(-Number(data.fx_result.market_value));
+        return (
+          <div
+            className="holdings-fx"
+            title="Realised and unrealised FX result together — the market value of the currency_accounts pair, shown as a gain (positive = you are ahead)."
           >
-            {money(data.fx_result.market_value, oc)} {oc}
-          </span>
-        </div>
-      )}
+            <span className="holdings-fx-label">FX result</span>
+            <span className="holdings-fx-account">({data.fx_result.account})</span>
+            <span className={`holdings-fx-value ${signClassOf(gain)}`}>
+              {money(gain, oc)} {oc}
+            </span>
+          </div>
+        );
+      })()}
 
       <div className="report-table-wrapper">
         <table className="report-table holdings-table">
