@@ -7,6 +7,7 @@ GET, POST, PUT, DELETE for transactions.  Mutations use ``FavaLedger.file``
 from __future__ import annotations
 
 import datetime
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -164,6 +165,7 @@ def _build_cost_spec(p: PostingIn) -> data.CostSpec | None:
 
 
 _TWO_PLACES = Decimal("0.01")
+_FIAT_LIKE = re.compile(r"^[A-Z]{3}$")
 
 
 def _at_least_two_places(value: Decimal) -> Decimal:
@@ -198,8 +200,12 @@ def _build_bc_postings(
         if p.amount is not None and p.currency:
             if oc is None or p.currency == oc:
                 number = quantize_amount(p.amount)
-            else:
+            elif _FIAT_LIKE.match(p.currency):
+                # A currency code (USD, EUR, BTC): money, so at least two places.
                 number = _at_least_two_places(p.amount)
+            else:
+                # A quantity of something (PETR4, XAU, VACDAY): exactly as typed.
+                number = p.amount
             units = amt_mod.Amount(number, p.currency)
         cost = _build_cost_spec(p)
         if p.price is not None and p.price_currency:

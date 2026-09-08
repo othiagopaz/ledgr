@@ -629,7 +629,7 @@ def _holding_rows(
                     "held_at_cost": held_at_cost,
                     "units": str(units),
                     "cost_currency": cost_currency,
-                    "cost_total": str(cost_total) if cost_total is not None else None,
+                    "cost_total": str(quantize_display(cost_total, cost_currency, precisions)) if cost_total is not None else None,
                     "avg_cost": str(avg_cost) if avg_cost is not None else None,
                     "price": price,
                     "price_age_days": price_age_days,

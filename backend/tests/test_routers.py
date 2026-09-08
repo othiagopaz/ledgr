@@ -2600,9 +2600,15 @@ class TestUnitsAndCostPrecision:
         p = self._build({"account": "Assets:Crypto", "amount": "0.005", "currency": "BTC"})
         assert str(p.units.number) == "0.005"
 
-    def test_non_oc_integer_quantity_is_padded_not_rounded(self):
+    def test_currency_code_units_are_padded_not_rounded(self):
         p = self._build({"account": "Assets:Global", "amount": "1000", "currency": "USD"})
         assert str(p.units.number) == "1000.00"
+
+    def test_share_quantity_is_written_exactly_as_typed(self):
+        p = self._build({"account": "Assets:XP", "amount": "50", "currency": "PETR4"})
+        assert str(p.units.number) == "50"
+        p = self._build({"account": "Assets:Vacation", "amount": "2.5", "currency": "VACDAY"})
+        assert str(p.units.number) == "2.5"
 
     def test_cost_and_price_padded_to_two_places(self):
         from beancount.parser import printer
