@@ -156,7 +156,7 @@ returns it; `appendFilters` sends `conversion=…`. Cmd+K: `Value: Units`,
   totals. A "FX result" card with the market value of the `currency_accounts`
   pair when the plugin is on.
 
-### 3.3 Accounts — Commodities tab
+### 3.3 Accounts — Commodities tab (catalog and configuration only; price charts live in Holdings, plugins are switches with a trading-account picker — rounds 2–3)
 `AccountsView` gains tabs `Accounts | Commodities` (PageHeader, like Reports).
 Commodities tab: table of every commodity seen in the ledger (declared or not),
 with name, precision, holders, latest price + date, and actions **New

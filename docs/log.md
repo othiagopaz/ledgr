@@ -9,6 +9,14 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-09-08 — Commodities round 3 (second user review)
+
+- **Plugins are switches.** Each of the four cards toggles its plugin on or off (`POST /api/plugins` with `enable` / `disable`); turning on `currency_accounts` asks which Equity account receives the FX pair, and the line is rewritten when the account changes.
+- **Bounded balances.** The Accounts tree and register show at most two positions plus `+N` on one secondary line, full list in the tooltip (`summarizeUnits`). A leftover under a lens is reported as the commodity held (`1 XAU`), not the lens's intermediate (`1700 USD`).
+- **Price chart moved to Reports → Holdings**: each position row expands into the price history and its lots. The Commodities tab is a pure catalog and configuration surface, like Accounts.
+
+---
+
 ## 2026-09-08 — Commodities round 2 (user review)
 
 - **Plugins are enabled from the app.** `POST /api/plugins/enable` writes the four recommended `plugin` lines into the **top-level** file (Beancount ignores `plugin` in included files — verified) and opens `Equity:CurrencyTrading` when `currency_accounts` goes on. The Commodities tab banner explains what the plugins are and offers Enable / Enable all.
