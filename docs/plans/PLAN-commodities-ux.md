@@ -133,6 +133,17 @@ Manual `price` directives from the Commodities tab and Cmd+K. `beanprice`
 (separate package, reads `price:` metadata on the `commodity` directive) is the
 natural next step and is out of v1.
 
+### 2.11 A foreign-currency expense is written in the operating currency
+
+`cafe 5USD` from a USD account writes `Expenses:Food 26.00 BRL` against
+`Assets:Bank:Global -5.00 USD @ 5.20 BRL`, the rate pre-filled from the
+ledger's latest price and editable. The expense is what left the wallet in
+BRL that day; the USD's own move is the plugin's FX result. Keeping the expense
+in USD instead makes the P&L depend on the day the report is opened and hides
+the spend from BRL budget envelopes. Clearing the Rate switches to that form.
+Currency is read only when glued to the number (`5USD`, `100.10BRL`), never
+`5 USD`. Full reasoning in `features/commodities.md` §8b.
+
 ---
 
 ## 3. Surfaces

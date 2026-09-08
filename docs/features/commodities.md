@@ -194,6 +194,44 @@ the gaps listed here before:
 Still open: fast-input tokens for commodities, lot labels in the UI, automatic
 quotes, corporate actions, average cost across custodians.
 
+## 8b. Spending in a foreign currency: the expense is written in the operating currency
+
+Decision taken 2026-09-08 for v0, after the user asked whether converting
+inflates the Income Statement. It does not; the two ways of writing a
+5 USD coffee paid from a USD account differ only in **when the rate enters
+the number**.
+
+```beancount
+; What Ledgr writes (smart line `cafe 5USD`, Rate pre-filled from the ledger's latest price)
+2026-09-08 * "cafe"
+  Expenses:Food             26.00 BRL
+  Assets:Bank:Global        -5.00 USD @ 5.20 BRL
+
+; The alternative (clear the Rate field, or no USD price in the ledger)
+2026-09-08 * "cafe"
+  Expenses:Food              5.00 USD
+  Assets:Bank:Global        -5.00 USD
+```
+
+| | Expense in BRL at the day's rate | Expense kept in USD |
+|---|---|---|
+| Income Statement | 26.00 BRL, fixed forever | 5 USD, converted by the lens at the *report's* rate — a different number every day you look |
+| Budget envelopes (BRL) | drained | not seen |
+| Where the USD's own move (bought at 5.00, spent at 5.20) lands | `Equity:CurrencyTrading`, via `currency_accounts` | inside the expense |
+
+Nothing is counted twice: `-5 USD @ 5.20 BRL` and `+26.00 BRL` balance by
+weight, and the plugin splits the entry into two currency-closed pairs whose
+difference is the FX result. This is the currency-accounts method the plugin
+implements (Selinger), and the natural reading for a BRL book with a USD
+account. Someone who earns and spends in USD would prefer the second form —
+for them BRL is the thing that floats — which is why the Rate is editable and
+clearing it switches models.
+
+The Composer reads the currency only when it is **glued** to the number
+(`5USD`, `100.10BRL`, `10petr4`; a symbol the ledger knows or an explicit
+uppercase 3-letter code). `5 USD` with a space is deliberately not parsed, so
+an ordinary word after a number never turns into a currency.
+
 ## 9. Balance Sheet at cost
 
 `_compute_balance_sheet` reduces every section with `convert.get_cost` before splitting operating currency from the rest. This is not a presentation preference — it is the only basis on which the declared invariant holds:

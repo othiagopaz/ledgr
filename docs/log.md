@@ -9,6 +9,12 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-09-08 — Commodities: foreign-currency spending documented
+
+- `features/commodities.md` §8b and plan §2.11: why a USD expense from a USD account is written in BRL at the day's rate (P&L fixed, budgets see it, FX result stays in `Equity:CurrencyTrading`) and when the USD-only form is the right one. Currency on the smart line only when glued to the number (`5USD`, `100.10BRL`).
+
+---
+
 ## 2026-09-08 — Commodities round 4
 
 - Accounts tree and register: one line per row, always. Other commodities moved into the cell's tooltip behind a `◇N` marker; an account with no value under the lens shows its first position instead of a dash.
