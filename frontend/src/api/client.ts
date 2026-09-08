@@ -27,6 +27,13 @@ import type {
   SeriesReviseResponse,
   SeriesCancelResponse,
   BudgetResponse,
+  CommoditiesResponse,
+  CommodityInput,
+  CommodityMutationResponse,
+  PricePairsResponse,
+  PriceHistoryResponse,
+  PriceInput,
+  HoldingsResponse,
 } from "../types";
 
 const BASE = "";
@@ -60,6 +67,7 @@ function appendFilters(params: URLSearchParams, f?: GlobalFilters): void {
     for (const tag of f.tags) params.append("tags", tag);
   }
   if (f.payee) params.set("payee", f.payee);
+  if (f.conversion) params.set("conversion", f.conversion);
 }
 
 export async function fetchAccounts(
@@ -452,4 +460,58 @@ export async function copyBudgetMonth(
     throw new Error(data.detail || `${res.status} ${res.statusText}`);
   }
   return res.json();
+}
+
+// ── Commodities, prices, holdings (PLAN-commodities-ux §4) ──────────────────
+
+export async function fetchCommodities(): Promise<CommoditiesResponse> {
+  return get("/api/commodities");
+}
+
+export async function createCommodity(
+  body: CommodityInput,
+): Promise<CommodityMutationResponse> {
+  return post("/api/commodities", body);
+}
+
+export async function updateCommodity(
+  body: CommodityInput,
+): Promise<CommodityMutationResponse> {
+  const res = await fetch(`${BASE}/api/commodities`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchPricePairs(): Promise<PricePairsResponse> {
+  return get("/api/prices");
+}
+
+export async function fetchPriceHistory(
+  base: string,
+  quote: string,
+): Promise<PriceHistoryResponse> {
+  const params = new URLSearchParams({ base, quote });
+  return get(`/api/prices?${params}`);
+}
+
+export async function addPrice(body: PriceInput): Promise<{ ok: boolean }> {
+  return post("/api/prices", body);
+}
+
+export async function fetchHoldings(
+  viewMode: ViewMode = "combined",
+  filters?: GlobalFilters,
+): Promise<HoldingsResponse> {
+  const params = new URLSearchParams();
+  if (viewMode !== "combined") params.set("view_mode", viewMode);
+  appendFilters(params, filters);
+  const qs = params.toString();
+  return get(`/api/holdings${qs ? "?" + qs : ""}`);
 }

@@ -85,6 +85,7 @@ Design docs for in-flight or upcoming work. Not evergreen — once implemented, 
 | Page | Purpose |
 |---|---|
 | [`plans/PLAN-global-filters.md`](plans/PLAN-global-filters.md) | Global filters across reports |
+| [`plans/PLAN-commodities-ux.md`](plans/PLAN-commodities-ux.md) | Commodities: spend-vs-hold model, conversion lens, Holdings, Composer Commodity mode, API contracts, parallel work streams |
 
 ## Log
 

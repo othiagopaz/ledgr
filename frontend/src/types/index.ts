@@ -12,6 +12,8 @@ export interface AccountNode {
   ledgr_type: string | null;
   open_date: string | null;
   currencies: string[];
+  /** Booking method on `open`. Non-null ⇒ the account holds assets to sell (tracks cost). */
+  booking?: BookingMethod | null;
   metadata: Record<string, string>;
   balance: Balance[];
   children: AccountNode[];
@@ -68,8 +70,16 @@ export interface PostingInput {
   account: string;
   amount?: number | null;
   currency?: string | null;
+  /** Per-unit cost `{33.00 BRL}`. Mutually exclusive with `cost_total`. */
   cost?: number | null;
   cost_currency?: string | null;
+  /** Total cost `{{3300.00 BRL}}` — Beancount divides it across the units. */
+  cost_total?: number | null;
+  /** Lot identifiers `{33.00 BRL, 2026-02-01, "label"}`. */
+  cost_date?: string | null;
+  cost_label?: string | null;
+  /** Emit `{}` and let the account's booking method pick the lot. */
+  cost_empty?: boolean | null;
   price?: number | null;
   price_currency?: string | null;
 }
@@ -111,6 +121,10 @@ export interface OptionsResponse {
   title: string;
   filename: string;
   locale: string | null;
+  /** Enabled `plugin` lines, e.g. "beancount.plugins.implicit_prices". */
+  plugins?: string[];
+  /** Every commodity symbol seen in the ledger. */
+  commodities?: string[];
 }
 
 // Fast Input types
@@ -196,6 +210,8 @@ export interface GlobalFilters {
   to_date?: string | null;
   tags?: string[];
   payee?: string | null;
+  /** Conversion lens (PLAN-commodities-ux §2.7). Omitted ⇒ backend default `at_value`. */
+  conversion?: Conversion | null;
 }
 
 // Report types
@@ -521,6 +537,8 @@ export interface AccountInput {
   date?: string;
   ledgr_type?: string;
   metadata?: Record<string, string>;
+  /** Booking method (5th field of `open`). Set ⇒ the account holds assets to sell. */
+  booking?: BookingMethod | null;
 }
 
 export interface AccountUpdateInput {
@@ -530,6 +548,8 @@ export interface AccountUpdateInput {
   metadata?: Record<string, string>;
   /** New opening date. Only send when changed. */
   date?: string;
+  /** Booking method; `""` clears it (back to a spend account). Omit to leave unchanged. */
+  booking?: BookingMethod | "" | null;
 }
 
 export interface CloseAccountInput {
@@ -602,4 +622,118 @@ export interface AccountWarning {
 
 export interface AccountWarningsResponse {
   warnings: AccountWarning[];
+}
+
+// ── Commodities (see docs/plans/PLAN-commodities-ux.md §4) ─────────────────
+
+/** Conversion lens for every report. `at_value` is the default. */
+export type Conversion = "units" | "at_cost" | "at_value";
+
+export type BookingMethod =
+  | "STRICT"
+  | "STRICT_WITH_SIZE"
+  | "FIFO"
+  | "LIFO"
+  | "HIFO"
+  | "NONE";
+
+export interface PricePoint {
+  number: string;
+  quote: string;
+  date: string;
+}
+
+export interface CommodityRow {
+  symbol: string;
+  declared: boolean;
+  name: string | null;
+  precision: number | null;
+  metadata: Record<string, string>;
+  is_operating: boolean;
+  holders: string[];
+  latest_price: PricePoint | null;
+  pairs: { quote: string; count: number }[];
+}
+
+export interface CommoditiesResponse {
+  operating_currency: string;
+  plugins: {
+    implicit_prices: boolean;
+    coherent_cost: boolean;
+    check_average_cost: boolean;
+    currency_accounts: boolean;
+  };
+  currency_trading_account: string | null;
+  commodities: CommodityRow[];
+}
+
+export interface CommodityInput {
+  symbol: string;
+  name?: string;
+  precision?: number;
+  metadata?: Record<string, string>;
+  date?: string;
+}
+
+export interface CommodityMutationResponse {
+  ok: boolean;
+  commodity: CommodityRow;
+}
+
+export interface PricePairSummary {
+  base: string;
+  quote: string;
+  count: number;
+  latest: { date: string; number: string };
+}
+
+export interface PricePairsResponse {
+  pairs: PricePairSummary[];
+}
+
+export interface PriceHistoryResponse {
+  base: string;
+  quote: string;
+  prices: { date: string; number: string }[];
+}
+
+export interface PriceInput {
+  date: string;
+  base: string;
+  number: string;
+  quote: string;
+}
+
+export interface HoldingLot {
+  date: string;
+  label: string | null;
+  units: string;
+  cost: string;
+}
+
+export interface HoldingPosition {
+  account: string;
+  commodity: string;
+  booking: BookingMethod | null;
+  held_at_cost: boolean;
+  units: string;
+  cost_currency: string | null;
+  cost_total: string | null;
+  avg_cost: string | null;
+  price: PricePoint | null;
+  price_age_days: number | null;
+  market_value: string | null;
+  unrealized: string | null;
+  unrealized_pct: string | null;
+  weight_pct: string | null;
+  /** null when the booking is NONE — lots are not meaningful there. */
+  lots: HoldingLot[] | null;
+}
+
+export interface HoldingsResponse {
+  operating_currency: string;
+  conversion: Conversion;
+  positions: HoldingPosition[];
+  totals: { cost_total: string; market_value: string; unrealized: string };
+  fx_result: { account: string; market_value: string } | null;
 }
