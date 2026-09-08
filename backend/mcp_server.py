@@ -247,6 +247,11 @@ def _period(
     return from_date, to_date
 
 
+# Any of these on a posting means it balances by weight, not by amount — and
+# the cheap sum below must stand down. ``cost_empty`` is a flag, checked apart.
+_WEIGHT_KEYS = ("cost", "cost_total", "cost_date", "cost_label", "price")
+
+
 def _balance_error(postings: list[dict[str, Any]]) -> str | None:
     """Return an error string if fully-specified postings don't balance.
 
@@ -272,8 +277,8 @@ def _balance_error(postings: list[dict[str, Any]]) -> str | None:
     if any(p.get("amount") is None for p in postings):
         return None  # elided amount — let Beancount auto-balance
     if any(
-        p.get("cost") is not None or p.get("price") is not None for p in postings
-    ):
+        p.get(k) is not None for p in postings for k in _WEIGHT_KEYS
+    ) or any(p.get("cost_empty") for p in postings):
         return None  # weight != amount — only the backend can check this
 
     residual: dict[str, Decimal] = {}
@@ -329,8 +334,30 @@ def add_transaction(
     Tip: call ``suggest_posting(payee)`` first to get the account and typical
     amount previously used for a payee.
 
-    Each posting dict accepts: account (required), amount, currency, and
-    optionally cost, cost_currency, price, price_currency (for investments).
+    Each posting dict accepts: account (required), amount, currency, and for
+    commodities held at cost or exchanged at a price (all numbers as strings):
+
+      cost, cost_currency     per-unit cost basis        -> ``{35.00 BRL}``
+      cost_total, cost_currency  total cost, Beancount spreads it over the
+                              units (exclusive with cost) -> ``{# 1750.00 BRL}``
+      cost_date, cost_label   identify an existing lot, alone or with a cost
+                              -> ``{2026-02-01}``, ``{"lote-fev"}``
+      cost_empty: true        emit ``{}`` and let the account's booking method
+                              (FIFO/LIFO/HIFO/STRICT) pick the lot. Cannot be
+                              combined with any other cost field.
+      price, price_currency   unit price -> ``@ 40.00 BRL``
+
+    Buy 10 PETR4 at 33.00: ``{"account": "Assets:XP", "amount": "10",
+    "currency": "PETR4", "cost": "33.00", "cost_currency": "BRL"}`` against
+    ``-330.00 BRL`` cash. Sell on a FIFO account: ``{"account": "Assets:XP",
+    "amount": "-10", "currency": "PETR4", "cost_empty": true, "price": "40.00",
+    "price_currency": "BRL"}``, ``400.00 BRL`` cash, and ``{"account":
+    "Income:Gains"}`` with no amount so Beancount computes the gain. On a NONE
+    account (Brazilian average cost) pass the average as ``cost`` instead of
+    ``cost_empty``. Buy USD as spending money: ``{"account": "Assets:Global",
+    "amount": "1000.00", "currency": "USD", "price": "5.00", "price_currency":
+    "BRL"}`` against ``-5000.00 BRL``. These fields are passed to the backend
+    unchanged; it validates them and answers 400 on an invalid combination.
 
     Returns the created transaction, or ``{"success": false, "errors": [...]}``
     if Beancount rejects it (e.g. postings don't balance) — read the errors

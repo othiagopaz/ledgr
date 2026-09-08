@@ -12,12 +12,15 @@ from __future__ import annotations
 
 import warnings
 
+import pytest
+
 with warnings.catch_warnings():
     # The `mcp` SDK emits a pydantic_settings warning about one of its own
     # models at import time. Third-party and pre-existing — scoped here so it
     # does not become the first of many in the suite's output.
     warnings.simplefilter("ignore")
-    from mcp_server import _balance_error
+    import mcp_server
+    from mcp_server import _balance_error, add_transaction
 
 
 class TestBalanceError:
@@ -101,3 +104,79 @@ class TestBalanceError:
             {"account": "Expenses:Fees", "amount": "10.00", "currency": "BRL"},
             {"account": "Assets:Bank", "amount": "-5.00", "currency": "BRL"},
         ]) is not None
+
+    # ── The widened cost vocabulary (PLAN-commodities-ux §4.8) ─────────
+    # A lot named by total, date, label or `{}` balances by a weight only
+    # the backend can resolve (it has to book the lot). Same stand-down.
+
+    @pytest.mark.parametrize("extra", [
+        {"cost_total": "1750.00", "cost_currency": "BRL"},
+        {"cost_date": "2026-02-01"},
+        {"cost_label": "lote-fev"},
+        {"cost_empty": True},
+    ])
+    def test_lot_identifiers_stand_the_guard_down(self, extra: dict) -> None:
+        """Sold 50 PETR4 for 2000.00 cash with an explicit 250.00 gain.
+
+        The amount sum sees ``-50 PETR4`` and ``+1750.00 BRL`` and would call
+        every one of these unbalanced. None of them is."""
+        assert _balance_error([
+            {
+                "account": "Assets:XP", "amount": "-50", "currency": "PETR4",
+                "price": "40.00", "price_currency": "BRL", **extra,
+            },
+            {"account": "Assets:Bank", "amount": "2000.00", "currency": "BRL"},
+            {"account": "Income:Gains", "amount": "-250.00", "currency": "BRL"},
+        ]) is None
+
+    def test_cost_empty_false_is_not_a_cost(self) -> None:
+        """An explicit ``cost_empty: false`` carries no cost, so the cheap
+        guard still applies."""
+        assert _balance_error([
+            {"account": "Expenses:Fees", "amount": "10.00", "currency": "BRL",
+             "cost_empty": False},
+            {"account": "Assets:Bank", "amount": "-5.00", "currency": "BRL"},
+        ]) is not None
+
+
+class TestAddTransactionPassthrough:
+    """``add_transaction`` forwards postings to the backend unchanged.
+
+    The MCP must not know the cost vocabulary — the backend validates it and
+    answers 400 on a bad combination. Anything the MCP dropped or renamed
+    here would silently change what gets written."""
+
+    def test_new_posting_fields_reach_the_backend_verbatim(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict = {}
+
+        def fake_post(path: str, json: dict) -> dict:
+            captured["path"] = path
+            captured["json"] = json
+            return {"success": True}
+
+        monkeypatch.setattr(mcp_server, "_post", fake_post)
+
+        postings = [
+            {
+                "account": "Assets:Clear", "amount": "-50", "currency": "PETR4",
+                "cost_empty": True,
+                "price": "40.00", "price_currency": "BRL",
+            },
+            {
+                "account": "Assets:Rico", "amount": "10", "currency": "PETR4",
+                "cost_total": "350.00", "cost_currency": "BRL",
+                "cost_date": "2026-02-01", "cost_label": "lote-fev",
+            },
+            {"account": "Assets:Bank", "amount": "1650.00", "currency": "BRL"},
+            {"account": "Income:Gains"},
+        ]
+        result = add_transaction(
+            date="2026-06-01", postings=postings, narration="passthrough",
+        )
+
+        assert result == {"success": True}
+        assert captured["path"] == "/api/transactions"
+        assert captured["json"]["postings"] == postings
+        assert captured["json"]["date"] == "2026-06-01"

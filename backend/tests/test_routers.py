@@ -74,6 +74,83 @@ def commodities_client(tmp_path: Path) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
+# One broker account per booking method, each holding the same two PETR4 lots
+# (100 @ 33.00 in February, 100 @ 37.00 in March — average 35.00), so the same
+# sale can be written against NONE, FIFO and STRICT and the outcome compared.
+# The FIFO and STRICT lots carry labels so a sale can name them.
+BOOKING_LEDGER = '''option "title" "Booking Test Ledger"
+option "operating_currency" "BRL"
+plugin "beancount.plugins.implicit_prices"
+
+; Declared but never held — must still be listed as a commodity.
+2020-01-01 commodity ITUB4
+  name: "Itau Unibanco PN"
+
+2020-01-01 open Assets:Bank:Checking  BRL
+  ledgr-type: "cash"
+2020-01-01 open Assets:XP  "NONE"
+  ledgr-type: "investment"
+2020-01-01 open Assets:Clear  "FIFO"
+  ledgr-type: "investment"
+2020-01-01 open Assets:Rico  "STRICT"
+  ledgr-type: "investment"
+2020-01-01 open Income:Gains
+2020-01-01 open Equity:OpeningBalances  BRL
+
+2020-01-01 * "Opening Balance"
+  Assets:Bank:Checking  100000.00 BRL
+  Equity:OpeningBalances
+
+2020-02-01 * "XP" "Buy PETR4 lot fev"
+  Assets:XP  100 PETR4 {33.00 BRL}
+  Assets:Bank:Checking  -3300.00 BRL
+
+2020-03-01 * "XP" "Buy PETR4 lot mar"
+  Assets:XP  100 PETR4 {37.00 BRL}
+  Assets:Bank:Checking  -3700.00 BRL
+
+2020-02-01 * "Clear" "Buy PETR4 lot fev"
+  Assets:Clear  100 PETR4 {33.00 BRL, "lote-fev"}
+  Assets:Bank:Checking  -3300.00 BRL
+
+2020-03-01 * "Clear" "Buy PETR4 lot mar"
+  Assets:Clear  100 PETR4 {37.00 BRL}
+  Assets:Bank:Checking  -3700.00 BRL
+
+2020-02-01 * "Rico" "Buy PETR4 strict lot"
+  Assets:Rico  100 PETR4 {33.00 BRL, "rico-fev"}
+  Assets:Bank:Checking  -3300.00 BRL
+'''
+
+
+@pytest.fixture()
+def booking_file(tmp_path: Path) -> Path:
+    """Write the booking ledger into a temp dir and return its path."""
+    dst = tmp_path / "test.beancount"
+    dst.write_text(BOOKING_LEDGER, encoding="utf-8")
+    return dst
+
+
+@pytest.fixture()
+def booking_client(booking_file: Path) -> TestClient:
+    """A TestClient over ``BOOKING_LEDGER`` — NONE, FIFO and STRICT accounts."""
+    ledger_mod.init_ledger(str(booking_file))
+
+    from main import app
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def _postings_for(client: TestClient, narration: str) -> list[dict]:
+    """The postings of the single transaction with ``narration``."""
+    txns = [
+        t for t in client.get("/api/transactions").json()["transactions"]
+        if t["narration"] == narration
+    ]
+    assert len(txns) == 1, [t["narration"] for t in txns]
+    return txns[0]["postings"]
+
+
 # ------------------------------------------------------------------
 # Accounts
 # ------------------------------------------------------------------
@@ -1819,3 +1896,688 @@ class TestValidateBalanceUnits:
         )
         assert _resolve_cost(bc[0]) is None
         assert self._validate(bc) == []
+
+
+# ------------------------------------------------------------------
+# Widened PostingIn — PLAN-commodities-ux §4.8
+# ------------------------------------------------------------------
+
+
+class TestBuildCostSpec:
+    """``_build_bc_postings`` must produce the ``CostSpec`` the parser would.
+
+    The printer only renders the shapes the parser emits (``MISSING`` in the
+    empty slots, never ``None``), so a spec built any other way either prints
+    wrong or fails to load. Every shape here is formatted with
+    ``printer.format_entry`` and loaded back with zero errors.
+    """
+
+    HEADER = '''option "operating_currency" "BRL"
+2020-01-01 open Assets:Bank:Checking BRL
+2020-01-01 open Assets:XP "NONE"
+2020-01-01 open Assets:Clear "FIFO"
+2020-01-01 open Assets:Rico "STRICT"
+2020-01-01 open Income:Gains
+2020-01-01 open Equity:OpeningBalances
+2020-01-01 * "seed"
+  Assets:Bank:Checking  100000.00 BRL
+  Equity:OpeningBalances
+2020-02-01 * "lots"
+  Assets:XP     100 PETR4 {33.00 BRL}
+  Assets:Clear  100 PETR4 {33.00 BRL, "lote-fev"}
+  Assets:Rico   100 PETR4 {33.00 BRL, "rico-fev"}
+  Assets:Bank:Checking
+2020-03-01 * "lots"
+  Assets:XP     100 PETR4 {37.00 BRL}
+  Assets:Clear  100 PETR4 {37.00 BRL}
+  Assets:Bank:Checking
+'''
+
+    @staticmethod
+    def _build(specs: list[dict]) -> list:
+        from routers.transactions import PostingIn, _build_bc_postings
+
+        return _build_bc_postings([PostingIn(**s) for s in specs])
+
+    def _round_trip(self, narration: str, specs: list[dict]) -> str:
+        """Format the built transaction and load it on top of ``HEADER``.
+
+        Returns the formatted source so the caller can assert the syntax.
+        """
+        from beancount import loader
+        from beancount.core import data
+        from beancount.parser import printer
+
+        txn = data.Transaction(
+            data.new_metadata("<test>", 0), datetime.date(2020, 6, 1), "*",
+            "", narration, frozenset(), frozenset(), self._build(specs),
+        )
+        text = printer.format_entry(txn)
+        _, errors, _ = loader.load_string(self.HEADER + "\n" + text)
+        assert errors == [], [e.message for e in errors]
+        return text
+
+    def test_per_unit_cost(self) -> None:
+        from beancount.core import data
+
+        [p, _] = self._build([
+            {"account": "Assets:Clear", "amount": "10", "currency": "PETR4",
+             "cost": "35.00", "cost_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "-350.00", "currency": "BRL"},
+        ])
+        assert p.cost == data.CostSpec(
+            Decimal("35.00"), None, "BRL", None, None, False
+        )
+
+    def test_total_cost_uses_missing_for_the_per_unit_slot(self) -> None:
+        """``{# 350.00 BRL}``: the parser puts MISSING, not None, in
+        ``number_per`` — that is what makes the printer emit ``#``."""
+        from beancount.core.number import MISSING
+
+        [p, _] = self._build([
+            {"account": "Assets:Clear", "amount": "10", "currency": "PETR4",
+             "cost_total": "350.00", "cost_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "-350.00", "currency": "BRL"},
+        ])
+        assert p.cost.number_per is MISSING
+        assert p.cost.number_total == Decimal("350.00")
+        assert p.cost.currency == "BRL"
+
+    def test_empty_cost_mirrors_the_parser(self) -> None:
+        from beancount.core import data
+        from beancount.core.number import MISSING
+
+        [p] = self._build([
+            {"account": "Assets:Clear", "amount": "-10", "currency": "PETR4",
+             "cost_empty": True},
+        ])
+        assert p.cost == data.CostSpec(MISSING, None, MISSING, None, None, False)
+
+    def test_date_and_label_alone_identify_a_lot(self) -> None:
+        from beancount.core import data
+        from beancount.core.number import MISSING
+
+        [by_date, by_label] = self._build([
+            {"account": "Assets:Clear", "amount": "-10", "currency": "PETR4",
+             "cost_date": "2020-03-01"},
+            {"account": "Assets:Clear", "amount": "-10", "currency": "PETR4",
+             "cost_label": "lote-fev"},
+        ])
+        assert by_date.cost == data.CostSpec(
+            MISSING, None, MISSING, datetime.date(2020, 3, 1), None, False
+        )
+        assert by_label.cost == data.CostSpec(
+            MISSING, None, MISSING, None, "lote-fev", False
+        )
+
+    def test_cost_empty_false_is_no_cost(self) -> None:
+        [p] = self._build([
+            {"account": "Assets:Clear", "amount": "-10", "currency": "PETR4",
+             "cost_empty": False},
+        ])
+        assert p.cost is None
+
+    def test_no_cost_fields_means_no_cost(self) -> None:
+        """A stray ``cost_currency`` on its own is ignored, as it always was."""
+        [p] = self._build([
+            {"account": "Assets:Bank:Checking", "amount": "10", "currency": "BRL",
+             "cost_currency": "BRL"},
+        ])
+        assert p.cost is None
+
+    # ── Round-trips: printer → loader, zero errors ─────────────────
+
+    def test_total_cost_round_trips(self) -> None:
+        text = self._round_trip("buy total", [
+            {"account": "Assets:Clear", "amount": "10", "currency": "PETR4",
+             "cost_total": "350.00", "cost_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "-350.00", "currency": "BRL"},
+        ])
+        assert "{# 350.00 BRL}" in text
+
+    def test_total_cost_with_date_and_label_round_trips(self) -> None:
+        text = self._round_trip("buy total dated", [
+            {"account": "Assets:Rico", "amount": "10", "currency": "PETR4",
+             "cost_total": "350.00", "cost_currency": "BRL",
+             "cost_date": "2020-06-01", "cost_label": "lote-jun"},
+            {"account": "Assets:Bank:Checking", "amount": "-350.00", "currency": "BRL"},
+        ])
+        assert '{# 350.00 BRL, 2020-06-01, "lote-jun"}' in text
+
+    def test_per_unit_with_date_and_label_round_trips(self) -> None:
+        text = self._round_trip("buy dated", [
+            {"account": "Assets:Rico", "amount": "10", "currency": "PETR4",
+             "cost": "35.00", "cost_currency": "BRL",
+             "cost_date": "2020-06-01", "cost_label": "lote-jun"},
+            {"account": "Assets:Bank:Checking", "amount": "-350.00", "currency": "BRL"},
+        ])
+        assert '{35.00 BRL, 2020-06-01, "lote-jun"}' in text
+
+    def test_empty_cost_round_trips_on_fifo(self) -> None:
+        text = self._round_trip("sell fifo", [
+            {"account": "Assets:Clear", "amount": "-50", "currency": "PETR4",
+             "cost_empty": True, "price": "40.00", "price_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+            {"account": "Income:Gains"},
+        ])
+        assert "{} @ 40.00 BRL" in text
+
+    def test_lot_by_date_round_trips_on_fifo(self) -> None:
+        text = self._round_trip("sell by date", [
+            {"account": "Assets:Clear", "amount": "-50", "currency": "PETR4",
+             "cost_date": "2020-03-01", "price": "40.00", "price_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+            {"account": "Income:Gains"},
+        ])
+        assert "{2020-03-01} @ 40.00 BRL" in text
+
+    def test_lot_by_label_round_trips_on_strict(self) -> None:
+        text = self._round_trip("sell by label", [
+            {"account": "Assets:Rico", "amount": "-50", "currency": "PETR4",
+             "cost_label": "rico-fev", "price": "40.00", "price_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+            {"account": "Income:Gains"},
+        ])
+        assert '{"rico-fev"} @ 40.00 BRL' in text
+
+    def test_average_cost_round_trips_on_none(self) -> None:
+        """Brazilian average cost: NONE booking, Ledgr supplies the average."""
+        text = self._round_trip("sell none", [
+            {"account": "Assets:XP", "amount": "-50", "currency": "PETR4",
+             "cost": "35.00", "cost_currency": "BRL",
+             "price": "40.00", "price_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+            {"account": "Income:Gains"},
+        ])
+        assert "{35.00 BRL} @ 40.00 BRL" in text
+
+    # ── The balance guard keeps working over the new shapes ────────
+
+    @staticmethod
+    def _validate(bc_postings: list) -> list[str]:
+        from beancount.parser import options
+
+        from routers.transactions import _validate_balance
+
+        return _validate_balance(bc_postings, dict(options.OPTIONS_DEFAULTS))
+
+    def test_total_cost_still_validates_the_residual(self) -> None:
+        from routers.transactions import _resolve_cost
+
+        bc = self._build([
+            {"account": "Assets:Clear", "amount": "10", "currency": "PETR4",
+             "cost_total": "350.00", "cost_currency": "BRL"},
+            {"account": "Assets:Bank:Checking", "amount": "-999.00", "currency": "BRL"},
+        ])
+        assert _resolve_cost(bc[0]).cost.number == Decimal("35.00")
+        assert self._validate(bc), "a wrong cash leg must still be caught"
+        bc[1] = bc[1]._replace(
+            units=bc[1].units._replace(number=Decimal("-350.00"))
+        )
+        assert self._validate(bc) == []
+
+    @pytest.mark.parametrize("lot", [
+        {"cost_empty": True},
+        {"cost_date": "2020-03-01"},
+        {"cost_label": "lote-fev"},
+    ])
+    def test_booking_only_lots_defer_to_the_loader(self, lot: dict) -> None:
+        from routers.transactions import _resolve_cost
+
+        bc = self._build([
+            {"account": "Assets:Clear", "amount": "-50", "currency": "PETR4",
+             "price": "40.00", "price_currency": "BRL", **lot},
+            {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+            {"account": "Income:Gains", "amount": "-999.00", "currency": "BRL"},
+        ])
+        assert _resolve_cost(bc[0]) is None
+        # Even with an obviously wrong gain: the weight is unknowable here.
+        assert self._validate(bc) == []
+
+
+class TestWidenedPostingWrites:
+    """The HTTP path: every new cost field lands in the file and loads clean."""
+
+    def test_ledger_is_valid(self, booking_client: TestClient) -> None:
+        assert booking_client.get("/api/errors").json()["count"] == 0
+
+    def test_total_cost_buy(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Buy 10 PETR4 total",
+            "postings": [
+                {"account": "Assets:Clear", "amount": 10, "currency": "PETR4",
+                 "cost_total": "350.00", "cost_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "-350.00", "currency": "BRL"},
+            ],
+        })
+        assert r.status_code == 200
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert "{# 350.00 BRL}" in booking_file.read_text(encoding="utf-8")
+        # Booked, the total is spread over the units (Beancount's division
+        # yields `35`, not `35.00` — compare as numbers).
+        [asset, _] = _postings_for(booking_client, "Buy 10 PETR4 total")
+        assert Decimal(asset["cost"]) == Decimal("35.00")
+        assert asset["cost_currency"] == "BRL"
+
+    def test_total_cost_with_wrong_cash_is_refused(
+        self, booking_client: TestClient
+    ) -> None:
+        count_before = booking_client.get("/api/transactions").json()["count"]
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Buy 10 PETR4, wrong cash",
+            "postings": [
+                {"account": "Assets:Clear", "amount": 10, "currency": "PETR4",
+                 "cost_total": "350.00", "cost_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "-999.00", "currency": "BRL"},
+            ],
+        })
+        body = r.json()
+        assert body["success"] is False
+        assert any("balance" in e.lower() for e in body["errors"])
+        assert booking_client.get("/api/transactions").json()["count"] == count_before
+
+    def test_empty_cost_lets_fifo_pick_the_lot(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Sell 50 PETR4 FIFO",
+            "postings": [
+                {"account": "Assets:Clear", "amount": -50, "currency": "PETR4",
+                 "cost_empty": True, "price": "40.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert "{} @ 40.00 BRL" in booking_file.read_text(encoding="utf-8")
+        # FIFO took the February lot — and the response of the POST itself
+        # must not leak Beancount's MISSING sentinel into the JSON.
+        posted = r.json()["transaction"]["postings"][0]
+        assert posted["cost"] is None
+        assert posted["cost_currency"] is None
+        [asset, _, gain] = _postings_for(booking_client, "Sell 50 PETR4 FIFO")
+        assert asset["cost"] == "33.00"
+        assert asset["cost_label"] == "lote-fev"
+        assert gain["amount"] == "-350.00"
+
+    def test_lot_by_date(self, booking_client: TestClient, booking_file: Path) -> None:
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Sell 50 PETR4 by date",
+            "postings": [
+                {"account": "Assets:Clear", "amount": -50, "currency": "PETR4",
+                 "cost_date": "2020-03-01", "price": "40.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert "{2020-03-01} @ 40.00 BRL" in booking_file.read_text(encoding="utf-8")
+        [asset, _, gain] = _postings_for(booking_client, "Sell 50 PETR4 by date")
+        assert asset["cost"] == "37.00"  # the March lot, not FIFO's February one
+        assert gain["amount"] == "-150.00"
+
+    def test_lot_by_label(self, booking_client: TestClient, booking_file: Path) -> None:
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Sell 50 PETR4 by label",
+            "postings": [
+                {"account": "Assets:Clear", "amount": -50, "currency": "PETR4",
+                 "cost_label": "lote-fev", "price": "40.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert '{"lote-fev"} @ 40.00 BRL' in booking_file.read_text(encoding="utf-8")
+        [asset, _, _] = _postings_for(booking_client, "Sell 50 PETR4 by label")
+        assert asset["cost"] == "33.00"
+        assert asset["cost_label"] == "lote-fev"
+
+    def test_lot_by_label_on_strict(self, booking_client: TestClient) -> None:
+        """STRICT refuses an ambiguous ``{}`` but takes a lot named by label."""
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Sell 50 PETR4 strict",
+            "postings": [
+                {"account": "Assets:Rico", "amount": -50, "currency": "PETR4",
+                 "cost_label": "rico-fev", "price": "40.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+
+    def test_none_account_takes_the_average_cost(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        """Lots at 33 and 37; Ledgr supplies the 35.00 average; gain 250.00."""
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Sell 50 PETR4 avg",
+            "postings": [
+                {"account": "Assets:XP", "amount": -50, "currency": "PETR4",
+                 "cost": "35.00", "cost_currency": "BRL",
+                 "price": "40.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert "{35.00 BRL} @ 40.00 BRL" in booking_file.read_text(encoding="utf-8")
+        [_, _, gain] = _postings_for(booking_client, "Sell 50 PETR4 avg")
+        assert gain["amount"] == "-250.00"
+
+    def test_buy_with_date_and_label(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Buy 10 PETR4 labelled",
+            "postings": [
+                {"account": "Assets:Rico", "amount": 10, "currency": "PETR4",
+                 "cost": "35.00", "cost_currency": "BRL",
+                 "cost_date": "2020-06-01", "cost_label": "lote-jun"},
+                {"account": "Assets:Bank:Checking", "amount": "-350.00", "currency": "BRL"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert '{35.00 BRL, 2020-06-01, "lote-jun"}' in booking_file.read_text(encoding="utf-8")
+        [asset, _] = _postings_for(booking_client, "Buy 10 PETR4 labelled")
+        assert asset["cost_date"] == "2020-06-01"
+        assert asset["cost_label"] == "lote-jun"
+
+    def test_serialized_postings_expose_cost_label(
+        self, booking_client: TestClient
+    ) -> None:
+        r = booking_client.get("/api/transactions", params={"account": "Assets:Clear"})
+        labels = {
+            p.get("cost_label")
+            for t in r.json()["transactions"] for p in t["postings"]
+            if p["account"] == "Assets:Clear"
+        }
+        assert labels == {"lote-fev", None}
+
+    def test_edit_path_accepts_the_new_fields(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        """PUT shares the builder: rewrite the March buy as a total cost."""
+        txn = next(
+            t for t in booking_client.get("/api/transactions").json()["transactions"]
+            if t["narration"] == "Buy PETR4 lot mar" and t["payee"] == "Clear"
+        )
+        r = booking_client.put("/api/transactions", json={
+            "lineno": txn["lineno"], "filename": txn["filename"],
+            "date": txn["date"], "payee": "Clear", "narration": "Buy PETR4 lot mar",
+            "postings": [
+                {"account": "Assets:Clear", "amount": 100, "currency": "PETR4",
+                 "cost_total": "3700.00", "cost_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "-3700.00", "currency": "BRL"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert "{# 3700.00 BRL}" in booking_file.read_text(encoding="utf-8")
+
+    # ── 400s ──────────────────────────────────────────────────────
+
+    @pytest.mark.parametrize("bad,fragment", [
+        ({"cost_empty": True, "cost": "35.00", "cost_currency": "BRL"}, "cost_empty"),
+        ({"cost_empty": True, "cost_total": "1750.00", "cost_currency": "BRL"}, "cost_empty"),
+        ({"cost_empty": True, "cost_date": "2020-03-01"}, "cost_empty"),
+        ({"cost_empty": True, "cost_label": "lote-fev"}, "cost_empty"),
+        ({"cost_empty": True, "cost_currency": "BRL"}, "cost_empty"),
+        ({"cost": "35.00", "cost_total": "1750.00", "cost_currency": "BRL"}, "not both"),
+        ({"cost": "35.00"}, "cost_currency"),
+        ({"cost_total": "1750.00"}, "cost_currency"),
+        ({"cost_date": "03/01/2020"}, "YYYY-MM-DD"),
+    ])
+    def test_invalid_cost_combinations_are_400(
+        self, booking_client: TestClient, bad: dict, fragment: str
+    ) -> None:
+        count_before = booking_client.get("/api/transactions").json()["count"]
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "bad cost",
+            "postings": [
+                {"account": "Assets:Clear", "amount": -50, "currency": "PETR4",
+                 "price": "40.00", "price_currency": "BRL", **bad},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.status_code == 400, r.json()
+        assert fragment in r.json()["detail"]
+        assert booking_client.get("/api/transactions").json()["count"] == count_before
+
+    def test_invalid_cost_combination_is_400_on_edit_too(
+        self, booking_client: TestClient
+    ) -> None:
+        txn = booking_client.get("/api/transactions").json()["transactions"][-1]
+        r = booking_client.put("/api/transactions", json={
+            "lineno": txn["lineno"], "filename": txn["filename"],
+            "date": txn["date"], "narration": txn["narration"],
+            "postings": [
+                {"account": "Assets:Rico", "amount": 100, "currency": "PETR4",
+                 "cost": "33.00", "cost_total": "3300.00", "cost_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "-3300.00", "currency": "BRL"},
+            ],
+        })
+        assert r.status_code == 400
+        assert booking_client.get("/api/errors").json()["count"] == 0
+
+
+# ------------------------------------------------------------------
+# Booking on accounts — PLAN-commodities-ux §4.9; options — §4.10
+# ------------------------------------------------------------------
+
+
+class TestBookingOnAccounts:
+    def test_create_with_booking(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        r = booking_client.post("/api/accounts", json={
+            "name": "Assets:Nu", "date": "2020-01-01",
+            "ledgr_type": "investment", "booking": "NONE",
+        })
+        assert r.status_code == 201, r.json()
+        assert r.json()["account"]["booking"] == "NONE"
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert 'open Assets:Nu' in booking_file.read_text(encoding="utf-8")
+        assert '"NONE"' in booking_file.read_text(encoding="utf-8")
+
+    def test_create_with_currencies_and_booking(
+        self, booking_client: TestClient
+    ) -> None:
+        r = booking_client.post("/api/accounts", json={
+            "name": "Assets:Nu", "date": "2020-01-01", "ledgr_type": "investment",
+            "currencies": ["PETR4", "ITUB4"], "booking": "HIFO",
+        })
+        assert r.status_code == 201, r.json()
+        assert r.json()["account"]["currencies"] == ["PETR4", "ITUB4"]
+        assert r.json()["account"]["booking"] == "HIFO"
+        node = _find_node(booking_client.get("/api/accounts").json()["accounts"], "Assets:Nu")
+        assert node["currencies"] == ["PETR4", "ITUB4"]
+        assert node["booking"] == "HIFO"
+        assert booking_client.get("/api/errors").json()["count"] == 0
+
+    def test_create_without_booking_is_a_spend_account(
+        self, booking_client: TestClient
+    ) -> None:
+        r = booking_client.post("/api/accounts", json={
+            "name": "Assets:Global", "date": "2020-01-01",
+            "ledgr_type": "cash", "currencies": ["USD"],
+        })
+        assert r.status_code == 201, r.json()
+        assert r.json()["account"]["booking"] is None
+
+    def test_tree_nodes_expose_booking(self, booking_client: TestClient) -> None:
+        nodes = booking_client.get("/api/accounts").json()["accounts"]
+        assert _find_node(nodes, "Assets:XP")["booking"] == "NONE"
+        assert _find_node(nodes, "Assets:Clear")["booking"] == "FIFO"
+        assert _find_node(nodes, "Assets:Rico")["booking"] == "STRICT"
+        assert _find_node(nodes, "Assets:Bank:Checking")["booking"] is None
+        # A structural node has no `open` and so no booking either.
+        assert _find_node(nodes, "Assets:Bank")["booking"] is None
+
+    @pytest.mark.parametrize("method", ["STRICT", "STRICT_WITH_SIZE", "FIFO", "LIFO", "HIFO", "NONE"])
+    def test_every_implemented_method_is_accepted(
+        self, booking_client: TestClient, method: str
+    ) -> None:
+        r = booking_client.post("/api/accounts", json={
+            "name": "Assets:Nu", "date": "2020-01-01",
+            "ledgr_type": "investment", "booking": method,
+        })
+        assert r.status_code == 201, r.json()
+        assert r.json()["account"]["booking"] == method
+        assert booking_client.get("/api/errors").json()["count"] == 0
+
+    def test_unknown_booking_is_400(self, booking_client: TestClient) -> None:
+        r = booking_client.post("/api/accounts", json={
+            "name": "Assets:Nu", "date": "2020-01-01",
+            "ledgr_type": "investment", "booking": "fifo",
+        })
+        assert r.status_code == 400
+        assert "Invalid booking method" in r.json()["detail"]
+
+    def test_average_is_refused_with_a_reason(self, booking_client: TestClient) -> None:
+        """In the enum, not in the code: a ledger using it fails to load."""
+        r = booking_client.post("/api/accounts", json={
+            "name": "Assets:Nu", "date": "2020-01-01",
+            "ledgr_type": "investment", "booking": "AVERAGE",
+        })
+        assert r.status_code == 400
+        assert "3.2" in r.json()["detail"]
+        assert "NONE" in r.json()["detail"]
+
+    def test_update_sets_booking_and_preserves_the_rest(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        r = booking_client.put("/api/accounts", json={
+            "name": "Assets:Bank:Checking", "booking": "FIFO",
+        })
+        assert r.status_code == 200, r.json()
+        acct = r.json()["account"]
+        assert acct["booking"] == "FIFO"
+        assert acct["open_date"] == "2020-01-01"
+        assert acct["currencies"] == ["BRL"]
+        assert acct["ledgr_type"] == "cash"
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert '2020-01-01 open Assets:Bank:Checking  BRL  "FIFO"' in booking_file.read_text(encoding="utf-8")
+
+    def test_update_with_empty_string_clears_booking(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        r = booking_client.put("/api/accounts", json={
+            "name": "Assets:XP", "booking": "",
+        })
+        assert r.status_code == 200, r.json()
+        assert r.json()["account"]["booking"] is None
+        assert r.json()["account"]["ledgr_type"] == "investment"
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        assert '"NONE"' not in booking_file.read_text(encoding="utf-8")
+
+    def test_update_without_booking_leaves_it_alone(
+        self, booking_client: TestClient
+    ) -> None:
+        r = booking_client.put("/api/accounts", json={
+            "name": "Assets:XP", "metadata": {"broker": "XP Investimentos"},
+        })
+        assert r.status_code == 200, r.json()
+        assert r.json()["account"]["booking"] == "NONE"
+        assert r.json()["account"]["metadata"]["broker"] == "XP Investimentos"
+        assert booking_client.get("/api/errors").json()["count"] == 0
+
+    def test_update_with_invalid_booking_is_400_and_writes_nothing(
+        self, booking_client: TestClient, booking_file: Path
+    ) -> None:
+        before = booking_file.read_text(encoding="utf-8")
+        r = booking_client.put("/api/accounts", json={
+            "name": "Assets:XP", "booking": "AVERAGE",
+        })
+        assert r.status_code == 400
+        assert booking_file.read_text(encoding="utf-8") == before
+
+    def test_none_account_from_the_api_takes_an_average_cost_sale(
+        self, booking_client: TestClient
+    ) -> None:
+        """Open NONE via the API, buy at 33 and 37, sell 50 at the 35 average
+        with the gain elided — the whole Brazilian flow, zero errors."""
+        assert booking_client.post("/api/accounts", json={
+            "name": "Assets:Nu", "date": "2020-01-01",
+            "ledgr_type": "investment", "booking": "NONE",
+        }).status_code == 201
+        for date, cost in (("2020-02-01", "33.00"), ("2020-03-01", "37.00")):
+            r = booking_client.post("/api/transactions", json={
+                "date": date, "narration": f"Buy Nu {cost}",
+                "postings": [
+                    {"account": "Assets:Nu", "amount": 100, "currency": "PETR4",
+                     "cost": cost, "cost_currency": "BRL"},
+                    {"account": "Assets:Bank:Checking"},
+                ],
+            })
+            assert r.json()["success"] is True, r.json()
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Sell Nu avg",
+            "postings": [
+                {"account": "Assets:Nu", "amount": -50, "currency": "PETR4",
+                 "cost": "35.00", "cost_currency": "BRL",
+                 "price": "40.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        [_, _, gain] = _postings_for(booking_client, "Sell Nu avg")
+        assert gain["amount"] == "-250.00"
+
+    def test_fifo_account_from_the_api_takes_an_empty_cost_sale(
+        self, booking_client: TestClient
+    ) -> None:
+        assert booking_client.post("/api/accounts", json={
+            "name": "Assets:Nu", "date": "2020-01-01",
+            "ledgr_type": "investment", "booking": "FIFO",
+        }).status_code == 201
+        for date, cost in (("2020-02-01", "33.00"), ("2020-03-01", "37.00")):
+            r = booking_client.post("/api/transactions", json={
+                "date": date, "narration": f"Buy Nu {cost}",
+                "postings": [
+                    {"account": "Assets:Nu", "amount": 100, "currency": "PETR4",
+                     "cost": cost, "cost_currency": "BRL"},
+                    {"account": "Assets:Bank:Checking"},
+                ],
+            })
+            assert r.json()["success"] is True, r.json()
+        r = booking_client.post("/api/transactions", json={
+            "date": "2020-06-01", "narration": "Sell Nu fifo",
+            "postings": [
+                {"account": "Assets:Nu", "amount": -50, "currency": "PETR4",
+                 "cost_empty": True, "price": "40.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank:Checking", "amount": "2000.00", "currency": "BRL"},
+                {"account": "Income:Gains"},
+            ],
+        })
+        assert r.json()["success"] is True, r.json()
+        assert booking_client.get("/api/errors").json()["count"] == 0
+        [asset, _, gain] = _postings_for(booking_client, "Sell Nu fifo")
+        assert asset["cost"] == "33.00"
+        assert gain["amount"] == "-350.00"
+
+
+class TestOptionsCommodities:
+    def test_plugins_and_commodities(self, booking_client: TestClient) -> None:
+        body = booking_client.get("/api/options").json()
+        assert body["plugins"] == ["beancount.plugins.implicit_prices"]
+        assert body["commodities"] == sorted(body["commodities"])
+        # Held (PETR4), operating (BRL) and declared-but-unused (ITUB4) alike.
+        assert {"BRL", "PETR4", "ITUB4"} <= set(body["commodities"])
+
+    def test_ledger_without_plugins(self, client: TestClient) -> None:
+        body = client.get("/api/options").json()
+        assert body["plugins"] == []
+        assert isinstance(body["commodities"], list)
+        assert "BRL" in body["commodities"]

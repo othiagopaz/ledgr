@@ -99,12 +99,14 @@ def serialize_account_node(
     # Enrich from Open directive
     open_entry = opens_map.get(acct_name) if opens_map else None
     ledgr_type = None
+    booking = None
     open_date = None
     currencies: list[str] = []
     metadata: dict[str, str] = {}
 
     if open_entry:
         ledgr_type = open_entry.meta.get("ledgr-type")
+        booking = open_entry.booking.name if open_entry.booking else None
         open_date = open_entry.date.isoformat()
         currencies = list(open_entry.currencies) if open_entry.currencies else []
         metadata = {
@@ -124,6 +126,7 @@ def serialize_account_node(
         "name": acct_name,
         "type": acct_type,
         "ledgr_type": ledgr_type,
+        "booking": booking,
         "open_date": open_date,
         "currencies": currencies,
         "metadata": metadata,
@@ -152,13 +155,17 @@ def serialize_posting(posting: data.Posting) -> dict[str, Any]:
         "currency": posting.units.currency if posting.units else None,
     }
     if posting.cost is not None:
-        # CostSpec uses number_per; Cost uses number
+        # CostSpec uses number_per; Cost uses number. An unbooked CostSpec
+        # (`{}`, `{# total}`, `{2020-03-01}`) carries MISSING in the number
+        # and currency slots — a class, not a value — so only real ones pass.
         cost_number = getattr(posting.cost, "number_per", None) or getattr(posting.cost, "number", None)
-        result["cost"] = str(cost_number) if cost_number else None
-        result["cost_currency"] = posting.cost.currency
+        result["cost"] = str(cost_number) if isinstance(cost_number, Decimal) else None
+        cost_currency = posting.cost.currency
+        result["cost_currency"] = cost_currency if isinstance(cost_currency, str) else None
         result["cost_date"] = (
             posting.cost.date.isoformat() if posting.cost.date else None
         )
+        result["cost_label"] = posting.cost.label
     if posting.price is not None:
         result["price"] = str(posting.price.number)
         result["price_currency"] = posting.price.currency

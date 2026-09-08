@@ -13,7 +13,7 @@ from typing import Any
 from beancount.core import amount as amt_mod, data, interpolate
 from beancount.core.number import MISSING
 from beancount.parser import booking_full, printer
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fava.beans.funcs import hash_entry
 from fava.core import FavaLedger
 from fava.core.file import get_entry_slice
@@ -31,13 +31,30 @@ router = APIRouter()
 
 
 class PostingIn(BaseModel):
-    """Posting input — all monetary values use Decimal, never float."""
+    """Posting input — all monetary values use Decimal, never float.
+
+    The cost fields map onto Beancount's cost annotation vocabulary (see
+    ``docs/features/commodities.md`` §2):
+
+    * ``cost`` + ``cost_currency`` → ``{35.00 BRL}`` (per unit)
+    * ``cost_total`` + ``cost_currency`` → ``{# 1750.00 BRL}`` (total, spread
+      over the units by Beancount). Mutually exclusive with ``cost``.
+    * ``cost_date`` / ``cost_label`` → lot identifiers, alone
+      (``{2020-03-01}``, ``{"lote-fev"}``) or alongside a number
+      (``{35.00 BRL, 2020-03-01, "lote-fev"}``).
+    * ``cost_empty`` → ``{}``: let the account's booking method pick the lot.
+      Cannot be combined with any other cost field.
+    """
 
     account: str
     amount: Decimal | None = None
     currency: str | None = None
     cost: Decimal | None = None
+    cost_total: Decimal | None = None
     cost_currency: str | None = None
+    cost_date: str | None = None
+    cost_label: str | None = None
+    cost_empty: bool | None = None
     price: Decimal | None = None
     price_currency: str | None = None
 
@@ -64,17 +81,95 @@ class EditTransactionIn(TransactionIn):
 # ------------------------------------------------------------------
 
 
+def _build_cost_spec(p: PostingIn) -> data.CostSpec | None:
+    """Turn the cost fields of a ``PostingIn`` into the ``CostSpec`` the parser
+    would have produced for the equivalent source text.
+
+    Mirroring the parser matters because ``printer.format_entry`` is what
+    writes the file, and it only renders the shapes the parser emits:
+
+    * ``{35.00 BRL}``      → ``CostSpec(35.00, None, "BRL", …)``
+    * ``{# 1750.00 BRL}``  → ``CostSpec(MISSING, 1750.00, "BRL", …)`` — the
+      per-unit slot must be ``MISSING`` (not ``None``) for the printer to emit
+      ``#`` and for ``convert_costspec_to_cost`` to divide the total.
+    * ``{}`` / ``{2020-03-01}`` / ``{"lote-fev"}``
+                           → ``CostSpec(MISSING, None, MISSING, date, label, False)``
+
+    Raises 400 on a combination that has no Beancount spelling.
+    """
+    has_number = p.cost is not None or p.cost_total is not None
+    has_identity = p.cost_date is not None or p.cost_label is not None
+
+    if p.cost_empty:
+        if has_number or has_identity or p.cost_currency:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Posting to '{p.account}': cost_empty means `{{}}` and "
+                    "cannot be combined with cost, cost_total, cost_currency, "
+                    "cost_date or cost_label."
+                ),
+            )
+        return data.CostSpec(MISSING, None, MISSING, None, None, False)
+
+    if p.cost is not None and p.cost_total is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Posting to '{p.account}': give either cost (per unit) or "
+                "cost_total, not both."
+            ),
+        )
+    if has_number and not p.cost_currency:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Posting to '{p.account}': cost_currency is required when "
+                "cost or cost_total is given."
+            ),
+        )
+    if not has_number and not has_identity:
+        # No cost at all. A stray `cost_currency` on its own is ignored, as it
+        # always was.
+        return None
+
+    cost_date = None
+    if p.cost_date is not None:
+        try:
+            cost_date = datetime.date.fromisoformat(p.cost_date)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Posting to '{p.account}': cost_date must be YYYY-MM-DD, "
+                    f"got {p.cost_date!r}."
+                ),
+            ) from exc
+
+    if p.cost is not None:
+        return data.CostSpec(
+            p.cost, None, p.cost_currency, cost_date, p.cost_label, False
+        )
+    if p.cost_total is not None:
+        return data.CostSpec(
+            MISSING,  # type: ignore[arg-type]
+            p.cost_total, p.cost_currency, cost_date, p.cost_label, False,
+        )
+    # Lot identified by date and/or label only — resolved by booking.
+    return data.CostSpec(
+        MISSING, None, MISSING, cost_date, p.cost_label, False  # type: ignore[arg-type]
+    )
+
+
 def _build_bc_postings(postings: list[PostingIn]) -> list[data.Posting]:
     """Convert Pydantic posting models to Beancount Posting objects."""
     bc_postings: list[data.Posting] = []
     for p in postings:
         units = None
-        cost = None
         price = None
         if p.amount is not None and p.currency:
             units = amt_mod.Amount(quantize_amount(p.amount), p.currency)
-        if p.cost is not None and p.cost_currency:
-            cost = data.CostSpec(p.cost, None, p.cost_currency, None, None, False)
+        cost = _build_cost_spec(p)
         if p.price is not None and p.price_currency:
             price = amt_mod.Amount(p.price, p.price_currency)
         bc_postings.append(

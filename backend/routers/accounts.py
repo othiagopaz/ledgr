@@ -184,11 +184,40 @@ def get_options(
                 if e.values and len(e.values) > 0:
                     locale = str(e.values[0].value)
 
+    # Beancount 3 stores each `plugin` line as a ``(name, config)`` tuple;
+    # the frontend only needs the names to show which ones are enabled.
+    plugins = [
+        entry[0] if isinstance(entry, (tuple, list)) else str(entry)
+        for entry in ledger.options.get("plugin", [])
+    ]
+
+    # Every commodity the ledger mentions, declared or not. Beancount 3.2 no
+    # longer fills ``options["commodities"]`` (it is always an empty set), so
+    # start from Fava's own index (posting units and cost currencies) and add
+    # what it skips: `commodity` declarations, `price` pairs, posting prices
+    # and the operating currency. The option is folded in for the day
+    # Beancount populates it again.
+    commodities: set[str] = set(ledger.attributes.currencies)
+    commodities.update(ledger.options.get("commodities") or ())
+    commodities.update(ledger.options.get("operating_currency") or ())
+    for e in ledger.all_entries:
+        if isinstance(e, data.Commodity):
+            commodities.add(e.currency)
+        elif isinstance(e, data.Price):
+            commodities.add(e.currency)
+            commodities.add(e.amount.currency)
+        elif isinstance(e, data.Transaction):
+            for p in e.postings:
+                if p.price is not None:
+                    commodities.add(p.price.currency)
+
     return {
         "operating_currency": ledger.options.get("operating_currency", []),
         "title": ledger.options.get("title", ""),
         "filename": ledger.options.get("filename", ""),
         "locale": locale,
+        "plugins": plugins,
+        "commodities": sorted(commodities),
     }
 
 
@@ -263,6 +292,10 @@ class AccountIn(BaseModel):
     date: str | None = None
     ledgr_type: str | None = None
     metadata: dict[str, str] = {}
+    # Booking method — the 5th field of `open`. Set it and the account *holds
+    # assets to sell* (Beancount tracks lots and cost); leave it unset and the
+    # account merely spends (held at price). See PLAN-commodities-ux §2.1.
+    booking: str | None = None
 
 
 class AccountUpdateIn(BaseModel):
@@ -274,6 +307,9 @@ class AccountUpdateIn(BaseModel):
     # account's `open` makes the ledger invalid ("Invalid reference to inactive
     # account"), and moving the opening back is usually the right fix.
     date: str | None = None
+    # Booking method. ``None`` leaves it unchanged; ``""`` clears it (back to
+    # a spend account); a method name sets it.
+    booking: str | None = None
 
 
 class CloseAccountIn(BaseModel):
@@ -355,6 +391,40 @@ def _validate_ledgr_type(root: str, ledgr_type: str | None) -> str:
     return ledgr_type
 
 
+# The booking methods Beancount 3.2 actually implements. ``AVERAGE`` is in the
+# enum but its code path is a FIXME — a ledger using it fails to load.
+BOOKING_METHODS = ("STRICT", "STRICT_WITH_SIZE", "FIFO", "LIFO", "HIFO", "NONE")
+
+
+def _validate_booking(value: str | None) -> data.Booking | None:
+    """Turn a booking method name into ``data.Booking``; 400 on anything else.
+
+    ``None`` and ``""`` both mean "no booking method" — the account spends
+    rather than holds. The distinction between the two is the caller's
+    (``update_account`` reads ``None`` as *unchanged*).
+    """
+    if not value:
+        return None
+    if value == "AVERAGE":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Booking method AVERAGE is not implemented in Beancount 3.2 — "
+                "a ledger using it fails to load. For Brazilian average cost "
+                "use NONE and let Ledgr fill in the average cost on each sale."
+            ),
+        )
+    if value not in BOOKING_METHODS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid booking method '{value}'. "
+                f"Valid: {', '.join(BOOKING_METHODS)}"
+            ),
+        )
+    return data.Booking[value]
+
+
 def _serialize_account_response(
     name: str, open_entry: data.Open
 ) -> dict[str, Any]:
@@ -362,6 +432,7 @@ def _serialize_account_response(
     return {
         "name": name,
         "ledgr_type": open_entry.meta.get("ledgr-type"),
+        "booking": open_entry.booking.name if open_entry.booking else None,
         "open_date": open_entry.date.isoformat(),
         "currencies": list(open_entry.currencies) if open_entry.currencies else [],
         "metadata": {
@@ -391,6 +462,7 @@ def create_account(
 
     root = body.name.split(":")[0]
     ledgr_type = _validate_ledgr_type(root, body.ledgr_type)
+    booking = _validate_booking(body.booking)
 
     # Build metadata
     meta = data.new_metadata(str(ledger.beancount_file_path), 0)
@@ -401,7 +473,7 @@ def create_account(
     open_date = datetime.date.fromisoformat(body.date) if body.date else datetime.date.today()
     currencies = body.currencies or []
 
-    open_entry = data.Open(meta, open_date, body.name, currencies, None)
+    open_entry = data.Open(meta, open_date, body.name, currencies, booking)
     ledger.file.insert_entries([open_entry])
     reload_ledger()
 
@@ -469,14 +541,23 @@ def update_account(
                 ),
             )
 
-    updated = data.Open(new_meta, new_date, body.name, new_currencies, None)
+    # Booking: None leaves the current method alone, "" clears it, a name sets it.
+    if body.booking is None:
+        new_booking = open_entry.booking
+    else:
+        new_booking = _validate_booking(body.booking)
 
-    # Build source text for the updated directive
+    updated = data.Open(new_meta, new_date, body.name, new_currencies, new_booking)
+
+    # Build source text for the updated directive:
+    #   DATE open ACCOUNT [CUR,CUR] ["BOOKING"]
     source_lines = [
         f"{new_date.isoformat()} open {body.name}"
     ]
     if new_currencies:
         source_lines[0] += "  " + ",".join(new_currencies)
+    if new_booking is not None:
+        source_lines[0] += f'  "{new_booking.name}"'
 
     for k, v in new_meta.items():
         if k in ("filename", "lineno"):
