@@ -1,6 +1,7 @@
 import type { Transaction } from "../types";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, amountSignClass } from "../utils/format";
+import { useCommoditiesUi } from "../stores/commoditiesUiStore";
 
 interface StatusBarProps {
   account: string | null;
@@ -17,6 +18,7 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
   const viewMode = useAppStore((s) => s.viewMode);
 
   // Build context-aware keyboard hints
+  const accountsSubTab = useCommoditiesUi((s) => s.accountsTab);
   const viewLabel = viewMode === 'combined' ? 'Actual + Planned' : 'Actual';
   const hints: string[] = ["⌘K search", `P ${viewLabel}`];
 
@@ -30,8 +32,11 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
       "↑↓ navigate", "N new", "⌘I compose",
       "Enter edit", "E modal", "R reconcile", "Del delete",
     );
-  } else if (viewType === "accounts") {
+  } else if (viewType === "accounts" && accountsSubTab === "accounts") {
     hints.push("↑↓ navigate", "← → expand", "Space expand", "Enter open", "E edit account");
+  } else if (viewType === "accounts") {
+    // Commodities sub-tab: the tree (and its key handlers) is unmounted.
+    hints.push("⌘K New Commodity", "⌘K Update Price");
   } else if (viewType === "series") {
     hints.push("↑↓ navigate", "Enter edit", "R reconcile", "Space select");
   } else {

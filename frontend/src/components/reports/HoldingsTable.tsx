@@ -61,7 +61,7 @@ export default function HoldingsTable() {
             // TODO(merge): 'commodity' is added to ComposerOpts.initial by the
             // FE-writes stream (Composer "Commodity" disclosure). Drop the cast
             // once both streams are on the same branch.
-            onClick={() => openComposer({ initial: "commodity" as never })}
+            onClick={() => openComposer({ initial: "commodity" })}
           >
             New — Commodity
           </button>{" "}
