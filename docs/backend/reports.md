@@ -67,6 +67,13 @@ Fava's `cost_or_value` / `convert_position` over `FavaLedger.prices`
   stays the raw position list. The tree shows `value` as the primary number
   and the non-OC units on a muted second line.
 
+`POST /api/plugins` turns the four recommended plugins (`implicit_prices`,
+`coherent_cost`, `check_average_cost`, `currency_accounts`) on or off by
+rewriting the `plugin` lines of the **top-level** file through
+`FavaLedger.file` — Beancount ignores `plugin` directives in included files.
+`currency_accounts` takes an Equity base account (default
+`Equity:CurrencyTrading`), opened when missing.
+
 Holdings (`/api/holdings`) lists every non-OC position per (account,
 commodity): units, cost in the cost currency, market value and unrealised gain
 in the report currency, `lots` (null for booking `NONE`, where Beancount does
