@@ -16,6 +16,13 @@ export interface AccountNode {
   booking?: BookingMethod | null;
   metadata: Record<string, string>;
   balance: Balance[];
+  /**
+   * Subtree total in the operating currency under the request's conversion
+   * lens (PLAN-commodities-ux §3.2). Null when nothing converts.
+   */
+  value?: string | null;
+  /** Non-OC positions that could not be brought into `value` under the lens. */
+  other?: Balance[];
   children: AccountNode[];
   is_leaf: boolean;
   /** Carries a Beancount Close directive — inactive, hidden from the tree by default. */
@@ -744,4 +751,18 @@ export interface HoldingsResponse {
   positions: HoldingPosition[];
   totals: { cost_total: string; market_value: string; unrealized: string };
   fx_result: { account: string; market_value: string } | null;
+}
+
+export type LedgerPluginName =
+  | "implicit_prices"
+  | "coherent_cost"
+  | "check_average_cost"
+  | "currency_accounts";
+
+export interface EnablePluginsResponse {
+  ok: boolean;
+  plugins: CommoditiesResponse["plugins"];
+  currency_trading_account: string | null;
+  /** Plugin lines actually written this call (empty when all were already on). */
+  added: LedgerPluginName[];
 }

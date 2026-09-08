@@ -34,6 +34,8 @@ import type {
   PriceHistoryResponse,
   PriceInput,
   HoldingsResponse,
+  LedgerPluginName,
+  EnablePluginsResponse,
 } from "../types";
 
 const BASE = "";
@@ -514,4 +516,14 @@ export async function fetchHoldings(
   appendFilters(params, filters);
   const qs = params.toString();
   return get(`/api/holdings${qs ? "?" + qs : ""}`);
+}
+
+/**
+ * Write the recommended `plugin` lines into the top-level ledger file
+ * (PLAN-commodities-ux §2.9). Idempotent: already-enabled plugins are skipped.
+ */
+export async function enablePlugins(
+  plugins: LedgerPluginName[],
+): Promise<EnablePluginsResponse> {
+  return post("/api/plugins/enable", { plugins });
 }
