@@ -1,11 +1,22 @@
 ---
 type: log
-last_updated: 2026-09-07
+last_updated: 2026-09-08
 ---
 
 # Wiki Log
 
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
+
+---
+
+## 2026-09-08 — Commodities: the feature lands (`feat/commodities`)
+
+- New plan [`plans/PLAN-commodities-ux.md`](plans/PLAN-commodities-ux.md): the product decisions over the engine map in `features/commodities.md`. The one that reorganises everything: **there is no currency-vs-stock split, only spend-vs-hold per account**, signalled by the booking method on `open`. Brazilian average cost = booking `NONE` + Ledgr pre-fills the cost + `check_average_cost` guards it (Beancount 3.2 has no `AVERAGE`). Conversion lens is global, default at market; unrealised gains are computed, never posted.
+- Built by four parallel agents in worktrees (BE-reads, BE-writes, FE-reads, FE-writes) against the plan's §4 API contracts, with the shared frontend types pre-seeded in the base commit. Merged in that order; one trivial CSS conflict.
+- Backend: `/api/commodities` (GET/POST/PUT), `/api/prices` (GET/POST), `/api/holdings`; `conversion=` on every report; widened `PostingIn` (`cost_total`, `cost_date`, `cost_label`, `cost_empty`); `booking` on accounts; MCP passthrough. Suite 520 → 667. Balance Sheet invariant now `A = L + E + unrealized_gains` under market lenses, byte-identical under `at_cost`; an OC-only ledger is identical under every lens (HTTP-level regression test).
+- Frontend: "Value" lens in the FilterBar, Holdings tab, Accounts → Commodities tab (catalog, price history, New commodity / Update price, plugin banner), Composer Commodity wing with live Beancount preview, booking toggle in the account modal, seven palette entries. vitest 117 → 152.
+- Three new [`pitfalls.md`](pitfalls.md) rows: `NONE` appends negative positions instead of reducing lots; `options["commodities"]` is always empty in Beancount 3.2; `currency_accounts` gives a pair to value, not a per-sale gain, and its base account is one per ledger.
+- Fixed on integration: quantities outside the OC were being quantized to two places (`0.005 BTC` → `0.01`); now padded, never rounded, and cost/price get the same treatment so the file reads `{33.00 BRL}`.
 
 ---
 

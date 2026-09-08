@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-08-19
+last_updated: 2026-09-08
 ---
 
 # Front-end guidelines
@@ -155,6 +155,16 @@ only as much as the transaction needs.
   forms were removed.) **All of this is detected on space**, mirroring dates/tags — the parser only
   fires once the token is complete, so `212,90*10` never commits at `*1`. When a schedule is
   detected, the **Repeat wing opens automatically** (as if the button were pressed).
+- **The Commodity wing** (`initial: 'commodity'`, or the `◇ Commodity` disclosure): Buy / Sell /
+  Exchange with quantity, commodity (autocomplete + inline "declare"), unit price in the OC, optional
+  fees, cash and asset accounts. The **asset account decides the syntax** — an account with a booking
+  method *holds to sell* and gets `{cost}`; one without *spends* and gets `@ price`
+  ([`../plans/PLAN-commodities-ux.md`](../plans/PLAN-commodities-ux.md) §2.1). Selling from a `NONE`
+  account pre-fills the average cost from `/api/holdings`; other bookings get a lot picker
+  ("Automatic" → `{}`); the gain leg (`Income:Gains`, editable) is sent with no amount so Beancount
+  interpolates it. `utils/commodityPreview.ts` (pure, unit-tested) builds both the `PostingInput[]`
+  payload and the Beancount preview from one draft, so they cannot disagree. Commodity and Split are
+  mutually exclusive; Repeat is disabled while the wing is open; the wing is hidden when editing.
 - **The `>` route picker**: `>` builds a `from → to` route in one fluid motion (no cleared input) —
   pick `from`, focus flows to `to`, `⇄` flips direction, amount sign follows the route. The dropdown
   is fuzzy + personally-ranked (usage counts from all loaded txns, recents this session, the payee's

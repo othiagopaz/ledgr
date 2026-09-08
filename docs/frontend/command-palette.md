@@ -1,6 +1,6 @@
 ---
 type: feature
-last_updated: 2026-08-06
+last_updated: 2026-09-08
 ---
 
 # Cmd+K — every user-facing action must be accessible
@@ -19,8 +19,8 @@ If a capability is only reachable through a button nested in a specific view, it
 
 | Group        | Purpose                                                                        |
 |--------------|--------------------------------------------------------------------------------|
-| `"Actions"`  | Primary CRUD and navigation actions (New, New — Split, New — Repeat, New Account) |
-| `"Views"`    | Navigate to a specific tab (Dashboard, Accounts, Reports, Series)              |
+| `"Actions"`  | Primary CRUD and navigation actions (New, New — Split, New — Repeat, New — Commodity, New Account, New Commodity, Update Price, Value: Units / At cost / At market) |
+| `"Views"`    | Navigate to a specific tab (Dashboard, Accounts, Reports, Series, Holdings, Commodities) |
 | `"Accounts"` | Individual account register tabs                                               |
 
 ## Label conventions
@@ -28,7 +28,9 @@ If a capability is only reachable through a button nested in a specific view, it
 When adding a new entry, place it in the correct group and use consistent labels:
 
 - Create actions: `"New"` opens the [Composer](guidelines.md#the-composer-composertsx--one-way-to-post); fast paths `"New — Split"` / `"New — Repeat"` pre-disclose it. (Transactions and series are one surface now — no separate "New Series".)
-- Navigate actions: `"View <Thing>"` — e.g. `"View Dashboard"`, `"View Series"`
+- Navigate actions: `"View <Thing>"` — e.g. `"View Dashboard"`, `"View Series"`, `"View Holdings"`, `"View Commodities"`
+- Lens actions: `"Value: <Lens>"` — `Units` / `At cost` / `At market` switch the global conversion lens (a lens, not a filter: it never counts as an active filter and "Clear All Filters" leaves it alone)
+- Commodity actions: `"New — Commodity (buy / sell / exchange)"` pre-discloses the Composer's Commodity wing; `"New Commodity"` declares a symbol; `"Update Price"` adds a `price` directive
 
 ## Keyboard access
 
