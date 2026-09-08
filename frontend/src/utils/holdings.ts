@@ -41,6 +41,73 @@ export function formatUnits(
   });
 }
 
+/** One non-operating-currency position of an account, folded across lots. */
+export interface UnitPosition {
+  currency: string;
+  /** Quantity as a decimal string. */
+  number: string;
+  /** True when the current lens could not bring this position into the value. */
+  unvalued?: boolean;
+}
+
+export interface UnitSummary {
+  /** Positions that fit on the one-line summary, in display order. */
+  shown: UnitPosition[];
+  /** How many positions were folded into the `+N` tail. */
+  hidden: number;
+  /** The one-line summary: `100 PETR4 · 1.000,00 USD · +8`. Empty when there is nothing. */
+  line: string;
+  /**
+   * Every position, one per line, unvalued ones marked — for the cell's
+   * tooltip and accessible name. Empty when there is nothing.
+   */
+  full: string;
+}
+
+export const UNIT_SEPARATOR = ' · ';
+export const UNVALUED_SUFFIX = ' — not valued under this lens';
+
+/** `100 PETR4`, `1.000,00 USD` — a quantity and its commodity. */
+export function unitText(p: UnitPosition, locale = 'en-US'): string {
+  return `${formatUnits(p.number, null, locale)} ${p.currency}`;
+}
+
+/**
+ * Display order for positions. The API carries no per-position value, so
+ * "largest share first" is not available and ordering by raw units would
+ * compare shares to dollars. Instead: positions the lens *could* value first
+ * (they are part of the number above), the leftovers after, alphabetical
+ * within each group — deterministic, and the same on every lens.
+ */
+export function orderUnits<T extends UnitPosition>(units: readonly T[]): T[] {
+  return [...units].sort((a, b) => {
+    const ua = a.unvalued ? 1 : 0;
+    const ub = b.unvalued ? 1 : 0;
+    return ua - ub || a.currency.localeCompare(b.currency);
+  });
+}
+
+/**
+ * Bound a list of positions to one line. At most `max` are spelled out; the
+ * rest collapse into `+N`, so a broker holding ten tickers takes the same
+ * space as one holding two. `full` carries the whole list for the tooltip.
+ */
+export function summarizeUnits(
+  units: readonly UnitPosition[],
+  max = 2,
+  locale = 'en-US',
+): UnitSummary {
+  const ordered = orderUnits(units);
+  const shown = ordered.slice(0, Math.max(0, max));
+  const hidden = ordered.length - shown.length;
+  const parts = shown.map((p) => unitText(p, locale));
+  if (hidden > 0) parts.push(`+${hidden}`);
+  const full = ordered
+    .map((p) => unitText(p, locale) + (p.unvalued ? UNVALUED_SUFFIX : ''))
+    .join('\n');
+  return { shown, hidden, line: parts.join(UNIT_SEPARATOR), full };
+}
+
 /**
  * Signed percent with two decimals and an explicit + on gains ("+14.29%").
  * Locale-aware like formatUnits/formatAmount, so "+16,50%" sits next to

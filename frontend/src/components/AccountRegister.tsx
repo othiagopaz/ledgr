@@ -3,7 +3,7 @@ import type { Transaction, TransactionInput } from "../types";
 import { addTransaction, editTransaction, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, formatDateFull, getLocale, formatInstallmentBadge } from "../utils/format";
-import { formatUnits } from "../utils/holdings";
+import { formatUnits, summarizeUnits } from "../utils/holdings";
 import { today } from "../utils/dateUtils";
 import InlineEditor from "./InlineEditor";
 
@@ -305,7 +305,9 @@ export default function AccountRegister({ account, transactions, openingBalance,
             <th className="num" style={{ width: 28 }}>R</th>
             <th className="num" style={{ width: 100 }}>Debit</th>
             <th className="num" style={{ width: 100 }}>Credit</th>
-            <th className="num" style={{ width: 110 }}>Balance</th>
+            {/* Wide enough for two positions and the `+N` tail on the units
+                line (see .register td.amount .bal-units). */}
+            <th className="num" style={{ width: 170 }}>Balance</th>
             <th style={{ width: 36 }}></th>
           </tr>
         </thead>
@@ -343,9 +345,12 @@ export default function AccountRegister({ account, transactions, openingBalance,
             const debitVal = row.amount > 0 ? fmtCell(row.amount) : "";
             const creditVal = row.amount < 0 ? fmtCell(Math.abs(row.amount)) : "";
             const bal = formatAmount(row.balance, operatingCurrency);
-            const unitsText = row.units
-              .map((u) => `${formatUnits(u.number, null, getLocale(operatingCurrency))} ${u.currency}`)
-              .join(" · ");
+            // Same one-line rule as the account tree: at most two positions,
+            // then `+N`; the whole list lives in the cell's tooltip.
+            const units = summarizeUnits(row.units, 2, getLocale(operatingCurrency));
+            const balDetail = row.units.length === 0
+              ? undefined
+              : row.hasOc ? `${bal}\n${units.full}` : units.full;
             const balSign = row.hasOc
               ? row.balance >= 0 ? "positive" : "negative"
               : row.units.length === 1
@@ -424,16 +429,20 @@ export default function AccountRegister({ account, transactions, openingBalance,
                 <td className={`num amount ${row.amount < 0 ? "negative" : ""}`}>
                   {creditVal}
                 </td>
-                <td className={`num amount ${balSign}`}>
+                <td
+                  className={`num amount ${balSign}`}
+                  title={balDetail}
+                  aria-label={balDetail?.replace(/\n/g, ", ")}
+                >
                   {row.units.length === 0 ? (
                     bal
                   ) : row.hasOc ? (
                     <span className="bal-stack">
                       <span>{bal}</span>
-                      <span className="bal-units" title={unitsText}>{unitsText}</span>
+                      <span className="bal-units">{units.line}</span>
                     </span>
                   ) : (
-                    <span className="bal-units bal-units-only" title={unitsText}>{unitsText}</span>
+                    <span className="bal-units bal-units-only">{units.line}</span>
                   )}
                 </td>
                 <td className="actions" onClick={(e) => e.stopPropagation()}>
