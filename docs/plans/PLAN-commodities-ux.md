@@ -1,6 +1,6 @@
 # PLAN — Commodities: model, UX and delivery
 
-Status: **approved 2026-09-08**, implementation in flight on `feat/commodities`.
+Status: **landed on `main` 2026-09-08** (rounds 1–4). Kept as the record of the product decisions; the engine map is `features/commodities.md`.
 Companion to [`../features/commodities.md`](../features/commodities.md), which is the
 map of the Beancount/Fava machinery. This page records the *product* decisions
 taken on top of that map, the API contracts the frontend and backend agreed on,
