@@ -8,12 +8,12 @@
  */
 
 export interface ParsedToken {
-  type: 'narration' | 'amount' | 'payee' | 'tag' | 'link' | 'date' | 'flag' | 'currency';
+  type: 'narration' | 'amount' | 'payee' | 'tag' | 'link' | 'date' | 'flag';
   value: string;
   raw: string;
   startIndex: number;
   endIndex: number;
-  /** On an `amount`: the commodity typed right after it (`5 USD`, `5usd`). */
+  /** On an `amount`: the commodity glued to it (`5USD`, `100.10BRL`). */
   currency?: string;
 }
 
@@ -146,21 +146,33 @@ export interface ParseOpts {
   /** User locale uses comma as decimal (e.g. pt/BRL). Enables bare `212,90`. */
   commaDecimal?: boolean;
   /**
-   * Commodity symbols the ledger knows (USD, PETR4, …). A word matching one
-   * of them — or any explicit uppercase 3-letter code — right after an amount
-   * becomes that amount's currency; on its own it is a `currency` token the
-   * Composer attaches to an existing amount pill.
+   * Commodity symbols the ledger knows (USD, PETR4, …). Only a symbol glued
+   * to the number — `5USD`, `100.10BRL`, `10petr4` — is read as the amount's
+   * currency; `5 USD` with a space is left alone on purpose, so an ordinary
+   * word after a number never turns into a currency and the other fast-input
+   * tokens keep working.
    */
   currencies?: readonly string[];
 }
 
-/** `5 USD` / `5usd`: is this word a currency for the amount before it? */
+/** Is this suffix a currency? A symbol the ledger knows, or an explicit uppercase 3-letter code. */
 export function currencyWord(word: string | undefined, currencies: ReadonlySet<string>): string | null {
   if (!word) return null;
   const up = word.toUpperCase();
   if (!/^[A-Z][A-Z0-9'._-]{1,23}$/.test(up)) return null;
   if (currencies.has(up) || /^[A-Z]{3}$/.test(word)) return up;
   return null;
+}
+
+/**
+ * The number part of a glued amount. Either separator is the decimal point
+ * when it is the only one and 1–2 digits follow it (`100.10`, `100,10`);
+ * anything else is handed to the locale-aware parser unchanged.
+ */
+function gluedNumber(num: string, commaDecimal: boolean): string | null {
+  const m = num.match(/^(\d+)[.,](\d{1,2})$/);
+  if (m) return tryParseAmount(`${m[1]}${commaDecimal ? ',' : '.'}${m[2]}`, commaDecimal);
+  return tryParseAmount(num, commaDecimal);
 }
 
 export function parseInput(text: string, cursorPosition: number, opts: ParseOpts = {}): ParseResult {
@@ -173,20 +185,9 @@ export function parseInput(text: string, cursorPosition: number, opts: ParseOpts
   // Split into whitespace-delimited tokens, preserving positions
   const tokenSegments = splitWithPositions(text);
 
-  let skipNext = false;
-  for (let idx = 0; idx < tokenSegments.length; idx++) {
-    const seg = tokenSegments[idx];
-    if (skipNext) { skipNext = false; continue; }
+  for (const seg of tokenSegments) {
     const { word, start, end } = seg;
     const cursorInToken = cursorPosition >= start && cursorPosition <= end;
-    // The word after this one, for `5 USD` — only when it is already complete
-    // (the cursor is not still inside it).
-    const next = tokenSegments[idx + 1];
-    const nextDone = next ? !(cursorPosition >= next.start && cursorPosition <= next.end) : false;
-    const attachCurrency = (token: ParsedToken) => {
-      const cur = nextDone ? currencyWord(next?.word, currencies) : null;
-      if (cur) { token.currency = cur; token.raw = text.slice(token.startIndex, next.end); token.endIndex = next.end; skipNext = true; }
-    };
 
     // --- Trigger: $ (amount) ---
     if (word.startsWith('$')) {
@@ -199,9 +200,7 @@ export function parseInput(text: string, cursorPosition: number, opts: ParseOpts
         activeTrigger = { type: 'amount', query: value, position: start };
       }
       if (value) {
-        const token: ParsedToken = { type: 'amount', value, raw: word, startIndex: start, endIndex: end };
-        if (!cursorInToken) attachCurrency(token);
-        tokens.push(token);
+        tokens.push({ type: 'amount', value, raw: word, startIndex: start, endIndex: end });
       }
       continue;
     }
@@ -266,27 +265,19 @@ export function parseInput(text: string, cursorPosition: number, opts: ParseOpts
     // --- Bare amount (no $), locale-aware: 212,90 / 1.234,56 / 55.00 ---
     const bareAmount = tryParseAmount(word, commaDecimal);
     if (bareAmount) {
-      const token: ParsedToken = { type: 'amount', value: bareAmount, raw: word, startIndex: start, endIndex: end };
-      attachCurrency(token);
-      tokens.push(token);
+      tokens.push({ type: 'amount', value: bareAmount, raw: word, startIndex: start, endIndex: end });
       continue;
     }
 
-    // --- Glued amount + currency: 5usd / 27,50EUR ---
+    // --- Glued amount + currency: 5USD / 100.10BRL / 10petr4 (never `5 USD`) ---
     const glued = word.match(/^([\d.,]+)([A-Za-z][A-Za-z0-9'._-]{1,23})$/);
     if (glued) {
-      const amt = tryParseAmount(glued[1], commaDecimal);
+      const amt = gluedNumber(glued[1], commaDecimal);
       const cur = currencyWord(glued[2], currencies);
       if (amt && cur) {
         tokens.push({ type: 'amount', value: amt, currency: cur, raw: word, startIndex: start, endIndex: end });
         continue;
       }
-    }
-
-    // --- A known commodity on its own: the Composer attaches it to the amount pill ---
-    if (currencies.has(word.toUpperCase()) && !cursorInToken) {
-      tokens.push({ type: 'currency', value: word.toUpperCase(), raw: word, startIndex: start, endIndex: end });
-      continue;
     }
 
     // --- Everything else is narration ---

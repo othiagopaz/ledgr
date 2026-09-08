@@ -734,16 +734,6 @@ export default function Composer({ onMutated }: ComposerProps) {
         const pill: Pill = { type: 'amount', label: cur ? `${token.value} ${cur}` : `$ ${token.value}`, value: token.value, currency: cur };
         setPills(prev => existing >= 0 ? [...prev.slice(0, existing), pill, ...prev.slice(existing + 1)] : [...prev, pill]);
         setInputValue(prev => prev.replace(token.raw, '').replace(/\s+/g, ' ').trim());
-      } else if (token.type === 'currency') {
-        // "USD" typed after the amount already became a pill: re-label that pill.
-        const existing = pills.findIndex(p => p.type === 'amount');
-        if (existing >= 0) {
-          const cur = token.value !== operatingCurrency ? token.value : undefined;
-          setPills(prev => prev.map((p, i) => i === existing
-            ? { ...p, currency: cur, label: cur ? `${p.value} ${cur}` : `$ ${p.value}` }
-            : p));
-          setInputValue(prev => prev.replace(token.raw, '').replace(/\s+/g, ' ').trim());
-        }
       } else if (token.type === 'date') {
         // The date pill is owned by the `date`→pill sync effect; just set date.
         setDate(token.value);

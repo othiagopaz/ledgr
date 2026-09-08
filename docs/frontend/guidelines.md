@@ -155,8 +155,10 @@ only as much as the transaction needs.
   forms were removed.) **All of this is detected on space**, mirroring dates/tags — the parser only
   fires once the token is complete, so `212,90*10` never commits at `*1`. When a schedule is
   detected, the **Repeat wing opens automatically** (as if the button were pressed).
-- **A foreign-currency amount on the smart line** (`5 USD`, `5usd`, or `USD` typed after the
-  amount; any symbol the ledger knows, or an explicit uppercase 3-letter code): the payment leg
+- **A foreign-currency amount on the smart line** — the symbol **glued** to the number
+  (`5USD`, `100.10BRL`, `10petr4`; any symbol the ledger knows, or an explicit uppercase 3-letter
+  code). `5 USD` with a space is deliberately *not* read, so an ordinary word after a number never
+  becomes a currency and the other fast-input tokens stay untouched: the payment leg
   stays in that currency with `@ rate`, and the expense leg is written in the operating currency
   at the rate — the ledger's latest `USD→BRL` price by default, editable in the **Rate** field
   under the preview. With no rate known, both legs stay in the foreign currency (the expense
