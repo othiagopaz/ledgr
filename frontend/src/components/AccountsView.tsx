@@ -101,7 +101,7 @@ export default function AccountsView({ onSelectAccount }: AccountsViewProps) {
   return (
     <div className="accounts-view">
       <PageHeader<AccountsSubTab>
-        title="Accounts"
+        title="Accounts & Commodities"
         tabs={ACCOUNTS_TABS}
         activeTab={subTab}
         onTabChange={setSubTab}
