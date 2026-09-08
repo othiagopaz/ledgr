@@ -1,6 +1,6 @@
 ---
 type: feature
-last_updated: 2026-09-07
+last_updated: 2026-09-08
 ---
 
 # Commodities, lots and exchange
@@ -173,28 +173,26 @@ The `commodity` directive itself carries arbitrary metadata. Beancount's own exa
 - **Balance Sheet totals are cost-aware** — see §9.
 - **The Cash Flow Statement already reasons about this.** `backend/cashflow.py` has a dedicated cross-currency residual branch for exactly the "buy shares priced in ITOT with a USD cash leg" shape.
 
-### Missing
+### Closed on 2026-09-08 (branch `feat/commodities`)
 
-| Layer | Gap |
+Product decisions and API contracts live in
+[`../plans/PLAN-commodities-ux.md`](../plans/PLAN-commodities-ux.md). Status of
+the gaps listed here before:
+
+| Layer | Now |
 |---|---|
-| **Reports — market value** | No conversion anywhere. `_compute_income_statement` and `_compute_net_worth` in `backend/routers/reports.py` sum the operating currency and drop everything else into an `other_currencies` bucket of raw units. **Fava already solves this and Ledgr does not call it**: `FavaLedger.prices`, `.commodities`, `.commodity_pairs`, `conversion_from_str("at_value")`, and `account_journal(filtered, account, conversion, …)` — which already takes the conversion as a parameter |
-| **Reports — net worth** | `_compute_net_worth` skips any posting whose `units.currency` is not the OC. A share purchase drops net worth by the cash spent and it never comes back. `convert.get_weight` is the right primitive for a posting stream (it keeps the running sum double-entry consistent, and values an FX leg at its purchase rate) |
-| **Write path** | `PostingIn` in `backend/routers/transactions.py` carries only `cost` / `cost_currency` / `price` / `price_currency`. No `cost_date`, no `cost_label`, no total cost, and no way to express `{}` — the builder requires both `cost` and `cost_currency`. So **a sale cannot name its lot**; only a fully-specified basis works |
-| **Accounts** | `data.Open(meta, date, name, currencies, None)` — that last field is the booking method, hard-coded to `None`. No FIFO/HIFO account can be created from the UI |
-| **Commodities** | Nothing. No endpoint, no screen. No way to declare a commodity, name it, or attach metadata |
-| **Prices** | Nothing. No `/api/prices`, no quote import, no history |
-| **UI** | `DraftPosting` in `frontend/src/types/index.ts` *has* `cost` / `price` fields and nothing populates them. `frontend/src/utils/fastInputParser.ts` has no cost or price token |
-| **Unrealised gains** | Absent from the product as a concept |
+| **Reports — market value** | `conversion=units|at_cost|at_value|<CUR>` on every report, default `at_value`, via `fava.core.conversion` over `FavaLedger.prices`. See [`../backend/reports.md`](../backend/reports.md) |
+| **Reports — net worth** | No longer drops non-OC postings; valued under the lens |
+| **Write path** | `PostingIn` carries `cost_total`, `cost_date`, `cost_label`, `cost_empty` (`{}`); specs mirror the parser so `printer.format_entry` emits `{# …}`, `{2020-03-01}`, `{"label"}`, `{}` |
+| **Accounts** | `booking` on create/update → 5th field of `open`; `AVERAGE` rejected with a message |
+| **Commodities** | `GET/POST/PUT /api/commodities` (declared or not, name, precision, metadata, holders, latest price, active plugins) |
+| **Prices** | `GET /api/prices` (pairs, history) and `POST /api/prices` (manual `price` directive). Quote fetching (`beanprice`) still out |
+| **Holdings** | `GET /api/holdings`: per (account, commodity) units, avg cost, market value, unrealised, weight, lots, `fx_result` |
+| **Unrealised gains** | Computed line `unrealized_gains` on the Balance Sheet under market lenses; never posted |
+| **UI** | Conversion selector in the FilterBar, Holdings tab, Commodities tab, Composer "Commodity" disclosure, booking in the account modal |
 
-### Suggested order
-
-1. **Conversion selector on the reports** (`units` / at cost / at value / a currency), delegating to `fava.core.conversion` and `FavaLedger.prices`. Largest gain per line written, and entirely Beancount-first.
-2. **Net worth via `convert.get_weight`** — small, and fixes a visibly wrong dashboard number.
-3. **`/api/commodities` + `/api/prices`**, reads first.
-4. **Widen `PostingIn`** with `cost_date`, `cost_label`, total cost and an explicit empty spec → sales that name their lot.
-5. **Booking method on `open`** — one field in the account modal, the 5th argument of `data.Open`.
-6. **Unrealised gain as a computed line** on the Balance Sheet, never a posted entry, in Fava's spirit.
-7. **Recommended plugins** in the ledger: `implicit_prices` and `coherent_cost` are nearly free and prevent the two most common mistakes.
+Still open: fast-input tokens for commodities, lot labels in the UI, automatic
+quotes, corporate actions, average cost across custodians.
 
 ## 9. Balance Sheet at cost
 

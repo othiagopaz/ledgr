@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-09-07
+last_updated: 2026-09-08
 ---
 
 # Known failure modes — do not repeat
@@ -39,6 +39,9 @@ Real incidents and their fixes. Add new entries as you encounter them — with e
 | Splitting a Balance Sheet into OC vs "other" by `units` alone | `100 ITOT {35.00 USD}` has units in ITOT, a currency the OC total skips, so the 3500.00 USD paid for it leaves the equation: `total_assets == total_liabilities + total_equity` fails by exactly the cost of the position | Reduce with `convert.get_cost` first. "Other currencies" is for commodities with no OC value (`VACHR`), not for anything whose cost is known — see [`features/commodities.md`](features/commodities.md) §9 |
 | A test helper that reimplements the code it tests | `TestBalanceSheet._compute_balance_sheet` was a ~75-line copy of the router, so the accounting invariant was asserted against the *test's* version. The shipped report broke the equation on any held-at-cost position while the suite stayed green | Delegate to the real function. A test that owns a second copy of the logic can only prove the copy right |
 | A fixture that is quietly invalid | `multicurrency.beancount` bought `100 ITOT` against `-3500.00 USD` with no cost — two unrelated currencies, so it never balanced and the file always loaded with an error. Nothing asserted otherwise, so it taught the wrong pattern for a long time and no test ever exercised a real cost basis | Assert `GET /api/errors` returns 0 on every fixture that models something non-trivial — see `TestHeldAtCostWrites::test_fixture_is_valid` |
+| Expecting booking `NONE` to reduce lots | Under `NONE` Beancount **appends** a negative position (`-50 PETR4 {33.00, 2026-06-01}`) next to the positive one instead of matching a lot. Units net correctly, but the lot list is meaningless and `Not enough lots` never fires | Holdings returns `lots: null` for `NONE` accounts and shows totals per commodity; the average cost comes from `sum(cost) / sum(units)` over the whole inventory. `check_average_cost` is the guard, not booking |
+| Reading `ledger.options["commodities"]` | Always an **empty set** in Beancount 3.2 — the parser no longer fills it | Build the symbol set from the display context (`dcontext`), `commodity`/`open`/`price` directives and the operating currency (`collect_commodities` in `routers/commodities.py`) |
+| Assuming `currency_accounts` gives a per-sale FX gain | The plugin rewrites every cross-currency transaction into two currency-balanced pairs through `Equity:CurrencyTrading:<CUR>`. The FX result is the **market value of that pair**, realised and unrealised together; it separates only when the foreign position is zero. Its base account is one per ledger (plugin config), not per account or posting | Present it as `fx_result` on Holdings; do not try to attribute it to sales. Accounts that need a per-sale gain must hold the currency at cost |
 
 ## Frontend
 

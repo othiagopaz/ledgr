@@ -1,6 +1,6 @@
 ---
 type: pattern
-last_updated: 2026-09-07
+last_updated: 2026-09-08
 ---
 
 # Accounting reports — correct Fava usage
@@ -34,9 +34,41 @@ closed    = summarize.cap_opt(ledger.all_entries, ledger.options)
 real_root = realization.realize(closed)
 ```
 
-**Invariant**: `total_assets == total_liabilities + total_equity`. This MUST pass on every generated Balance Sheet (both `combined` and `actual` view modes). Tested in `backend/tests/test_reports.py` and `backend/tests/test_routers.py` — see [`testing.md`](testing.md).
+**Invariant**: `total_assets == total_liabilities + total_equity + unrealized_gains`, where `unrealized_gains` is `0.00` under the `units` and `at_cost` lenses. This MUST pass on every generated Balance Sheet (both `combined` and `actual` view modes, every `conversion`). Tested in `backend/tests/test_reports.py` and `backend/tests/test_routers.py` — see [`testing.md`](testing.md).
 
 `cap_opt` is necessary but not sufficient: every section is also reduced with `convert.get_cost` before the operating currency is split from the rest. A position held at cost has its OC value locked inside a non-OC `units` currency, and without the reduction that value leaves the equation. See [`../features/commodities.md`](../features/commodities.md) §9 — and note that the test helper must **call** this function rather than reimplement it, which is how the violation went unnoticed.
+
+## The conversion lens (`conversion=`)
+
+Every report endpoint (`net-worth`, `income-statement`, `balance-sheet`,
+`account-balance`, `income-expense`) and `/api/holdings` accept
+`conversion ∈ units | at_cost | at_value | <CURRENCY>`, default **`at_value`**.
+Anything else is a 400. The lens is resolved once with
+`fava.core.conversion.conversion_from_str` and applied to inventories with
+Fava's `cost_or_value` / `convert_position` over `FavaLedger.prices`
+(a `FavaPriceMap`). Ledgr never multiplies units by a price itself.
+
+- **`units`** — raw quantities; non-OC positions stay in `other_*` buckets.
+- **`at_cost`** — `convert.get_cost`; a held-at-cost position contributes its
+  basis, a held-at-price position stays in `other_*`. This is the lens under
+  which double-entry closes on its own (§ Balance Sheet).
+- **`at_value` / `<CURRENCY>`** — market value through the price map, chaining
+  through the cost currency when needed (`XAU {1700 USD}` → USD → BRL). The
+  Balance Sheet reports the residual `A − L − E` as `unrealized_gains`, a
+  **computed** line: it is never posted (Beancount 3 dropped the `unrealized`
+  plugin; Fava computes it at presentation too). For a ledger with the
+  `currency_accounts` plugin the FX side of that residual is already in
+  `Equity:CurrencyTrading:*`, so `unrealized_gains` is only the held-at-cost part.
+- An operating-currency-only ledger returns **byte-identical** numbers under
+  every lens — pinned by an HTTP-level regression test over `minimal.beancount`.
+
+Holdings (`/api/holdings`) lists every non-OC position per (account,
+commodity): units, cost in the cost currency, market value and unrealised gain
+in the report currency, `lots` (null for booking `NONE`, where Beancount does
+not reduce lots), and `fx_result` (market value of the `currency_accounts`
+subtree) when that plugin is on. `unrealized_gains` on the Balance Sheet and
+`totals.unrealized` on Holdings are computed by independent paths and a test
+asserts they agree. See [`../plans/PLAN-commodities-ux.md`](../plans/PLAN-commodities-ux.md) §4.
 
 ## Time series (charts)
 
