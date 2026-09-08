@@ -3725,16 +3725,18 @@ button.acct-edit:hover {
 /* ── end commodities (FE-reads) ── */
 
 /* ── account tree: multi-commodity (round 2) ── */
-/* The Balance column is two lines at most: the number under the conversion
-   lens, and below it — smaller, muted — the raw units the account holds
-   (`-550,00 USD · 70 PETR4`). A row that carries units gets a fixed, taller
-   height, so the second line lives inside its own row and never bleeds into
-   the neighbours; every other row keeps the compact height. The column is a
-   fixed width in header and rows alike, so a long units line clips with an
-   ellipsis (the full text is in the tooltip) instead of pushing the tree
-   sideways. Widened from 120px so `1.000,00 USD · 100 PETR4` fits. */
+/* The Balance column is two lines, always: the number under the conversion
+   lens, and below it — smaller, muted — what the account holds, bounded to
+   one line (`70 PETR4 · 1.000,00 USD · +8`; the component spells out at most
+   two positions and folds the rest into `+N`). A row that carries units gets
+   a fixed, taller height, so the second line lives inside its own row and
+   never bleeds into the neighbours; every other row keeps the compact height.
+   The column is a fixed width in header and rows alike, so even the bounded
+   line clips with an ellipsis (the whole list is the cell's tooltip) instead
+   of pushing the tree sideways. Widened from 120px so two signed positions
+   (`-1.150,00 USD · -0,5 VACDAY`) fit without clipping. */
 .acct-bal,
-.acct-tree-col-bal { width: 150px; }
+.acct-tree-col-bal { width: 168px; }
 .acct-row-multi { height: 36px; }
 .acct-row-top.acct-row-multi { height: 40px; }
 .acct-bal-stack {
@@ -3762,20 +3764,30 @@ button.acct-edit:hover {
   text-overflow: ellipsis;
 }
 .acct-bal-sep { margin: 0 4px; opacity: 0.7; }
+/* The `+N` tail: the positions the one line did not spell out. Same muted
+   colour as its neighbours — it is a count, not a call to action; the tooltip
+   on the cell has the names. */
+.acct-bal-more { font-variant-numeric: tabular-nums; }
 /* A unit the current lens could not value (no price, no cost — vacation days,
-   or USD cash under the cost lens): dotted underline and a tooltip, quiet
-   enough not to compete with the number above it. */
+   or USD cash under the cost lens): dotted underline, quiet enough not to
+   compete with the number above it. The cell's tooltip says which ones. */
 .acct-bal-unit-unvalued {
   text-decoration: underline dotted;
   text-decoration-color: var(--color-text-tertiary);
   text-underline-offset: 2px;
-  cursor: help;
 }
+.acct-bal-stack[title] { cursor: help; }
 
 /* Register: the running balance gets the same two lines. The register has no
    lens, so the primary line is the operating-currency total and the second
-   line the other commodities' units; an account that never touched the
-   operating currency shows its units as the primary line instead. */
+   line the other commodities' units (bounded to two positions and a `+N`
+   tail, like the tree); an account that never touched the operating currency
+   shows its units as the primary line instead. The units line is capped at
+   the column's width (170px, set on the header cell in AccountRegister) and
+   ellipsizes — under table-layout:auto a nowrap block would otherwise widen
+   the column to fit. The cap is sized so two positions and the `+N` tail
+   (`300 ABEV3 · 200 BBDC4 · +3`) fit: the tail is the part that must never
+   be the thing clipped. */
 .register td.amount .bal-stack {
   display: flex;
   flex-direction: column;
@@ -3784,10 +3796,15 @@ button.acct-edit:hover {
   line-height: 1.2;
 }
 .register td.amount .bal-units {
+  display: block;
+  max-width: 170px;
   font-size: 10px;
   color: var(--color-text-tertiary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.register td.amount[title] { cursor: help; }
 .register td.amount .bal-units-only {
   font-size: inherit;
   color: inherit;

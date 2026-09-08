@@ -2,7 +2,73 @@ import { describe, it, expect } from 'vitest';
 import {
   isPriceStale, priceAgeTitle, formatUnits, formatPct, signClassOf,
   lotTotalCost, hasExpandableLots, STALE_PRICE_DAYS,
+  summarizeUnits, orderUnits, unitText, UNVALUED_SUFFIX,
 } from './holdings';
+
+describe('summarizeUnits', () => {
+  const petr = { currency: 'PETR4', number: '100' };
+  const usd = { currency: 'USD', number: '1000.00' };
+  const itub = { currency: 'ITUB4', number: '50' };
+  const vale = { currency: 'VALE3', number: '10' };
+
+  it('is empty for no positions', () => {
+    expect(summarizeUnits([])).toEqual({ shown: [], hidden: 0, line: '', full: '' });
+  });
+  it('spells out up to the maximum with no tail', () => {
+    const s = summarizeUnits([petr, usd]);
+    expect(s.line).toBe('100 PETR4 · 1,000.00 USD');
+    expect(s.hidden).toBe(0);
+    expect(s.shown).toHaveLength(2);
+  });
+  it('folds the rest into +N', () => {
+    const s = summarizeUnits([petr, usd, itub, vale]);
+    expect(s.line).toBe('50 ITUB4 · 100 PETR4 · +2');
+    expect(s.hidden).toBe(2);
+    expect(s.shown.map((p) => p.currency)).toEqual(['ITUB4', 'PETR4']);
+  });
+  it('honours a different maximum', () => {
+    expect(summarizeUnits([petr, usd, itub], 1).line).toBe('50 ITUB4 · +2');
+    expect(summarizeUnits([petr, usd, itub], 3).line).toBe('50 ITUB4 · 100 PETR4 · 1,000.00 USD');
+    expect(summarizeUnits([petr, usd], 0).line).toBe('+2');
+  });
+  it('lists every position in full, one per line, marking the unvalued', () => {
+    const s = summarizeUnits([petr, { ...usd, unvalued: true }, itub, vale]);
+    expect(s.full).toBe(
+      ['50 ITUB4', '100 PETR4', '10 VALE3', `1,000.00 USD${UNVALUED_SUFFIX}`].join('\n'),
+    );
+  });
+  it('is locale-aware', () => {
+    expect(summarizeUnits([usd, petr], 2, 'pt-BR').line).toBe('100 PETR4 · 1.000,00 USD');
+  });
+  it('does not mutate its input', () => {
+    const input = [usd, petr];
+    summarizeUnits(input);
+    expect(input.map((p) => p.currency)).toEqual(['USD', 'PETR4']);
+  });
+});
+
+describe('orderUnits', () => {
+  it('puts valued positions first, then alphabetical within each group', () => {
+    const ordered = orderUnits([
+      { currency: 'ZZZ', number: '1' },
+      { currency: 'AAA', number: '1', unvalued: true },
+      { currency: 'MMM', number: '1' },
+      { currency: 'BBB', number: '1', unvalued: true },
+    ]);
+    expect(ordered.map((p) => p.currency)).toEqual(['MMM', 'ZZZ', 'AAA', 'BBB']);
+  });
+  it('treats a missing flag as valued', () => {
+    const ordered = orderUnits([{ currency: 'B', number: '1', unvalued: false }, { currency: 'A', number: '1' }]);
+    expect(ordered.map((p) => p.currency)).toEqual(['A', 'B']);
+  });
+});
+
+describe('unitText', () => {
+  it('pairs the formatted quantity with its commodity', () => {
+    expect(unitText({ currency: 'PETR4', number: '100' })).toBe('100 PETR4');
+    expect(unitText({ currency: 'USD', number: '1000.00' }, 'pt-BR')).toBe('1.000,00 USD');
+  });
+});
 
 describe('price staleness', () => {
   it('is stale strictly past the threshold', () => {

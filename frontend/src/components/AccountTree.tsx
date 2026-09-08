@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { AccountNode, Balance } from "../types";
+import type { UnitPosition } from "../utils/holdings";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, amountSignClass, getLocale } from "../utils/format";
-import { formatUnits } from "../utils/holdings";
+import { summarizeUnits, unitText } from "../utils/holdings";
 
 interface Props {
   accounts: AccountNode[];
@@ -13,23 +14,25 @@ interface Props {
 
 // ── Balance column ───────────────────────────────────────────────────
 //
-// One node, two lines at most. The primary line is `value`: the subtree total
+// One node, two lines, always. The primary line is `value`: the subtree total
 // in the operating currency as the backend saw it through the conversion lens
 // (market, cost, or plain units). Under it, only when the account holds
-// something other than the operating currency, a single muted line lists the
-// raw units — `-550,00 USD · 70 PETR4` — so the reader sees what is *in* the
-// account, not only what it is worth. Units the lens could not value (no
+// something other than the operating currency, a single muted line names what
+// is *in* the account — at most two positions, then `+N` for the rest
+// (`70 PETR4 · 1.000,00 USD · +8`), so a broker holding ten tickers takes the
+// same height as one holding two. The whole list, one position per line, is
+// the cell's tooltip and accessible name. Units the lens could not value (no
 // price, no cost) are marked; they are the part of the picture the number
 // above does not include.
 
 /** One non-OC commodity in an account, aggregated across lots. */
-interface UnitLine {
-  currency: string;
-  /** Sum of the positions, as a decimal string with the widest precision seen. */
-  number: string;
+interface UnitLine extends UnitPosition {
   /** True when the current lens could not bring this commodity into `value`. */
   unvalued: boolean;
 }
+
+/** How many positions the secondary line spells out before folding into `+N`. */
+const MAX_UNITS_INLINE = 2;
 
 /** Count of decimals in a decimal string ("33.5" → 1, "100" → 0). */
 function decimalsOf(value: string): number {
@@ -60,7 +63,7 @@ function unitLines(node: AccountNode, oc: string, markUnvalued: boolean): UnitLi
     if (Number(number) === 0) continue;
     lines.push({ currency, number, unvalued: markUnvalued && unvalued.has(currency) });
   }
-  lines.sort((a, b) => a.currency.localeCompare(b.currency));
+  // Display order (valued first, then alphabetical) is summarizeUnits' job.
   return lines;
 }
 
@@ -111,41 +114,43 @@ function BalanceDisplay({ node }: { node: AccountNode }) {
     return <span className="acct-bal">—</span>;
   }
 
-  const unitText = (line: UnitLine) =>
-    `${formatUnits(line.number, null, locale)} ${line.currency}`;
-  const unvaluedText = lines.filter((l) => l.unvalued).map(unitText);
-  const lineTitle =
-    lines.map(unitText).join(" · ") +
-    (unvaluedText.length > 0
-      ? `\n${unvaluedText.join(", ")} — not valued under this lens`
-      : "");
+  const primary = value === null ? "—" : formatAmount(value, operatingCurrency);
+  const summary = summarizeUnits(lines, MAX_UNITS_INLINE, locale);
+  // The tooltip and the accessible name carry what one line cannot: every
+  // position, and which of them the number above leaves out.
+  const detail = lines.length > 0 ? `${primary}\n${summary.full}` : undefined;
 
   return (
-    <span className="acct-bal acct-bal-stack">
+    <span
+      className="acct-bal acct-bal-stack"
+      title={detail}
+      aria-label={detail?.replace(/\n/g, ", ")}
+    >
       <span
         className={`acct-bal-primary ${
           value === null ? "acct-bal-none" : amountSignClass(value)
         }`}
       >
-        {value === null ? "—" : formatAmount(value, operatingCurrency)}
+        {primary}
       </span>
       {lines.length > 0 && (
-        <span className="acct-bal-units" title={lineTitle}>
-          {lines.map((line, i) => (
+        <span className="acct-bal-units" aria-hidden="true">
+          {summary.shown.map((line, i) => (
             <span key={line.currency}>
-              {i > 0 && (
-                <span className="acct-bal-sep" aria-hidden="true">
-                  ·
-                </span>
-              )}
+              {i > 0 && <span className="acct-bal-sep">·</span>}
               <span
                 className={`acct-bal-unit${line.unvalued ? " acct-bal-unit-unvalued" : ""}`}
-                title={line.unvalued ? `${unitText(line)} — not valued under this lens` : undefined}
               >
-                {unitText(line)}
+                {unitText(line, locale)}
               </span>
             </span>
           ))}
+          {summary.hidden > 0 && (
+            <span>
+              <span className="acct-bal-sep">·</span>
+              <span className="acct-bal-more">+{summary.hidden}</span>
+            </span>
+          )}
         </span>
       )}
     </span>
