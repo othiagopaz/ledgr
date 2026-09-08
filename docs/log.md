@@ -9,6 +9,13 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-09-08 — Commodities round 4
+
+- Accounts tree and register: one line per row, always. Other commodities moved into the cell's tooltip behind a `◇N` marker; an account with no value under the lens shows its first position instead of a dash.
+- Smart line accepts `5 USD`: payment leg in USD `@ rate`, expense leg in BRL at the ledger's latest price (editable Rate field); without a price both legs stay in USD. Parser gained `currency` on amount tokens and a standalone `currency` token for known symbols.
+
+---
+
 ## 2026-09-08 — Commodities round 3 (second user review)
 
 - **Plugins are switches.** Each of the four cards toggles its plugin on or off (`POST /api/plugins` with `enable` / `disable`); turning on `currency_accounts` asks which Equity account receives the FX pair, and the line is rewritten when the account changes.

@@ -514,9 +514,12 @@ export default function Composer({ onMutated }: ComposerProps) {
   const [fxRateInput, setFxRateInput] = useState<string | null>(null);
   useEffect(() => { setFxRateInput(null); }, [amountCurrency]);
   const fxRate: number | null = useMemo(() => {
-    const raw = fxRateInput ?? latestRate ?? '';
-    const n = parseLocaleNumber(String(raw).replace('.', commaDecimal ? ',' : '.'), commaDecimal) ?? parseFloat(String(raw));
-    return raw && Number.isFinite(n) && n > 0 ? n : null;
+    if (fxRateInput != null) {
+      const n = parseLocaleNumber(fxRateInput, commaDecimal);
+      return fxRateInput.trim() && n != null && n > 0 ? n : null;
+    }
+    const n = latestRate ? parseFloat(latestRate) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
   }, [fxRateInput, latestRate, commaDecimal]);
 
   const postings: Row[] = useMemo(() => {
@@ -1258,7 +1261,7 @@ export default function Composer({ onMutated }: ComposerProps) {
                     <span className="cx-fx-label">Rate</span>
                     <input className="cx-fx-input" inputMode="decimal"
                       placeholder={latestRate ? '' : 'none'}
-                      value={fxRateInput ?? (latestRate ?? '')}
+                      value={fxRateInput ?? (latestRate ? toField(parseFloat(latestRate), commaDecimal, true) : '')}
                       onChange={e => setFxRateInput(e.target.value)} />
                     <span className="cx-fx-unit">{operatingCurrency} per {amountCurrency}</span>
                     <span className="cx-fx-hint">

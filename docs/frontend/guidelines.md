@@ -155,6 +155,13 @@ only as much as the transaction needs.
   forms were removed.) **All of this is detected on space**, mirroring dates/tags — the parser only
   fires once the token is complete, so `212,90*10` never commits at `*1`. When a schedule is
   detected, the **Repeat wing opens automatically** (as if the button were pressed).
+- **A foreign-currency amount on the smart line** (`5 USD`, `5usd`, or `USD` typed after the
+  amount; any symbol the ledger knows, or an explicit uppercase 3-letter code): the payment leg
+  stays in that currency with `@ rate`, and the expense leg is written in the operating currency
+  at the rate — the ledger's latest `USD→BRL` price by default, editable in the **Rate** field
+  under the preview. With no rate known, both legs stay in the foreign currency (the expense
+  account then holds USD). Rationale: budgets and the P&L keep reading in BRL, and the
+  `currency_accounts` plugin owns the FX result of the USD account.
 - **The Commodity wing** (`initial: 'commodity'`, or the `◇ Commodity` disclosure): Buy / Sell /
   Exchange with quantity, commodity (autocomplete + inline "declare"), unit price in the OC, optional
   fees, cash and asset accounts. The **asset account decides the syntax** — an account with a booking
