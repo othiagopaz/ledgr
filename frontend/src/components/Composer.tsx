@@ -1396,6 +1396,14 @@ function CommodityPanel({
   onDeclare: (symbol: string, name: string, precision: number | null) => Promise<void>;
   onClose: () => void;
 }) {
+  // Focus Quantity after the opening keystroke has fully dispatched. A
+  // synchronous autoFocus catches the register's own `E` keypress and types
+  // an "e" into the field (50 → "50e").
+  const qtyRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const t = window.setTimeout(() => qtyRef.current?.focus(), 0);
+    return () => window.clearTimeout(t);
+  }, []);
   const kind = fields.kind;
   const exchange = kind === 'exchange';
   const sell = kind === 'sell';
@@ -1432,8 +1440,8 @@ function CommodityPanel({
         </div>
 
         <div className="cx-prow"><label>Quantity</label>
-          <input className="cx-pinp" inputMode="decimal" placeholder={exchange ? '1000' : '100'} value={fields.qty}
-            onChange={e => patch({ qty: e.target.value })} autoFocus /></div>
+          <input ref={qtyRef} className="cx-pinp" inputMode="decimal" placeholder={exchange ? '1000' : '100'} value={fields.qty}
+            onChange={e => patch({ qty: e.target.value })} /></div>
 
         <div className="cx-prow"><label>{exchange ? 'Currency' : 'Commodity'}</label>
           <InlineAutocomplete className="cx-pinp" value={fields.commodity}

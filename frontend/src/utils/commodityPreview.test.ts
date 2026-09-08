@@ -282,7 +282,7 @@ describe("lot label on a buy", () => {
     const asset = commodityPostings(d)[0];
     expect(asset.cost).toBe(33);
     expect(asset.cost_label).toBe("lote-fev");
-    expect(formatEntry(header, commodityPostings(d))).toContain('{33.00 BRL, "lote-fev"}');
+    expect(formatEntry(header, commodityPostings(d), "BRL")).toContain('{33.00 BRL, "lote-fev"}');
   });
   it("is ignored under NONE and on spend accounts", () => {
     expect(commodityPostings(base({ lotLabel: "x" }))[0].cost_label).toBeUndefined();
