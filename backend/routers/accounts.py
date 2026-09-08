@@ -28,11 +28,15 @@ from account_types import (
     build_account_type_map,
 )
 from ledger import get_filtered_entries, get_ledger, reload_ledger
+# The reports own the lens resolver (validation + the 400 wording); the tree
+# reuses it so `?conversion=` means exactly the same thing on every endpoint.
+from routers.reports import _lens
 from serializers import (
     ACCOUNT_TYPE_ORDER,
     _INTERNAL_META_KEYS,
     serialize_account_node,
     serialize_error,
+    value_and_other,
 )
 
 router = APIRouter()
@@ -47,6 +51,7 @@ def get_accounts(
     payee: str | None = Query(None),
     view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     include_closed: bool = Query(False),
+    conversion: str = Query("at_value"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
     """Account tree with balances, enriched with Open directive metadata.
@@ -54,7 +59,15 @@ def get_accounts(
     Closed (inactive) accounts are omitted by default: a long-lived ledger
     accumulates accounts that will never be posted to again, and they crowd out
     the ones in use. ``include_closed=true`` brings them back.
+
+    ``conversion`` (``units | at_cost | at_value | <CURRENCY>``, default
+    ``at_value`` — the reports' lens, PLAN-commodities-ux §2.7) adds ``value``
+    and ``other`` to every node: the subtree total in the operating currency
+    under the lens, and the positions the lens could not bring into it. The
+    raw ``balance`` is unchanged by the lens. Valuation is Fava's, as of
+    ``to_date`` when given, else the latest price.
     """
+    lens = _lens(conversion, ledger)
     entries = get_filtered_entries(
         ledger, view_mode,
         account=account,
@@ -80,9 +93,17 @@ def get_accounts(
             for p in e.postings:
                 posting_counts[p.account] += 1
 
+    oc = ledger.options["operating_currency"][0]
+    as_of = datetime.date.fromisoformat(to_date) if to_date else None
+    precisions = ledger.format_decimal.precisions
+    prices = ledger.prices
+
+    def valuer(inv: Any) -> tuple[str | None, list[dict[str, Any]]]:
+        return value_and_other(inv, lens, prices, as_of, oc, precisions)
+
     real_root = realization.realize(entries)
     top_level = [
-        serialize_account_node(c, opens_map, closes_map, posting_counts)
+        serialize_account_node(c, opens_map, closes_map, posting_counts, valuer)
         for c in real_root.values()
     ]
     top_level.sort(key=lambda n: ACCOUNT_TYPE_ORDER.get(n["name"], 99))

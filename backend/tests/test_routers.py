@@ -2627,3 +2627,162 @@ class TestUnitsAndCostPrecision:
             "cost": "1700.125", "cost_currency": "USD",
         })
         assert str(p.cost.number_per) == "1700.125"
+
+
+# ------------------------------------------------------------------
+# Account tree under the conversion lens
+# ------------------------------------------------------------------
+
+
+def _walk_nodes(nodes: list[dict]):
+    """Every node of a serialized account tree, depth first."""
+    for node in nodes:
+        yield node
+        yield from _walk_nodes(node["children"])
+
+
+def _oc_sum(balance: list[dict], oc: str = "BRL") -> Decimal | None:
+    """The operating-currency part of a raw balance; None when there is none."""
+    parts = [Decimal(b["number"]) for b in balance if b["currency"] == oc]
+    return sum(parts, Decimal(0)) if parts else None
+
+
+def _value(node: dict) -> Decimal | None:
+    return Decimal(node["value"]) if node["value"] is not None else None
+
+
+class TestAccountsConversionLens:
+    """``GET /api/accounts?conversion=`` adds ``value`` / ``other`` per node.
+
+    ``value`` is the subtree total in the operating currency as seen through
+    the lens (Fava's conversion, never Ledgr arithmetic); ``other`` is what the
+    lens could not bring across. ``balance`` — the raw positions — must not
+    change with the lens, so everything already built on it keeps working.
+    """
+
+    LENSES = ("units", "at_cost", "at_value")
+
+    def _tree(self, client: TestClient, **params: str) -> list[dict]:
+        r = client.get("/api/accounts", params=params)
+        assert r.status_code == 200, r.text
+        return r.json()["accounts"]
+
+    def test_every_node_carries_value_and_other(self, commodities_client: TestClient) -> None:
+        for node in _walk_nodes(self._tree(commodities_client)):
+            assert "value" in node and "other" in node
+            assert node["value"] is None or isinstance(node["value"], str)
+            for pos in node["other"]:
+                assert set(pos) == {"number", "currency"}
+
+    def test_default_lens_is_at_value(self, commodities_client: TestClient) -> None:
+        assert self._tree(commodities_client) == self._tree(
+            commodities_client, conversion="at_value"
+        )
+
+    def test_mixed_account_at_value_folds_fx_into_value(self, commodities_client: TestClient) -> None:
+        # Assets:Bank holds BRL cash and a USD balance. At market (USD 5.20 BRL
+        # in the fixture) the USD is brought into the BRL total; nothing is
+        # left over.
+        bank = _find_node(self._tree(commodities_client, conversion="at_value"), "Assets:Bank")
+        assert bank is not None
+        brl = _oc_sum(bank["balance"])
+        usd = sum(Decimal(b["number"]) for b in bank["balance"] if b["currency"] == "USD")
+        assert usd != 0, "fixture should leave a USD balance in Assets:Bank"
+        assert _value(bank) == brl + usd * Decimal("5.20")
+        assert bank["other"] == []
+
+    def test_held_at_cost_account_at_value_uses_market_price(self, commodities_client: TestClient) -> None:
+        broker = _find_node(
+            self._tree(commodities_client, conversion="at_value"), "Assets:Broker:PETR4"
+        )
+        assert broker is not None
+        units = sum(Decimal(b["number"]) for b in broker["balance"])
+        assert _value(broker) == units * Decimal("35.00")
+        assert broker["other"] == []
+
+    def test_at_cost_values_lots_at_their_basis(self, commodities_client: TestClient) -> None:
+        broker = _find_node(
+            self._tree(commodities_client, conversion="at_cost"), "Assets:Broker:PETR4"
+        )
+        assert broker is not None
+        basis = sum(Decimal(b["number"]) * Decimal(b["cost"]) for b in broker["balance"])
+        assert _value(broker) == basis
+        assert broker["other"] == []
+
+    def test_spend_account_at_cost_has_no_value_and_keeps_units(self, commodities_client: TestClient) -> None:
+        # USD bought `@ price` carries no cost, so the cost lens cannot value
+        # it: the leaf has no value at all, and the parent keeps its BRL total
+        # with the USD reported alongside.
+        tree = self._tree(commodities_client, conversion="at_cost")
+        usd = _find_node(tree, "Assets:Bank:USD")
+        assert usd is not None
+        assert usd["value"] is None
+        assert usd["other"] == [{"number": "-550.00", "currency": "USD"}]
+        bank = _find_node(tree, "Assets:Bank")
+        assert bank is not None
+        assert _value(bank) == _oc_sum(bank["balance"])
+        assert bank["other"] == [{"number": "-550.00", "currency": "USD"}]
+
+    def test_unconvertible_commodity_stays_in_other_under_every_lens(self, commodities_client: TestClient) -> None:
+        for lens in self.LENSES:
+            tree = self._tree(commodities_client, conversion=lens)
+            vac = _find_node(tree, "Assets:Vacation")
+            assert vac is not None
+            assert vac["value"] is None
+            assert vac["other"] == [{"number": "0.5", "currency": "VACDAY"}]
+            root = _find_node(tree, "Assets")
+            assert root is not None
+            assert {"number": "0.5", "currency": "VACDAY"} in root["other"]
+
+    def test_at_value_root_leaves_only_vacation_days_unvalued(self, commodities_client: TestClient) -> None:
+        root = _find_node(self._tree(commodities_client, conversion="at_value"), "Assets")
+        assert root is not None
+        assert root["value"] is not None
+        assert root["other"] == [{"number": "0.5", "currency": "VACDAY"}]
+
+    def test_units_lens_value_is_the_operating_currency_part(self, commodities_client: TestClient) -> None:
+        for node in _walk_nodes(self._tree(commodities_client, conversion="units")):
+            assert _value(node) == _oc_sum(node["balance"])
+            expected: dict[str, Decimal] = {}
+            for b in node["balance"]:
+                if b["currency"] != "BRL":
+                    expected[b["currency"]] = expected.get(b["currency"], Decimal(0)) + Decimal(b["number"])
+            assert {o["currency"]: Decimal(o["number"]) for o in node["other"]} == {
+                c: n for c, n in expected.items() if n != 0
+            }
+
+    def test_other_is_sorted_by_currency(self, commodities_client: TestClient) -> None:
+        root = _find_node(self._tree(commodities_client, conversion="units"), "Assets")
+        assert root is not None
+        currencies = [o["currency"] for o in root["other"]]
+        assert len(currencies) > 1
+        assert currencies == sorted(currencies)
+
+    def test_balance_is_identical_under_every_lens(self, commodities_client: TestClient) -> None:
+        def raw(tree: list[dict]) -> list[tuple[str, list[dict]]]:
+            return [(n["name"], n["balance"]) for n in _walk_nodes(tree)]
+
+        trees = [raw(self._tree(commodities_client, conversion=lens)) for lens in self.LENSES]
+        assert trees[0] == trees[1] == trees[2]
+
+    def test_currency_lens_states_value_in_that_currency(self, commodities_client: TestClient) -> None:
+        usd = _find_node(self._tree(commodities_client, conversion="USD"), "Assets:Bank:USD")
+        assert usd is not None
+        assert _value(usd) == Decimal("-550.00")
+        assert usd["other"] == []
+
+    def test_oc_only_ledger_is_lens_invariant(self, client: TestClient) -> None:
+        # Regression guard for the user's current, single-currency file: the
+        # lens must be invisible there.
+        baseline = self._tree(client)
+        for lens in self.LENSES:
+            tree = self._tree(client, conversion=lens)
+            assert tree == baseline
+            for node in _walk_nodes(tree):
+                assert node["other"] == []
+                assert _value(node) == _oc_sum(node["balance"])
+
+    def test_garbage_lens_is_a_400(self, client: TestClient) -> None:
+        r = client.get("/api/accounts", params={"conversion": "bananas"})
+        assert r.status_code == 400
+        assert "conversion" in r.json()["detail"]
