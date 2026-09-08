@@ -17,6 +17,9 @@ option "operating_currency" "BRL"
   asset-class: "commodity"
 2020-01-01 commodity VACDAY
   name: "Accrued vacation days"
+2020-01-01 commodity ITUB4
+  name: "Itau Unibanco PN"
+  asset-class: "equity"
 
 ; The 5th field of `open` is the booking method — how Beancount picks the lot
 ; when a reduction does not name one.
@@ -30,6 +33,11 @@ option "operating_currency" "BRL"
   ledgr-type: "investment"
 2020-01-01 open Assets:Vacation        VACDAY
   ledgr-type: "receivable"
+; Brazilian average cost (PLAN-commodities-ux §2.3): booking NONE, so Beancount
+; checks nothing and never reduces a lot — a sale appends a negative position
+; next to the buys. One broker account, no currency constraint, many assets.
+2020-01-01 open Assets:XP  "NONE"
+  ledgr-type: "investment"
 2020-01-01 open Income:Salary          BRL
 2020-01-01 open Income:VacationAccrued VACDAY
 2020-01-01 open Expenses:VacationTaken VACDAY
@@ -111,7 +119,25 @@ option "operating_currency" "BRL"
   Assets:Bank:USD          1850.00 USD
   Income:Gains
 
+; ── Average cost under booking NONE ─────────────────────────────────
+; Two lots at 33 and 37 → weighted average 35.00. The sale names that average
+; as its cost (Ledgr pre-fills it; check_average_cost would guard it) and
+; Beancount, checking nothing, appends -50 ITUB4 {35.00} beside the two buys.
+2020-02-15 * "XP" "Buy ITUB4 lot 1"
+  Assets:XP                  100 ITUB4 {33.00 BRL}
+  Assets:Bank:Checking   -3300.00 BRL
+
+2020-03-15 * "XP" "Buy ITUB4 lot 2"
+  Assets:XP                  100 ITUB4 {37.00 BRL}
+  Assets:Bank:Checking   -3700.00 BRL
+
+2020-10-15 * "XP" "Sell 50 ITUB4 at average cost"
+  Assets:XP                  -50 ITUB4 {35.00 BRL} @ 40.00 BRL
+  Assets:Bank:Checking    2000.00 BRL
+  Income:Gains
+
 ; ── Market prices ───────────────────────────────────────────────────
 2020-12-31 price PETR4    35.00 BRL
+2020-12-31 price ITUB4    38.00 BRL
 2020-12-31 price USD       5.20 BRL
 2020-12-31 price XAU    1900.00 USD
