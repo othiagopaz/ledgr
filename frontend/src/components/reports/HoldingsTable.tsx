@@ -1,14 +1,20 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchHoldings, fetchCommodities } from "../../api/client";
+import { fetchHoldings, fetchCommodities, fetchPriceHistory } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
+import { useCommoditiesUi } from "../../stores/commoditiesUiStore";
 import { useFilterParams } from "../../hooks/useFilterParams";
-import { formatAmount, formatDateShort, getLocale } from "../../utils/format";
+import { formatAmount, formatDateFull, formatDateShort, getLocale } from "../../utils/format";
 import {
   isPriceStale, priceAgeTitle, formatUnits, formatPct, signClassOf,
   lotTotalCost, hasExpandableLots,
 } from "../../utils/holdings";
+import PriceChart from "./PriceChart";
+import PriceModal from "../commodities/PriceModal";
 import type { HoldingPosition } from "../../types";
+
+/** Columns in the holdings table — the expanded detail row spans them all. */
+const COL_COUNT = 9;
 
 function money(value: string | null | undefined, currency: string): string {
   if (value == null) return "—";
@@ -19,12 +25,16 @@ function money(value: string | null | undefined, currency: string): string {
 /**
  * Holdings — one row per (account, commodity) that is not the operating
  * currency (PLAN-commodities-ux §3.2, contract §4.6). Everything is computed
- * server-side by Beancount/Fava; this table only lays it out.
+ * server-side by Beancount/Fava; this table only lays it out. A row expands
+ * into the commodity's price history (chart + Add price) and, when the
+ * booking keeps them, its lots.
  */
 export default function HoldingsTable() {
   const currency = useAppStore((s) => s.operatingCurrency);
   const viewMode = useAppStore((s) => s.viewMode);
   const openComposer = useAppStore((s) => s.openComposer);
+  const openPriceModal = useCommoditiesUi((s) => s.openPriceModal);
+  const priceModalOpen = useCommoditiesUi((s) => s.priceModalOpen);
   const filters = useFilterParams();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -73,7 +83,6 @@ export default function HoldingsTable() {
 
   const rowKey = (p: HoldingPosition) => `${p.account}|${p.commodity}`;
   const toggle = (p: HoldingPosition) => {
-    if (!hasExpandableLots(p)) return;
     const key = rowKey(p);
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -137,22 +146,18 @@ export default function HoldingsTable() {
           <tbody>
             {data.positions.map((p) => {
               const key = rowKey(p);
-              const expandable = hasExpandableLots(p);
-              const isOpen = expandable && expanded.has(key);
               const meta = catalog.get(p.commodity);
-              const stale = isPriceStale(p.price_age_days);
-              const costCcy = p.cost_currency ?? oc;
               return (
                 <HoldingRows
                   key={key}
                   p={p}
-                  expandable={expandable}
-                  isOpen={isOpen}
+                  isOpen={expanded.has(key)}
                   onToggle={() => toggle(p)}
+                  onAddPrice={() => openPriceModal(p.commodity)}
                   name={meta?.name ?? null}
                   precision={meta?.precision ?? null}
-                  stale={stale}
-                  costCcy={costCcy}
+                  stale={isPriceStale(p.price_age_days)}
+                  costCcy={p.cost_currency ?? oc}
                   oc={oc}
                   locale={locale}
                 />
@@ -176,15 +181,17 @@ export default function HoldingsTable() {
           </tbody>
         </table>
       </div>
+
+      {priceModalOpen && <PriceModal />}
     </div>
   );
 }
 
 interface HoldingRowsProps {
   p: HoldingPosition;
-  expandable: boolean;
   isOpen: boolean;
   onToggle: () => void;
+  onAddPrice: () => void;
   name: string | null;
   precision: number | null;
   stale: boolean;
@@ -194,28 +201,28 @@ interface HoldingRowsProps {
 }
 
 function HoldingRows({
-  p, expandable, isOpen, onToggle, name, precision, stale, costCcy, oc, locale,
+  p, isOpen, onToggle, onAddPrice, name, precision, stale, costCcy, oc, locale,
 }: HoldingRowsProps) {
   const unrealisedTitle = p.held_at_cost ? undefined : "Held at price: no cost basis";
+  const showLots = isOpen && hasExpandableLots(p);
+  // The chart pairs the commodity with whatever it is priced in; a position
+  // without a price yet falls back to the operating currency.
+  const quote = p.price?.quote ?? oc;
 
   return (
     <>
       <tr
-        className={`report-tree-row holdings-row${expandable ? " report-tree-parent" : ""}`}
+        className={`report-tree-row report-tree-parent holdings-row${isOpen ? " open" : ""}`}
         onClick={onToggle}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); }
         }}
-        tabIndex={expandable ? 0 : undefined}
-        role={expandable ? "button" : undefined}
-        aria-expanded={expandable ? isOpen : undefined}
+        tabIndex={0}
+        role="button"
+        aria-expanded={isOpen}
       >
         <td className="report-table-account holdings-commodity" title={name ?? undefined}>
-          {expandable ? (
-            <span className="report-tree-toggle">{isOpen ? "▾" : "▸"}</span>
-          ) : (
-            <span className="report-tree-toggle" />
-          )}
+          <span className="report-tree-toggle">{isOpen ? "▾" : "▸"}</span>
           <span className="holdings-symbol">{p.commodity}</span>
           {p.booking && <span className="holdings-booking">{p.booking}</span>}
         </td>
@@ -259,7 +266,15 @@ function HoldingRows({
         <td className="report-table-num">{formatPct(p.weight_pct, locale).replace(/^\+/, "")}</td>
       </tr>
 
-      {isOpen && p.lots!.map((lot, i) => (
+      {isOpen && (
+        <tr className="holdings-detail-row">
+          <td colSpan={COL_COUNT}>
+            <PriceHistory base={p.commodity} quote={quote} oc={oc} onAddPrice={onAddPrice} />
+          </td>
+        </tr>
+      )}
+
+      {showLots && p.lots!.map((lot, i) => (
         <tr key={`${lot.date}-${lot.label ?? ""}-${i}`} className="report-tree-row holdings-lot-row">
           <td className="report-table-account holdings-lot-label" style={{ paddingLeft: "40px" }}>
             lot · {formatDateShort(lot.date, oc)}
@@ -276,5 +291,69 @@ function HoldingRows({
         </tr>
       ))}
     </>
+  );
+}
+
+interface PriceHistoryProps {
+  base: string;
+  quote: string;
+  oc: string;
+  onAddPrice: () => void;
+}
+
+/**
+ * The expanded row: one header line (pair, count, first → last, latest, Add
+ * price) and the full-width chart — or a one-line empty state that still
+ * offers Add price.
+ */
+function PriceHistory({ base, quote, oc, onAddPrice }: PriceHistoryProps) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["price-history", base, quote],
+    queryFn: () => fetchPriceHistory(base, quote),
+  });
+
+  if (isLoading) return <div className="price-history price-history--empty">Loading…</div>;
+
+  const prices = data?.prices ?? [];
+  if (prices.length === 0) {
+    return (
+      <div className="price-history price-history--empty">
+        No prices for {base}/{quote} yet —{" "}
+        <button className="dashboard-link-btn" onClick={onAddPrice}>
+          Add price
+        </button>
+        .
+      </div>
+    );
+  }
+
+  // Ascending by date from the API.
+  const first = prices[0];
+  const last = prices[prices.length - 1];
+
+  return (
+    <div className="price-history">
+      <div className="price-history-head">
+        <span className="price-history-title">
+          {base} · {quote}
+        </span>
+        <span className="price-history-meta">
+          {prices.length} {prices.length === 1 ? "price" : "prices"}
+        </span>
+        <span className="price-history-meta">
+          {prices.length === 1
+            ? formatDateFull(first.date, oc)
+            : `${formatDateFull(first.date, oc)} → ${formatDateFull(last.date, oc)}`}
+        </span>
+        <span className="price-history-latest">
+          latest {formatAmount(Number(last.number), quote)}{" "}
+          <span className="text-muted">{quote}</span>
+        </span>
+        <button className="btn-link price-history-action" onClick={onAddPrice}>
+          Add price
+        </button>
+      </div>
+      <PriceChart prices={prices} quote={quote} oc={oc} height={200} />
+    </div>
   );
 }

@@ -101,8 +101,9 @@ interface PriceChartProps {
 }
 
 /**
- * Full-width price history for one base/quote pair (Accounts → Commodities,
- * PLAN-commodities-ux §3.3). Same visual language as the report charts:
+ * Full-width price history for one base/quote pair, shown under an expanded
+ * Holdings row (Reports → Holdings, PLAN-commodities-ux §3.2). Same visual
+ * language as the report charts:
  * midnight line, dashed grid, 11px secondary ticks, a small card tooltip.
  * The x axis is a real time scale so a gap of two years reads as a gap, not
  * as one step; the y axis is padded and nice-rounded (never forced to zero).
@@ -131,7 +132,7 @@ export default function PriceChart({ prices, quote, oc, height = 240 }: PriceCha
   const single = points.length === 1;
 
   return (
-    <div className="commodities-chart" role="img" aria-label={`${points.length} prices in ${quote}`}>
+    <div className="price-chart" role="img" aria-label={`${points.length} prices in ${quote}`}>
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={points} margin={{ top: 12, right: 16, bottom: 4, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
@@ -195,9 +196,9 @@ function PriceTooltip({ active, payload, quote, oc }: PriceTooltipProps) {
   const point = payload[0]?.payload as ChartPoint | undefined;
   if (!point) return null;
   return (
-    <div className="commodities-chart-tooltip">
-      <div className="commodities-chart-tooltip-date">{formatDateFull(point.date, oc)}</div>
-      <div className="commodities-chart-tooltip-price">
+    <div className="price-chart-tooltip">
+      <div className="price-chart-tooltip-date">{formatDateFull(point.date, oc)}</div>
+      <div className="price-chart-tooltip-price">
         {formatAmount(point.price, quote)} <span className="text-muted">{quote}</span>
       </div>
     </div>

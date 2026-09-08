@@ -1,16 +1,21 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { enablePlugins, fetchCommodities, fetchPriceHistory } from "../../api/client";
+import { fetchAccountNames, fetchCommodities, setPlugins } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { useCommoditiesUi } from "../../stores/commoditiesUiStore";
-import { formatAmount, formatDateFull, formatDateShort } from "../../utils/format";
+import { formatAmount, formatDateShort } from "../../utils/format";
+import InlineAutocomplete from "../InlineAutocomplete";
 import PriceModal from "./PriceModal";
 import CommodityModal from "./CommodityModal";
-import PriceChart from "./PriceChart";
-import type { CommodityRow, CommoditiesResponse, LedgerPluginName } from "../../types";
+import type {
+  CommodityRow,
+  CommoditiesResponse,
+  LedgerPluginName,
+  SetPluginsInput,
+} from "../../types";
 
 // The four ledger plugins the commodity model leans on (PLAN §2.9), with the
-// one-line "why" shown next to each.
+// one-line "why" shown on each card.
 const PLUGINS: {
   key: LedgerPluginName;
   name: string;
@@ -19,7 +24,7 @@ const PLUGINS: {
   {
     key: "implicit_prices",
     name: "implicit_prices",
-    why: "Turns every @ price and {} cost into a price point, so market values follow your trades without typing prices by hand.",
+    why: "Every @ price and {} cost becomes a price point, so market values follow your trades without typing prices by hand.",
   },
   {
     key: "coherent_cost",
@@ -34,17 +39,21 @@ const PLUGINS: {
   {
     key: "currency_accounts",
     name: "currency_accounts",
-    why: "Books the FX result of spend accounts into Equity:CurrencyTrading so a coffee in USD is just an expense.",
+    why: "Books the FX result of spend accounts into one Equity account, so a coffee in USD is just an expense.",
   },
 ];
 
-/** Query keys whose numbers can move when a plugin lands (implicit_prices adds price points). */
-const PLUGIN_DEPENDENT_KEYS = ["commodities", "prices", "price-history", "holdings", "errors"];
+/** The backend's own default when `currency_trading_account` is omitted. */
+const DEFAULT_TRADING_ACCOUNT = "Equity:CurrencyTrading";
+
+/** Query keys whose numbers can move when a plugin lands or leaves (implicit_prices adds price points). */
+const PLUGIN_DEPENDENT_KEYS = ["commodities", "prices", "price-history", "holdings", "errors", "accounts"];
 
 /**
- * Accounts → Commodities (PLAN-commodities-ux §3.3): every commodity seen in
- * the ledger, declared or not, with holders, latest price and price history,
- * plus the two write actions (declare, price) and the plugin banner.
+ * Accounts → Commodities (PLAN-commodities-ux §3.3): the catalog of every
+ * commodity seen in the ledger, declared or not, plus the two write actions
+ * (declare, price) and the ledger-plugin toggles. Configuration and creation
+ * only — price history lives under Reports → Holdings.
  */
 export default function CommoditiesView() {
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
@@ -54,7 +63,6 @@ export default function CommoditiesView() {
   const commodityModalOpen = useCommoditiesUi((s) => s.commodityModalOpen);
 
   const [showOperating, setShowOperating] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["commodities"],
@@ -70,7 +78,7 @@ export default function CommoditiesView() {
 
   return (
     <div className="commodities-view">
-      {data && <PluginsBanner data={data} />}
+      {data && <PluginToggles data={data} />}
 
       <div className="commodities-toolbar">
         <span className="commodities-count">
@@ -110,20 +118,19 @@ export default function CommoditiesView() {
                 <th className="report-table-account">Symbol</th>
                 <th>Name</th>
                 <th className="report-table-num">Precision</th>
+                <th className="commodities-meta-col">Metadata</th>
                 <th>Holders</th>
                 <th className="report-table-num">Latest price</th>
-                <th className="report-table-num">Pairs</th>
+                <th className="report-table-num">Prices</th>
                 <th className="commodities-actions-col" />
               </tr>
             </thead>
             <tbody>
               {rows.map((c) => (
-                <CommodityRows
+                <CommodityRowView
                   key={c.symbol}
                   c={c}
                   oc={oc}
-                  isOpen={expanded === c.symbol}
-                  onToggle={() => setExpanded((prev) => (prev === c.symbol ? null : c.symbol))}
                   onDeclare={() => openCommodityModal(c.symbol)}
                   onPrice={() => openPriceModal(c.symbol)}
                 />
@@ -139,253 +146,336 @@ export default function CommoditiesView() {
   );
 }
 
-/**
- * The plugin banner (PLAN §2.9). Self-explanatory and actionable: each of the
- * four plugins shows on/off with its "why"; an off row gets Enable, and the
- * banner an Enable all. Once all four are on it collapses to one quiet line.
- * `POST /api/plugins/enable` writes the `plugin` lines into the top-level file.
- */
-function PluginsBanner({ data }: { data: CommoditiesResponse }) {
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const off = PLUGINS.filter((p) => !data.plugins[p.key]).map((p) => p.key);
-
-  const enable = async (names: LedgerPluginName[]) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await enablePlugins(names);
-      await Promise.all(
-        PLUGIN_DEPENDENT_KEYS.map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (off.length === 0) {
-    return (
-      <div
-        className="commodities-plugins commodities-plugins--all-on"
-        title={
-          data.currency_trading_account
-            ? `currency_accounts → ${data.currency_trading_account}`
-            : undefined
-        }
-      >
-        <span className="commodities-plugin-state">✓</span>
-        <span>All four ledger plugins are on</span>
-        {data.currency_trading_account && (
-          <span className="commodities-plugin-why">
-            currency_accounts → {data.currency_trading_account}
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <section className="commodities-plugins" aria-label="Ledger plugins">
-      <div className="commodities-plugins-head">
-        <div className="commodities-plugins-text">
-          <span className="commodities-plugins-title">Ledger plugins</span>
-          <span className="commodities-plugins-lede">
-            The commodity model relies on four Beancount plugins declared in the top-level ledger
-            file. {off.length === 1 ? "One is" : `${off.length} are`} off.
-          </span>
-        </div>
-        <button
-          className="btn btn-primary commodities-plugins-enable-all"
-          onClick={() => enable(off)}
-          disabled={busy}
-        >
-          {busy ? "Enabling…" : "Enable all"}
-        </button>
-      </div>
-      <ul className="commodities-plugins-list">
-        {PLUGINS.map((p) => {
-          const on = data.plugins[p.key];
-          return (
-            <li
-              key={p.key}
-              className={`commodities-plugin${on ? " on" : " off"}`}
-              title={on ? `plugin "beancount.plugins.${p.name}" is on` : undefined}
-            >
-              <span className="commodities-plugin-state">{on ? "✓" : "off"}</span>
-              <span className="commodities-plugin-name">{p.name}</span>
-              {!on && (
-                <button
-                  className="btn-link commodities-plugin-enable"
-                  onClick={() => enable([p.key])}
-                  disabled={busy}
-                >
-                  Enable
-                </button>
-              )}
-              <span className="commodities-plugin-why">
-                {p.why}
-                {on && p.key === "currency_accounts" && data.currency_trading_account && (
-                  <> → {data.currency_trading_account}</>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {error && (
-        <div className="commodities-plugins-error" role="alert">
-          {error}
-        </div>
-      )}
-    </section>
-  );
-}
-
-interface CommodityRowsProps {
+interface CommodityRowViewProps {
   c: CommodityRow;
   oc: string;
-  isOpen: boolean;
-  onToggle: () => void;
   onDeclare: () => void;
   onPrice: () => void;
 }
 
-function CommodityRows({ c, oc, isOpen, onToggle, onDeclare, onPrice }: CommodityRowsProps) {
-  const pairCount = c.pairs.reduce((n, p) => n + p.count, 0);
-  const quote = c.latest_price?.quote ?? c.pairs[0]?.quote ?? oc;
-  const hasPrices = c.pairs.length > 0;
-  const colCount = 7;
+/** One catalog row: what the commodity is, who holds it, and its latest price. */
+function CommodityRowView({ c, oc, onDeclare, onPrice }: CommodityRowViewProps) {
+  const priceCount = c.pairs.reduce((n, p) => n + p.count, 0);
+  const metadata = Object.entries(c.metadata);
 
   return (
-    <>
-      <tr
-        className={`report-tree-row commodities-row${hasPrices ? " report-tree-parent" : ""}${isOpen ? " open" : ""}`}
-        onClick={() => hasPrices && onToggle()}
-        onKeyDown={(e) => {
-          if (hasPrices && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onToggle(); }
-        }}
-        tabIndex={hasPrices ? 0 : undefined}
-        role={hasPrices ? "button" : undefined}
-        aria-expanded={hasPrices ? isOpen : undefined}
-      >
-        <td className="report-table-account commodities-symbol">
-          <span className="report-tree-toggle">{hasPrices ? (isOpen ? "▾" : "▸") : ""}</span>
-          <span className="holdings-symbol">{c.symbol}</span>
-          {c.is_operating && <span className="type-badge">operating</span>}
-          {!c.declared && <span className="type-badge type-badge--undeclared">not declared</span>}
-        </td>
-        <td className={c.name ? undefined : "text-muted"}>{c.name ?? "—"}</td>
-        <td className="report-table-num">{c.precision ?? <span className="text-muted">—</span>}</td>
-        <td>
-          {c.holders.length === 0 ? (
-            <span className="text-muted">—</span>
-          ) : (
-            <div className="commodities-holders">
-              {c.holders.map((h) => (
-                <span key={h} className="chip tag-chip" title={h}>
-                  {h.split(":").slice(-2).join(":")}
-                </span>
-              ))}
-            </div>
-          )}
-        </td>
-        <td className="report-table-num">
-          {c.latest_price ? (
-            <>
-              {formatAmount(Number(c.latest_price.number), c.latest_price.quote)}{" "}
-              <span className="text-muted">{c.latest_price.quote}</span>
-              <span className="holdings-price-date">{formatDateShort(c.latest_price.date, oc)}</span>
-            </>
-          ) : (
-            <span className="text-muted">—</span>
-          )}
-        </td>
-        <td className="report-table-num">
-          {pairCount > 0 ? (
-            <span title={c.pairs.map((p) => `${c.symbol}/${p.quote}: ${p.count}`).join("\n")}>
-              {pairCount}
-            </span>
-          ) : (
-            <span className="text-muted">—</span>
-          )}
-        </td>
-        <td className="commodities-actions-col" onClick={(e) => e.stopPropagation()}>
-          <button className="btn-link" onClick={onDeclare}>
-            {c.declared ? "Edit" : "Declare"}
-          </button>
-          {!c.is_operating && (
-            <button className="btn-link" onClick={onPrice}>Price</button>
-          )}
-        </td>
-      </tr>
-      {isOpen && (
-        <tr className="commodities-history-row">
-          <td colSpan={colCount}>
-            <PriceHistory base={c.symbol} quote={quote} oc={oc} onAddPrice={onPrice} />
-          </td>
-        </tr>
-      )}
-    </>
+    <tr className="commodities-row">
+      <td className="report-table-account commodities-symbol">
+        <span className="holdings-symbol">{c.symbol}</span>
+        {c.is_operating && <span className="type-badge">operating</span>}
+        {!c.declared && <span className="type-badge type-badge--undeclared">not declared</span>}
+      </td>
+      <td className={c.name ? undefined : "text-muted"}>{c.name ?? "—"}</td>
+      <td className="report-table-num">{c.precision ?? <span className="text-muted">—</span>}</td>
+      <td className="commodities-meta-col">
+        {metadata.length === 0 ? (
+          <span className="text-muted">—</span>
+        ) : (
+          <dl className="commodities-meta">
+            {metadata.map(([key, value]) => (
+              <div key={key} className="commodities-meta-item">
+                <dt>{key}</dt>
+                <dd title={value}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </td>
+      <td>
+        {c.holders.length === 0 ? (
+          <span className="text-muted">—</span>
+        ) : (
+          <div className="commodities-holders">
+            {c.holders.map((h) => (
+              <span key={h} className="chip tag-chip" title={h}>
+                {h.split(":").slice(-2).join(":")}
+              </span>
+            ))}
+          </div>
+        )}
+      </td>
+      <td className="report-table-num">
+        {c.latest_price ? (
+          <>
+            {formatAmount(Number(c.latest_price.number), c.latest_price.quote)}{" "}
+            <span className="text-muted">{c.latest_price.quote}</span>
+            <span className="holdings-price-date">{formatDateShort(c.latest_price.date, oc)}</span>
+          </>
+        ) : (
+          <span className="text-muted">—</span>
+        )}
+      </td>
+      <td className="report-table-num">
+        {priceCount > 0 ? (
+          <span title={c.pairs.map((p) => `${c.symbol}/${p.quote}: ${p.count}`).join("\n")}>
+            {priceCount}
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        )}
+      </td>
+      <td className="commodities-actions-col">
+        <button className="btn-link" onClick={onDeclare}>
+          {c.declared ? "Edit" : "Declare"}
+        </button>
+        {!c.is_operating && (
+          <button className="btn-link" onClick={onPrice}>Price</button>
+        )}
+      </td>
+    </tr>
   );
 }
 
-interface PriceHistoryProps {
-  base: string;
-  quote: string;
-  oc: string;
-  onAddPrice: () => void;
-}
+/**
+ * The plugin toggles (PLAN §2.9). Each of the four plugins is one card that is
+ * itself the switch: click (or Space / Enter) turns it on or off through
+ * `POST /api/plugins`, which rewrites the `plugin` lines in the top-level
+ * file. `currency_accounts` first asks which Equity account should carry the
+ * FX result, in a popover anchored to its card.
+ */
+function PluginToggles({ data }: { data: CommoditiesResponse }) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState<LedgerPluginName | null>(null);
+  const [error, setError] = useState<{ key: LedgerPluginName; message: string } | null>(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
-/** Expanded row: one header line and the full-width chart (or a one-line empty state). */
-function PriceHistory({ base, quote, oc, onAddPrice }: PriceHistoryProps) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["price-history", base, quote],
-    queryFn: () => fetchPriceHistory(base, quote),
-  });
+  /** Run one plugin change; resolves true on success, false (with the error shown inline) otherwise. */
+  const run = async (key: LedgerPluginName, body: SetPluginsInput): Promise<boolean> => {
+    setBusy(key);
+    setError(null);
+    try {
+      await setPlugins(body);
+      await Promise.all(
+        PLUGIN_DEPENDENT_KEYS.map((k) => queryClient.invalidateQueries({ queryKey: [k] })),
+      );
+      return true;
+    } catch (e) {
+      setError({ key, message: e instanceof Error ? e.message : String(e) });
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  };
 
-  if (isLoading) return <div className="report-loading">Loading...</div>;
+  const toggle = (key: LedgerPluginName) => {
+    if (busy) return;
+    if (data.plugins[key]) {
+      void run(key, { disable: [key] });
+      return;
+    }
+    if (key === "currency_accounts") {
+      setError(null);
+      setPopoverOpen(true);
+      return;
+    }
+    void run(key, { enable: [key] });
+  };
 
-  const prices = data?.prices ?? [];
-  if (prices.length === 0) {
-    return (
-      <div className="commodities-history commodities-history--empty">
-        No prices for {base}/{quote} yet —{" "}
-        <button className="dashboard-link-btn" onClick={onAddPrice}>
-          Add price
-        </button>
-        .
-      </div>
-    );
-  }
-
-  // Ascending by date from the API.
-  const first = prices[0];
-  const last = prices[prices.length - 1];
+  const submitTradingAccount = async (account: string) => {
+    const ok = await run("currency_accounts", {
+      enable: ["currency_accounts"],
+      currency_trading_account: account,
+    });
+    if (ok) setPopoverOpen(false);
+  };
 
   return (
-    <div className="commodities-history">
-      <div className="commodities-history-head">
-        <span className="commodities-history-title">
-          {base} · {quote}
-        </span>
-        <span className="commodities-history-meta">
-          {prices.length} {prices.length === 1 ? "price" : "prices"}
-        </span>
-        <span className="commodities-history-meta">
-          {prices.length === 1
-            ? formatDateFull(first.date, oc)
-            : `${formatDateFull(first.date, oc)} → ${formatDateFull(last.date, oc)}`}
-        </span>
-        <span className="commodities-history-latest">
-          latest {formatAmount(Number(last.number), quote)}{" "}
-          <span className="text-muted">{quote}</span>
-        </span>
+    <section className="plugin-cards" aria-label="Ledger plugins">
+      <div className="plugin-cards-label">Ledger plugins</div>
+      <div className="plugin-cards-grid">
+        {PLUGINS.map((p) => (
+          <PluginCard
+            key={p.key}
+            name={p.name}
+            why={p.why}
+            on={data.plugins[p.key]}
+            busy={busy === p.key}
+            locked={busy !== null && busy !== p.key}
+            error={error?.key === p.key ? error.message : null}
+            onToggle={() => toggle(p.key)}
+            account={
+              p.key === "currency_accounts"
+                ? { value: data.currency_trading_account, popoverOpen }
+                : null
+            }
+            onOpenPopover={() => { setError(null); setPopoverOpen(true); }}
+            onClosePopover={() => { setError(null); setPopoverOpen(false); }}
+            onSubmitPopover={submitTradingAccount}
+          />
+        ))}
       </div>
-      <PriceChart prices={prices} quote={quote} oc={oc} />
+    </section>
+  );
+}
+
+interface PluginCardProps {
+  name: string;
+  why: string;
+  on: boolean;
+  /** This card's request is in flight. */
+  busy: boolean;
+  /** Another card's request is in flight — one change at a time. */
+  locked: boolean;
+  error: string | null;
+  onToggle: () => void;
+  /** Only for `currency_accounts`: the configured account and the popover state. */
+  account: { value: string | null; popoverOpen: boolean } | null;
+  onOpenPopover: () => void;
+  onClosePopover: () => void;
+  onSubmitPopover: (account: string) => void;
+}
+
+function PluginCard({
+  name, why, on, busy, locked, error, onToggle, account,
+  onOpenPopover, onClosePopover, onSubmitPopover,
+}: PluginCardProps) {
+  const disabled = busy || locked;
+  const popoverOpen = account?.popoverOpen ?? false;
+
+  return (
+    <div className="plugin-card-wrap">
+      <div
+        role="switch"
+        aria-checked={on}
+        aria-disabled={disabled || undefined}
+        aria-label={`${name} plugin`}
+        tabIndex={disabled ? -1 : 0}
+        className={`plugin-card${on ? " on" : " off"}${busy ? " busy" : ""}`}
+        title={
+          busy
+            ? "Saving…"
+            : on
+              ? `plugin "beancount.plugins.${name}" is on — click to turn it off`
+              : `Click to add plugin "beancount.plugins.${name}" to the ledger`
+        }
+        onClick={() => { if (!disabled) onToggle(); }}
+        onKeyDown={(e) => {
+          // Only when the switch itself has focus — not the "change" button inside it.
+          if (e.target !== e.currentTarget) return;
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            if (!disabled) onToggle();
+          }
+        }}
+      >
+        <span className="plugin-card-head">
+          <span className="plugin-card-state" aria-hidden="true">
+            {busy ? "…" : on ? "✓" : ""}
+          </span>
+          <span className="plugin-card-name">{name}</span>
+        </span>
+        <span className="plugin-card-why">{why}</span>
+        {account && on && (
+          <span className="plugin-card-account">
+            <span className="plugin-card-account-name" title={account.value ?? undefined}>
+              {account.value ?? DEFAULT_TRADING_ACCOUNT}
+            </span>
+            <button
+              type="button"
+              className="btn-link plugin-card-change"
+              disabled={disabled}
+              onClick={(e) => { e.stopPropagation(); onOpenPopover(); }}
+            >
+              change
+            </button>
+          </span>
+        )}
+      </div>
+      {error && !popoverOpen && (
+        <div className="plugin-card-error" role="alert">{error}</div>
+      )}
+      {account && popoverOpen && (
+        <TradingAccountPopover
+          initial={account.value ?? DEFAULT_TRADING_ACCOUNT}
+          busy={busy}
+          error={error}
+          onCancel={onClosePopover}
+          onSubmit={onSubmitPopover}
+        />
+      )}
+    </div>
+  );
+}
+
+interface TradingAccountPopoverProps {
+  initial: string;
+  busy: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSubmit: (account: string) => void;
+}
+
+/**
+ * "Which Equity account carries the FX result?" — asked before
+ * `currency_accounts` is turned on, and again from "change" once it is. Typing
+ * a name that does not exist yet is fine: the backend opens the account.
+ */
+function TradingAccountPopover({ initial, busy, error, onCancel, onSubmit }: TradingAccountPopoverProps) {
+  const [value, setValue] = useState(initial);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const { data } = useQuery({
+    queryKey: ["account-names"],
+    queryFn: () => fetchAccountNames(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const equityAccounts = (data?.accounts ?? []).filter((a) => a.startsWith("Equity:"));
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  // Click outside closes, like the other dropdowns.
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onCancel();
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [onCancel]);
+
+  const trimmed = value.trim();
+  // The backend is the validator ("must be under Equity", 400 with a detail
+  // shown inline); the button only needs something to send.
+  const valid = trimmed.length > 0;
+  const submit = () => { if (!busy && valid) onSubmit(trimmed); };
+
+  return (
+    <div
+      ref={rootRef}
+      className="plugin-popover"
+      role="dialog"
+      aria-label="Currency trading account"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") { e.stopPropagation(); onCancel(); }
+      }}
+    >
+      <label className="plugin-popover-label">
+        Currency trading account
+        <InlineAutocomplete
+          value={value}
+          onChange={setValue}
+          options={equityAccounts}
+          placeholder={DEFAULT_TRADING_ACCOUNT}
+          inputRef={inputRef}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); submit(); }
+          }}
+        />
+      </label>
+      <div className="plugin-popover-help">
+        Both legs of every exchange are posted here; its market value is the FX result shown in Holdings.
+      </div>
+      {error && <div className="plugin-popover-error" role="alert">{error}</div>}
+      <div className="plugin-popover-actions">
+        <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || !valid}>
+          {busy ? "Enabling…" : "Enable"}
+        </button>
+      </div>
     </div>
   );
 }
