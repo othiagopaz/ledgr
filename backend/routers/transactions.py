@@ -359,13 +359,17 @@ def get_transactions(
     # carry the pre-period balance of every real account. When the caller
     # asks for a specific account+date window, sum the "S" postings on
     # that account so the frontend can seed the running balance correctly.
-    opening_balance = Decimal("0")
+    # Per currency: an account holding BRL, USD and PETR4 has three opening
+    # balances, and adding them would be a number in no currency at all.
+    oc = ledger.options["operating_currency"][0]
+    opening_balances: dict[str, Decimal] = {}
     if account and (from_date or to_date):
         for e in entries:
             if isinstance(e, data.Transaction) and e.flag == "S":
                 for p in e.postings:
                     if p.account == account and p.units:
-                        opening_balance += p.units.number
+                        cur = p.units.currency
+                        opening_balances[cur] = opening_balances.get(cur, Decimal("0")) + p.units.number
 
     # Exclude synthetic entries from clamp_opt() (flag "S") — those are
     # internal opening-balance entries, not real user transactions.
@@ -377,7 +381,12 @@ def get_transactions(
     return {
         "transactions": result,
         "count": len(result),
-        "opening_balance": str(opening_balance),
+        # Operating currency only — what every single-currency account meant
+        # by this field all along.
+        "opening_balance": str(opening_balances.get(oc, Decimal("0"))),
+        "opening_balances": {
+            cur: str(num) for cur, num in sorted(opening_balances.items()) if num != 0
+        },
     }
 
 

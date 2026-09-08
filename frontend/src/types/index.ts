@@ -71,7 +71,10 @@ export interface AccountsResponse {
 export interface TransactionsResponse {
   transactions: Transaction[];
   count: number;
+  /** Pre-window balance in the operating currency. */
   opening_balance: string;
+  /** Pre-window balance per commodity (`{"BRL": "...", "USD": "..."}`), zeros omitted. */
+  opening_balances?: Record<string, string>;
 }
 
 export interface PostingInput {

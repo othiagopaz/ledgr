@@ -133,6 +133,7 @@ export default function App() {
               account={selectedAccount}
               transactions={txnsQuery.data.transactions}
               openingBalance={txnsQuery.data.opening_balance}
+              openingBalances={txnsQuery.data.opening_balances}
               onMutated={handleMutated}
             />
           );
@@ -190,6 +191,7 @@ export default function App() {
         account={selectedAccount || null}
         transactions={txnsQuery.data?.transactions || []}
         openingBalance={txnsQuery.data?.opening_balance}
+        openingBalances={txnsQuery.data?.opening_balances}
       />
 
       {commandPaletteOpen && <CommandPalette />}

@@ -2814,3 +2814,42 @@ class TestAccountsOtherIsWhatIsHeld:
         # {1700 USD} cost does not chain to BRL under at_cost: the leftover is the gold itself.
         assert vault["other"] == [{"number": "1", "currency": "XAU"}]
         assert vault["value"] is None
+
+
+class TestOpeningBalancesPerCurrency:
+    """`opening_balances` keeps one number per commodity; `opening_balance` is OC only."""
+
+    def _client(self):
+        from fastapi.testclient import TestClient
+        from ledger import init_ledger
+        from main import app
+        import os
+        init_ledger(os.path.join(os.path.dirname(__file__), "fixtures", "commodities.beancount"))
+        return TestClient(app)
+
+    def test_usd_wallet(self):
+        body = self._client().get(
+            "/api/transactions?account=Assets:Bank:USD&from_date=2020-07-01&to_date=2020-12-31"
+        ).json()
+        # 1000 USD bought in May, 3400 USD spent on gold in June.
+        assert body["opening_balances"] == {"USD": "-2400.00"}
+        assert body["opening_balance"] == "0"
+
+    def test_share_account(self):
+        body = self._client().get(
+            "/api/transactions?account=Assets:Broker:PETR4&from_date=2020-08-01&to_date=2020-12-31"
+        ).json()
+        assert body["opening_balances"] == {"PETR4": "250"}
+        assert body["opening_balance"] == "0"
+
+    def test_brl_account_unchanged(self):
+        body = self._client().get(
+            "/api/transactions?account=Assets:Bank:Checking&from_date=2020-03-01&to_date=2020-12-31"
+        ).json()
+        assert body["opening_balances"] == {"BRL": body["opening_balance"]}
+        assert body["opening_balance"] != "0"
+
+    def test_absent_without_a_window(self):
+        body = self._client().get("/api/transactions?account=Assets:Bank:USD").json()
+        assert body["opening_balances"] == {}
+        assert body["opening_balance"] == "0"

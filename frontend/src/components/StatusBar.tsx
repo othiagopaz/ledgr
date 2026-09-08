@@ -1,16 +1,17 @@
 import type { Transaction } from "../types";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, amountSignClass, getLocale } from "../utils/format";
-import { formatUnits } from "../utils/holdings";
+import { formatUnits, summarizeUnits, type UnitPosition } from "../utils/holdings";
 import { useCommoditiesUi } from "../stores/commoditiesUiStore";
 
 interface StatusBarProps {
   account: string | null;
   transactions: Transaction[];
   openingBalance?: string;
+  openingBalances?: Record<string, string>;
 }
 
-export default function StatusBar({ account, transactions, openingBalance }: StatusBarProps) {
+export default function StatusBar({ account, transactions, openingBalance, openingBalances }: StatusBarProps) {
   const operatingCurrency = useAppStore((s) => s.operatingCurrency);
   const { tabs, activeTabId } = useAppStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -84,9 +85,32 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
     }
   }
 
-  // The opening balance is stated in the operating currency (see the router).
-  const opening = openingBalance && totalsCurrency === operatingCurrency ? parseFloat(openingBalance) : 0;
-  const totalBalance = opening + clearedSum + projectedSum;
+  // Opening balance in the totals currency (per-commodity from the API, the
+  // single OC figure as the fallback for an older payload).
+  const openingOf = (cur: string): number => {
+    if (openingBalances && Object.keys(openingBalances).length > 0) {
+      const n = parseFloat(openingBalances[cur] ?? "0");
+      return Number.isFinite(n) ? n : 0;
+    }
+    return cur === operatingCurrency && openingBalance ? parseFloat(openingBalance) : 0;
+  };
+  const totalBalance = openingOf(totalsCurrency) + clearedSum + projectedSum;
+
+  // The other commodities the account holds at the end of the window, listed
+  // compactly next to the operating-currency balance — the same treatment as
+  // the account tree's Balance cell.
+  const otherUnits: UnitPosition[] = [...currencies]
+    .concat(Object.keys(openingBalances ?? {}))
+    .filter((c, i, arr) => c !== totalsCurrency && arr.indexOf(c) === i)
+    .map((cur) => {
+      let sum = openingOf(cur);
+      for (const { posting } of postingsHere) {
+        if ((posting!.currency ?? operatingCurrency) === cur) sum += parseFloat(posting!.amount!);
+      }
+      return { currency: cur, number: String(Math.round(sum * 1e8) / 1e8) };
+    })
+    .filter((u) => parseFloat(u.number) !== 0);
+  const others = summarizeUnits(otherUnits, 2, getLocale(operatingCurrency));
 
   return (
     <div className="status-bar">
@@ -106,11 +130,14 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
           </span>
         </span>
         <span>|</span>
-        <span>
+        <span title={otherUnits.length > 0 ? others.full : undefined}>
           Balance:{" "}
           <span className={amountSignClass(totalBalance)}>
             {fmt(totalBalance)}
           </span>
+          {otherUnits.length > 0 && (
+            <span className="status-units"> · {others.line}</span>
+          )}
         </span>
         <span>|</span>
         <span>{transactions.length} txns</span>

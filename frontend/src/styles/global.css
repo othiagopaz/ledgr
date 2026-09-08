@@ -3910,3 +3910,6 @@ button.acct-edit:hover {
 .cx-fx-hint { flex-basis: 100%; color: var(--color-text-tertiary); }
 .cx-fx-hint code { font-size: 10.5px; }
 .cx-pv-fx { color: var(--color-text-tertiary); font-weight: 400; }
+
+/* Register status bar: the other commodities beside the operating-currency balance. */
+.status-bar .status-units { color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }

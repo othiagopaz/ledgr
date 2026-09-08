@@ -11,6 +11,8 @@ interface Props {
   account: string;
   transactions: Transaction[];
   openingBalance?: string;
+  /** Pre-window balance per commodity; seeds one running total each. */
+  openingBalances?: Record<string, string>;
   onMutated: () => void;
 }
 
@@ -48,7 +50,7 @@ function formatCostBasis(posting: ReturnType<typeof getAccountPosting>, currency
   return null;
 }
 
-export default function AccountRegister({ account, transactions, openingBalance, onMutated }: Props) {
+export default function AccountRegister({ account, transactions, openingBalance, openingBalances, onMutated }: Props) {
   const [deletingLineno, setDeletingLineno] = useState<number | null>(null);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
@@ -89,8 +91,21 @@ export default function AccountRegister({ account, transactions, openingBalance,
   // register has no other information about it.
   const running = new Map<string, number>();
   const decimals = new Map<string, number>();
-  const opening = openingBalance ? parseFloat(openingBalance) : 0;
-  if (opening !== 0) running.set(operatingCurrency, opening);
+  // One opening balance per commodity from the API; the single OC figure is
+  // the fallback for an older payload.
+  if (openingBalances && Object.keys(openingBalances).length > 0) {
+    for (const [cur, num] of Object.entries(openingBalances)) {
+      const n = parseFloat(num);
+      if (Number.isFinite(n) && n !== 0) {
+        running.set(cur, n);
+        const dot = num.indexOf(".");
+        decimals.set(cur, dot === -1 ? 0 : num.length - dot - 1);
+      }
+    }
+  } else {
+    const opening = openingBalance ? parseFloat(openingBalance) : 0;
+    if (opening !== 0) running.set(operatingCurrency, opening);
+  }
   const rows = sorted.map((txn) => {
     const posting = getAccountPosting(txn, account);
     const amount = posting?.amount ? parseFloat(posting.amount) : 0;
