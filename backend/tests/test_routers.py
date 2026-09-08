@@ -2581,3 +2581,43 @@ class TestOptionsCommodities:
         assert body["plugins"] == []
         assert isinstance(body["commodities"], list)
         assert "BRL" in body["commodities"]
+
+
+class TestUnitsAndCostPrecision:
+    """Quantities are never rounded; cost and price are padded to two places."""
+
+    from decimal import Decimal as _D
+
+    def _build(self, spec, oc="BRL"):
+        from routers.transactions import PostingIn, _build_bc_postings
+        return _build_bc_postings([PostingIn(**spec)], oc)[0]
+
+    def test_operating_currency_units_still_quantized(self):
+        p = self._build({"account": "Assets:Bank", "amount": "38.2", "currency": "BRL"})
+        assert str(p.units.number) == "38.20"
+
+    def test_non_oc_quantity_keeps_its_precision(self):
+        p = self._build({"account": "Assets:Crypto", "amount": "0.005", "currency": "BTC"})
+        assert str(p.units.number) == "0.005"
+
+    def test_non_oc_integer_quantity_is_padded_not_rounded(self):
+        p = self._build({"account": "Assets:Global", "amount": "1000", "currency": "USD"})
+        assert str(p.units.number) == "1000.00"
+
+    def test_cost_and_price_padded_to_two_places(self):
+        from beancount.parser import printer
+        from beancount.core import data
+        p = self._build({
+            "account": "Assets:XP", "amount": "100", "currency": "PETR4",
+            "cost": "33", "cost_currency": "BRL",
+            "price": "40.5", "price_currency": "BRL",
+        })
+        assert str(p.cost.number_per) == "33.00"
+        assert str(p.price.number) == "40.50"
+
+    def test_cost_with_more_precision_is_untouched(self):
+        p = self._build({
+            "account": "Assets:XP", "amount": "1", "currency": "XAU",
+            "cost": "1700.125", "cost_currency": "USD",
+        })
+        assert str(p.cost.number_per) == "1700.125"

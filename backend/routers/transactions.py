@@ -148,12 +148,14 @@ def _build_cost_spec(p: PostingIn) -> data.CostSpec | None:
 
     if p.cost is not None:
         return data.CostSpec(
-            p.cost, None, p.cost_currency, cost_date, p.cost_label, False
+            _at_least_two_places(p.cost), None, p.cost_currency,
+            cost_date, p.cost_label, False,
         )
     if p.cost_total is not None:
         return data.CostSpec(
             MISSING,  # type: ignore[arg-type]
-            p.cost_total, p.cost_currency, cost_date, p.cost_label, False,
+            _at_least_two_places(p.cost_total), p.cost_currency,
+            cost_date, p.cost_label, False,
         )
     # Lot identified by date and/or label only — resolved by booking.
     return data.CostSpec(
@@ -161,17 +163,47 @@ def _build_cost_spec(p: PostingIn) -> data.CostSpec | None:
     )
 
 
-def _build_bc_postings(postings: list[PostingIn]) -> list[data.Posting]:
-    """Convert Pydantic posting models to Beancount Posting objects."""
+_TWO_PLACES = Decimal("0.01")
+
+
+def _at_least_two_places(value: Decimal) -> Decimal:
+    """Pad to two decimals without ever dropping precision.
+
+    ``33`` → ``33.00``, ``5.2`` → ``5.20``, ``0.005`` stays ``0.005``. Used for
+    cost and price numbers and for non-operating-currency units: the printer
+    keeps whatever precision it is handed, and a bare ``{33 BRL}`` in the file
+    both looks wrong next to ``33.00 BRL`` and narrows the tolerance Beancount
+    infers for that currency. Rounding the other way is never safe here — a
+    quantity of ``0.005 BTC`` is not a monetary amount.
+    """
+    if value.as_tuple().exponent >= -2:
+        return value.quantize(_TWO_PLACES)
+    return value
+
+
+def _build_bc_postings(
+    postings: list[PostingIn], oc: str | None = None
+) -> list[data.Posting]:
+    """Convert Pydantic posting models to Beancount Posting objects.
+
+    Units in the operating currency (or when no OC is known) are quantized to
+    two places like every monetary amount Ledgr writes. Units in any other
+    commodity are a *quantity* — shares, ounces, satoshis — and are only padded,
+    never rounded.
+    """
     bc_postings: list[data.Posting] = []
     for p in postings:
         units = None
         price = None
         if p.amount is not None and p.currency:
-            units = amt_mod.Amount(quantize_amount(p.amount), p.currency)
+            if oc is None or p.currency == oc:
+                number = quantize_amount(p.amount)
+            else:
+                number = _at_least_two_places(p.amount)
+            units = amt_mod.Amount(number, p.currency)
         cost = _build_cost_spec(p)
         if p.price is not None and p.price_currency:
-            price = amt_mod.Amount(p.price, p.price_currency)
+            price = amt_mod.Amount(_at_least_two_places(p.price), p.price_currency)
         bc_postings.append(
             data.Posting(p.account, units, cost, price, None, None)
         )
@@ -402,7 +434,7 @@ def add_transaction(
 ) -> dict[str, Any]:
     """Add a new transaction via FavaLedger.file.insert_entries."""
     txn_date = datetime.date.fromisoformat(body.date)
-    bc_postings = _build_bc_postings(body.postings)
+    bc_postings = _build_bc_postings(body.postings, ledger.options["operating_currency"][0])
 
     balance_errors = _validate_balance(bc_postings, ledger.options)
     if balance_errors:
@@ -450,7 +482,7 @@ def edit_transaction(
         }
 
     txn_date = datetime.date.fromisoformat(body.date)
-    bc_postings = _build_bc_postings(body.postings)
+    bc_postings = _build_bc_postings(body.postings, ledger.options["operating_currency"][0])
 
     balance_errors = _validate_balance(bc_postings, ledger.options)
     if balance_errors:
