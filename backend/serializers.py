@@ -16,10 +16,16 @@ Rules (AGENTS.md §6):
 
 from __future__ import annotations
 
+import datetime
+import re
+from collections.abc import Collection, Iterable
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from beancount.core import data, inventory, realization
+from fava.beans.prices import FavaPriceMap
+from fava.core.conversion import AT_VALUE, convert_position, cost_or_value
+from fava.core.inventory import CounterInventory
 
 # Canonical ordering for the five account types in the account tree.
 ACCOUNT_TYPE_ORDER: dict[str, int] = {
@@ -486,3 +492,136 @@ def build_balance_tree(
             node = build_node(root)
             result = node["children"]
     return result
+
+
+# ------------------------------------------------------------------
+# Conversion lenses — Fava does the valuation, these adapt its output
+# ------------------------------------------------------------------
+#
+# Every report accepts ``conversion`` (PLAN-commodities-ux §4.7):
+#
+#   units     → raw units, no valuation at all
+#   at_cost   → held-at-cost positions collapse into their cost (Fava AT_COST)
+#   at_value  → market value in the operating currency (see convert_inventory)
+#   <CCY>     → Fava's currency conversion into that one currency
+#
+# Nothing here computes a price or a cost: the reducers are Fava's, the price
+# lookups are ``FavaPriceMap``'s.  These helpers only pick the lens, hand the
+# inventory to Fava, and turn the result into ``{currency: Decimal}``.
+
+CONVERSION_LENSES: tuple[str, ...] = ("units", "at_cost", "at_value")
+
+# Beancount's own currency grammar (``beancount.parser.lexer``).
+CURRENCY_RE = re.compile(r"^[A-Z][A-Z0-9'._-]{0,22}[A-Z0-9]$|^[A-Z]$")
+
+
+def collect_commodities(entries: Iterable[Any], options: dict[str, Any]) -> set[str]:
+    """Every commodity symbol the ledger has seen, declared or not.
+
+    Beancount 2 filled ``options_map["commodities"]`` from the parser;
+    Beancount 3 leaves it empty.  The display context is the modern equivalent
+    — the parser registers every ``number currency`` it reads — so it is the
+    primary source, completed with the symbols that never appear beside a
+    number (``open`` currency constraints, ``commodity`` declarations, price
+    pairs, the operating currency itself).
+    """
+    found: set[str] = set(options.get("operating_currency") or ())
+    dcontext = options.get("dcontext")
+    if dcontext is not None:
+        found.update(
+            c for c in getattr(dcontext, "ccontexts", {}) if CURRENCY_RE.match(c)
+        )
+    for entry in entries:
+        if isinstance(entry, data.Commodity):
+            found.add(entry.currency)
+        elif isinstance(entry, data.Open) and entry.currencies:
+            found.update(entry.currencies)
+        elif isinstance(entry, data.Price):
+            found.add(entry.currency)
+            found.add(entry.amount.currency)
+    return found
+
+
+def parse_conversion(value: str | None, known_currencies: Collection[str]) -> str | None:
+    """Normalize a ``conversion`` query value; ``None`` when it is garbage.
+
+    Accepts the three lenses and any currency the ledger knows.  Unknown
+    currencies are rejected rather than converted to nothing — a typo would
+    otherwise silently produce a report full of unconverted units.
+    """
+    if value is None:
+        return "at_value"
+    value = value.strip()
+    if value in CONVERSION_LENSES:
+        return value
+    if CURRENCY_RE.match(value) and value in known_currencies:
+        return value
+    return None
+
+
+def report_currency(conversion: str, oc: str) -> str:
+    """The currency a report's totals are stated in under ``conversion``.
+
+    The operating currency for the three lenses; the target currency itself
+    when the lens is a currency code.
+    """
+    return oc if conversion in CONVERSION_LENSES else conversion
+
+
+def to_counter_inventory(inv: Iterable[Any]) -> CounterInventory:
+    """Copy a Beancount ``Inventory`` (or any iterable of positions) into
+    Fava's ``CounterInventory`` so Fava's conversions can be applied to it."""
+    if isinstance(inv, CounterInventory):
+        return inv
+    counter = CounterInventory()
+    for pos in inv:
+        counter.add_position(pos)
+    return counter
+
+
+def convert_inventory(
+    inv: Iterable[Any] | CounterInventory,
+    conversion: str,
+    prices: FavaPriceMap,
+    date: datetime.date | None,
+    oc: str,
+) -> dict[str, Decimal]:
+    """Apply a conversion lens and return ``{currency: Decimal}``.
+
+    ``at_value`` is Fava's ``AT_VALUE`` — market price when one exists, the
+    **cost** when it does not, in the position's cost currency — followed by a
+    second pass that carries whatever is still not in the operating currency
+    across to it (``USD`` cash at the USD→BRL rate, gold valued in USD then
+    USD→BRL).  Fava's balance sheet stops after the first pass, which is right
+    for a multi-currency household but leaves a BRL user staring at a USD line
+    that adds up with nothing.  Anything with no price path at all (vacation
+    days) stays in its own currency, which is how it lands in ``other_totals``.
+
+    ``units``, ``at_cost`` and ``<CURRENCY>`` are passed straight to
+    ``fava.core.conversion.cost_or_value``.
+    """
+    counter = to_counter_inventory(inv)
+    if conversion == "at_value":
+        valued = AT_VALUE.apply(counter, prices, date)
+        result = valued.reduce(convert_position, oc, prices, date)
+    else:
+        result = cost_or_value(counter, conversion, prices, date)
+    return dict(result)
+
+
+def quantize_display(
+    value: Decimal, currency: str, precisions: dict[str, int] | None = None
+) -> Decimal:
+    """Round a *derived* value to the currency's display precision.
+
+    Only for numbers Ledgr itself derives — an average cost, a market value
+    chained through two rates, a percentage — which otherwise carry every
+    digit of the intermediate arithmetic.  Amounts read from the ledger are
+    never passed through here; they keep the precision the user wrote.
+
+    The precision is Fava's: the commodity's ``precision`` metadata when
+    declared, else the most common precision seen in the file for that
+    currency (``options["dcontext"]``), else 2.
+    """
+    places = (precisions or {}).get(currency, 2)
+    return value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)

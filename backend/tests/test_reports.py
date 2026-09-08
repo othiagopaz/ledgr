@@ -9,13 +9,19 @@ sign convention where credit accounts are negative).
 from __future__ import annotations
 
 import datetime
+import json
+import shutil
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
+from beancount import loader
 from beancount.core import data, realization
 from beancount.ops import summarize
+from fastapi.testclient import TestClient
 from fava.core import FavaLedger
 
+import ledger as ledger_mod
 from cashflow import compute_cashflow, date_to_period
 from routers import reports as reports_router
 from serializers import (
@@ -23,9 +29,13 @@ from serializers import (
     attach_other_currencies_to_report_tree,
     build_balance_tree,
     build_report_tree,
+    collect_commodities,
     decimal_to_report_number,
     format_other_balances,
+    parse_conversion,
 )
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 # ------------------------------------------------------------------
@@ -35,7 +45,11 @@ from serializers import (
 
 class TestBalanceSheet:
     @staticmethod
-    def _compute_balance_sheet(ledger: FavaLedger, as_of_date: str | None = None) -> dict:
+    def _compute_balance_sheet(
+        ledger: FavaLedger,
+        as_of_date: str | None = None,
+        conversion: str = "at_cost",
+    ) -> dict:
         """Compute the balance sheet through the **router's own** code path.
 
         Deliberately delegates rather than reimplementing. This helper used to
@@ -51,30 +65,60 @@ class TestBalanceSheet:
             cutoff = datetime.date.fromisoformat(as_of_date)
             entries = [e for e in entries if e.date <= cutoff]
         oc = ledger.options["operating_currency"][0]
-        return reports_router._compute_balance_sheet(entries, ledger.options, oc)
+        return reports_router._compute_balance_sheet(
+            entries,
+            ledger.options,
+            oc,
+            conversion=conversion,
+            prices=ledger.prices,
+            precisions=ledger.format_decimal.precisions,
+        )
 
-    def test_accounting_equation(self, ledger: FavaLedger) -> None:
+    @staticmethod
+    def _assert_equation(result: dict) -> None:
+        """``A + L + E == unrealized_gains`` (Beancount signs: credits negative).
+
+        At cost ``unrealized_gains`` is ``0.00`` and this is the classic
+        ``A + L + E = 0``.  At market value the books do not close on their own
+        — nobody posted the market move — and the report says by how much;
+        in the positive convention the UI shows, ``A == L + E + unrealised``.
+        """
+        t = result["totals"]
+        total = t["assets"] + t["liabilities"] + t["equity"]
+        unrealized = float(Decimal(result["unrealized_gains"]))
+        assert total == pytest.approx(unrealized, abs=0.01), (
+            f"Accounting equation violated under {result['conversion']}: "
+            f"A={t['assets']} + L={t['liabilities']} + E={t['equity']} = {total}, "
+            f"unrealized_gains={result['unrealized_gains']}"
+        )
+
+    @pytest.mark.parametrize("conversion", ["at_cost", "at_value"])
+    def test_accounting_equation(self, ledger: FavaLedger, conversion: str) -> None:
         """The fundamental accounting invariant: A + L + E = 0.
 
         After ``cap_opt()`` closes Income/Expenses into Equity, the three
-        permanent account types must sum to zero.
+        permanent account types must sum to zero — plus the computed
+        unrealised gains when the sheet is stated at market.
         """
-        result = self._compute_balance_sheet(ledger)
-        t = result["totals"]
-        total = t["assets"] + t["liabilities"] + t["equity"]
-        assert total == pytest.approx(0.0, abs=0.01), (
-            f"Accounting equation violated: "
-            f"A={t['assets']} + L={t['liabilities']} + E={t['equity']} = {total}"
-        )
+        result = self._compute_balance_sheet(ledger, conversion=conversion)
+        self._assert_equation(result)
+        if conversion == "at_cost":
+            assert result["unrealized_gains"] == "0.00"
 
+    @pytest.mark.parametrize("conversion", ["at_cost", "at_value"])
     def test_accounting_equation_cashflow_fixture(
-        self, cashflow_ledger: FavaLedger
+        self, cashflow_ledger: FavaLedger, conversion: str
     ) -> None:
         """Invariant holds on a richer fixture too."""
-        result = self._compute_balance_sheet(cashflow_ledger)
-        t = result["totals"]
-        total = t["assets"] + t["liabilities"] + t["equity"]
-        assert total == pytest.approx(0.0, abs=0.01)
+        result = self._compute_balance_sheet(cashflow_ledger, conversion=conversion)
+        self._assert_equation(result)
+
+    def test_default_lens_is_cost_and_unchanged(self, ledger: FavaLedger) -> None:
+        """Calling without a lens is the historical at-cost report."""
+        default = self._compute_balance_sheet(ledger)
+        explicit = self._compute_balance_sheet(ledger, conversion="at_cost")
+        assert default == explicit
+        assert default["conversion"] == "at_cost"
 
     def test_has_expected_sections(self, ledger: FavaLedger) -> None:
         result = self._compute_balance_sheet(ledger)
@@ -251,14 +295,15 @@ class TestIncomeStatement:
 
 
 class TestMultiCurrencyBalanceSheet:
-    def test_oc_equation_holds(self, multicurrency_ledger: FavaLedger) -> None:
-        """A + L + E = 0 for operating currency only."""
-        result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
-        t = result["totals"]
-        total = t["assets"] + t["liabilities"] + t["equity"]
-        assert total == pytest.approx(0.0, abs=0.01), (
-            f"OC equation violated: A={t['assets']} L={t['liabilities']} E={t['equity']} = {total}"
+    @pytest.mark.parametrize("conversion", ["at_cost", "at_value"])
+    def test_oc_equation_holds(
+        self, multicurrency_ledger: FavaLedger, conversion: str
+    ) -> None:
+        """A + L + E = unrealised for operating currency only."""
+        result = TestBalanceSheet._compute_balance_sheet(
+            multicurrency_ledger, conversion=conversion
         )
+        TestBalanceSheet._assert_equation(result)
 
     def test_has_operating_currency(self, multicurrency_ledger: FavaLedger) -> None:
         result = TestBalanceSheet._compute_balance_sheet(multicurrency_ledger)
@@ -588,3 +633,219 @@ class TestConsolidatedAccountBalance:
         )
         assert {c["name"] for c in result["children"]} == {"A", "B"}
         assert result["series"][-1]["balance"] == pytest.approx(1250.00)
+
+
+# ------------------------------------------------------------------
+# Conversion lenses over HTTP (PLAN-commodities-ux §4.7)
+# ------------------------------------------------------------------
+
+LENSES = ("units", "at_cost", "at_value")
+
+REPORT_URLS = (
+    "/api/reports/net-worth?interval=yearly",
+    "/api/reports/income-statement?interval=yearly",
+    "/api/reports/balance-sheet?view_mode=combined",
+    "/api/reports/account-balance?account=Assets:Checking&interval=yearly",
+    "/api/reports/income-expense?interval=yearly",
+)
+
+
+def _http_client(tmp_path: Path, fixture: str) -> TestClient:
+    src = FIXTURES_DIR / fixture
+    dst = tmp_path / "test.beancount"
+    shutil.copy(src, dst)
+    ledger_mod.init_ledger(str(dst))
+    from main import app
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture()
+def oc_only_client(tmp_path: Path) -> TestClient:
+    """``minimal.beancount`` — every posting in the operating currency."""
+    return _http_client(tmp_path, "minimal.beancount")
+
+
+@pytest.fixture()
+def commodities_client(tmp_path: Path) -> TestClient:
+    return _http_client(tmp_path, "commodities.beancount")
+
+
+def _canonical(body: dict) -> str:
+    """The response minus the echoed lens, serialised deterministically."""
+    body = dict(body)
+    body.pop("conversion", None)
+    return json.dumps(body, sort_keys=True)
+
+
+class TestConversionLensesOnOcOnlyLedger:
+    """Regression guard for the user's current file: with nothing outside the
+    operating currency, the lens must be invisible — every report returns
+    byte-identical numbers under ``units``, ``at_cost``, ``at_value`` and the
+    operating currency itself."""
+
+    @pytest.mark.parametrize("url", REPORT_URLS)
+    def test_every_lens_is_identical(self, oc_only_client: TestClient, url: str) -> None:
+        baseline = oc_only_client.get(url)
+        assert baseline.status_code == 200, baseline.text
+        for lens in (*LENSES, "BRL"):
+            r = oc_only_client.get(f"{url}&conversion={lens}")
+            assert r.status_code == 200, r.text
+            assert _canonical(r.json()) == _canonical(baseline.json()), lens
+
+    def test_default_is_at_value(self, oc_only_client: TestClient) -> None:
+        body = oc_only_client.get("/api/reports/balance-sheet").json()
+        assert body["conversion"] == "at_value"
+        assert body["unrealized_gains"] == "0.00"
+        body = oc_only_client.get("/api/reports/income-statement").json()
+        assert body["conversion"] == "at_value"
+
+    @pytest.mark.parametrize("url", REPORT_URLS)
+    def test_garbage_lens_is_400(self, oc_only_client: TestClient, url: str) -> None:
+        for bad in ("garbage", "AT_VALUE", "XYZ"):
+            r = oc_only_client.get(f"{url}&conversion={bad}")
+            assert r.status_code == 400, (bad, r.text)
+
+
+class TestConversionLensesOnCommoditiesLedger:
+    """The fixture with lots, FX and vacation days, through the real endpoints.
+
+    Hand-derived (see ``test_commodities.py`` for the per-position numbers):
+    BRL cash 88760; PETR4 cost 1900 / market 2450; ITUB4 cost 5250 / market
+    5700; XAU cost 1700 USD / market 1900 USD; USD cash −550; USD→BRL 5.20.
+    """
+
+    @staticmethod
+    def _equation(body: dict) -> None:
+        t = body["totals"]
+        residual = Decimal(str(t["assets"])) + Decimal(str(t["liabilities"])) + Decimal(str(t["equity"]))
+        assert residual == pytest.approx(Decimal(body["unrealized_gains"]), abs=Decimal("0.01")), body
+
+    @pytest.mark.parametrize("lens", ["at_cost", "at_value", "USD"])
+    def test_balance_sheet_equation_holds_under_every_valued_lens(
+        self, commodities_client: TestClient, lens: str
+    ) -> None:
+        """``A == L + E + unrealized_gains`` — at cost the residual is zero;
+        at market (``at_value`` *or* a currency lens) it is the unrealised
+        gain, and the sheet still adds up."""
+        body = commodities_client.get(f"/api/reports/balance-sheet?conversion={lens}").json()
+        assert body["conversion"] == lens
+        self._equation(body)
+        if lens == "at_cost":
+            assert body["unrealized_gains"] == "0.00"
+        else:
+            assert Decimal(body["unrealized_gains"]) != 0
+
+    def test_balance_sheet_at_value_numbers(self, commodities_client: TestClient) -> None:
+        body = commodities_client.get("/api/reports/balance-sheet?conversion=at_value").json()
+        # 88760 + 2450 + 5700 + 9880 − 2860
+        assert body["totals"]["assets"] == pytest.approx(103930.0)
+        assert body["unrealized_gains"] == "2040.00"
+        # Only the commodity with no price path is left over.
+        assert [o["currency"] for o in body["other_totals"]["assets"]] == ["VACDAY"]
+
+    def test_unrealized_gains_match_the_holdings_total(self, commodities_client: TestClient) -> None:
+        """Two independent paths to the same number: the Balance Sheet's
+        residual and the Holdings table's sum of per-position gains."""
+        sheet = commodities_client.get("/api/reports/balance-sheet?conversion=at_value").json()
+        holdings = commodities_client.get("/api/holdings?conversion=at_value").json()
+        assert sheet["unrealized_gains"] == holdings["totals"]["unrealized"]
+
+    def test_balance_sheet_at_cost_keeps_unpriced_currency_in_other(
+        self, commodities_client: TestClient
+    ) -> None:
+        body = commodities_client.get("/api/reports/balance-sheet?conversion=at_cost").json()
+        # 88760 + 1900 + 5250; gold's cost is in USD and stays there at cost.
+        assert body["totals"]["assets"] == pytest.approx(95910.0)
+        other = {o["currency"]: o["amount"] for o in body["other_totals"]["assets"]}
+        assert other == {"USD": "1150.00", "VACDAY": "0.5"}
+
+    def test_balance_sheet_as_of_date_values_at_that_date(self, commodities_client: TestClient) -> None:
+        """Before any price directive exists ``at_value`` falls back to cost
+        (Fava's rule) and USD cash, having no price path yet, is left over."""
+        body = commodities_client.get(
+            "/api/reports/balance-sheet?conversion=at_value&to_date=2020-10-01"
+        ).json()
+        self._equation(body)
+        assert body["unrealized_gains"] == "0.00"
+        assert {o["currency"] for o in body["other_totals"]["assets"]} == {"USD", "VACDAY"}
+
+    def test_net_worth_no_longer_drops_non_oc_positions(self, commodities_client: TestClient) -> None:
+        def nw(lens: str) -> float:
+            body = commodities_client.get(
+                f"/api/reports/net-worth?interval=yearly&conversion={lens}"
+            ).json()
+            return body["series"][-1]["net_worth"]
+
+        assert nw("units") == pytest.approx(88760.0)      # historical: BRL cash only
+        assert nw("at_cost") == pytest.approx(95910.0)    # + shares at cost
+        assert nw("at_value") == pytest.approx(103930.0)  # + market, + USD at 5.20
+
+    def test_income_statement_carries_usd_gain_to_oc_at_value(
+        self, commodities_client: TestClient
+    ) -> None:
+        units = commodities_client.get(
+            "/api/reports/income-statement?interval=yearly&conversion=units"
+        ).json()
+        value = commodities_client.get(
+            "/api/reports/income-statement?interval=yearly&conversion=at_value"
+        ).json()
+        # BRL gains: 400 + 50 + 20 + 190 (FIFO) + 250 (ITUB4) = 910
+        assert units["net_income"]["2020"] == pytest.approx(910.0)
+        assert {o["currency"] for o in units["other_net_income"]} == {"USD", "VACDAY"}
+        # + the 150 USD gold gain at the year-end rate 5.20 = 780
+        assert value["net_income"]["2020"] == pytest.approx(1690.0)
+        assert [o["currency"] for o in value["other_net_income"]] == ["VACDAY"]
+
+    def test_income_expense_follows_the_lens(self, commodities_client: TestClient) -> None:
+        def income(lens: str) -> float:
+            body = commodities_client.get(
+                f"/api/reports/income-expense?interval=yearly&conversion={lens}"
+            ).json()
+            return body["series"][-1]["income"]
+
+        assert income("units") == pytest.approx(910.0)
+        assert income("at_value") == pytest.approx(1690.0)
+
+    def test_account_balance_units_vs_value(self, commodities_client: TestClient) -> None:
+        def balance(lens: str) -> float:
+            body = commodities_client.get(
+                "/api/reports/account-balance?account=Assets:Vault:XAU"
+                f"&interval=yearly&conversion={lens}"
+            ).json()
+            return body["series"][-1]["balance"]
+
+        assert balance("units") == pytest.approx(1.0)        # 1 XAU
+        assert balance("at_cost") == pytest.approx(0.0)      # cost is in USD, not BRL
+        assert balance("at_value") == pytest.approx(9880.0)  # 1900 USD × 5.20
+        assert balance("USD") == pytest.approx(1900.0)
+
+    def test_currency_lens_is_a_known_currency_only(self, commodities_client: TestClient) -> None:
+        assert commodities_client.get("/api/reports/net-worth?conversion=USD").status_code == 200
+        assert commodities_client.get("/api/reports/net-worth?conversion=EUR").status_code == 400
+
+
+class TestCollectCommodities:
+    def test_operating_currency_without_a_number_is_still_known(self) -> None:
+        """Beancount 3 leaves ``options["commodities"]`` empty; the set has to
+        be rebuilt — and must not lose an operating currency that only ever
+        appears in the option line."""
+        entries, errors, options = loader.load_string(
+            'option "operating_currency" "BRL"\n'
+            "2020-01-01 open Assets:A\n"
+            "2020-01-01 open Assets:B\n"
+            '2020-01-02 * "x"\n'
+            "  Assets:A   1 FOO {2 BAR}\n"
+            "  Assets:B   -2 BAR\n"
+            '2020-01-03 * "y"\n'
+            "  Assets:A   1 QUX @ 3 ZED\n"
+            "  Assets:B   -3 ZED\n"
+            "2020-01-04 price QUX 4 ONLYPRICE\n"
+        )
+        assert not errors
+        assert options["commodities"] == set()
+        known = collect_commodities(entries, options)
+        assert known == {"BRL", "FOO", "BAR", "QUX", "ZED", "ONLYPRICE"}
+        assert parse_conversion("BAR", known) == "BAR"
+        assert parse_conversion("EUR", known) is None
+        assert parse_conversion(None, known) == "at_value"
