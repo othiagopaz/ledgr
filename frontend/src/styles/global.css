@@ -3654,3 +3654,73 @@ button.acct-edit:hover {
 .commodity-modal-note code { font-family: var(--font-mono); font-size: 11px; }
 .commodity-modal input.invalid { border-color: var(--color-warning-fg); }
 /* ── end commodities (FE-reads) ── */
+
+/* ── account tree: multi-commodity (round 2) ── */
+/* The Balance column is two lines at most: the number under the conversion
+   lens, and below it — smaller, muted — the raw units the account holds
+   (`-550,00 USD · 70 PETR4`). A row that carries units gets a fixed, taller
+   height, so the second line lives inside its own row and never bleeds into
+   the neighbours; every other row keeps the compact height. The column is a
+   fixed width in header and rows alike, so a long units line clips with an
+   ellipsis (the full text is in the tooltip) instead of pushing the tree
+   sideways. Widened from 120px so `1.000,00 USD · 100 PETR4` fits. */
+.acct-bal,
+.acct-tree-col-bal { width: 150px; }
+.acct-row-multi { height: 36px; }
+.acct-row-top.acct-row-multi { height: 40px; }
+.acct-bal-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+}
+.acct-bal-primary { display: block; }
+.acct-bal-none { color: var(--color-text-tertiary); }
+.acct-bal-units {
+  display: block;
+  max-width: 100%;
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acct-bal-sep { margin: 0 4px; opacity: 0.7; }
+/* A unit the current lens could not value (no price, no cost — vacation days,
+   or USD cash under the cost lens): dotted underline and a tooltip, quiet
+   enough not to compete with the number above it. */
+.acct-bal-unit-unvalued {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--color-text-tertiary);
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+/* Register: the running balance gets the same two lines. The register has no
+   lens, so the primary line is the operating-currency total and the second
+   line the other commodities' units; an account that never touched the
+   operating currency shows its units as the primary line instead. */
+.register td.amount .bal-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  line-height: 1.2;
+}
+.register td.amount .bal-units {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+.register td.amount .bal-units-only {
+  font-size: inherit;
+  color: inherit;
+}
+/* ── end account tree: multi-commodity (round 2) ── */

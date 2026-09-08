@@ -3,6 +3,7 @@ import type { Transaction, TransactionInput } from "../types";
 import { addTransaction, editTransaction, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, formatDateFull, getLocale, formatInstallmentBadge } from "../utils/format";
+import { formatUnits } from "../utils/holdings";
 import { today } from "../utils/dateUtils";
 import InlineEditor from "./InlineEditor";
 
@@ -78,12 +79,45 @@ export default function AccountRegister({ account, transactions, openingBalance,
     (a, b) => a.date.localeCompare(b.date)
   );
 
-  let runningBalance = openingBalance ? parseFloat(openingBalance) : 0;
+  // One running total per commodity. An account that holds BRL, USD and
+  // PETR4 used to fold all three into a single float — 100 shares plus 100
+  // dollars plus the cash — which is not a balance in any currency. The
+  // Balance column shows the operating-currency total as the number and the
+  // other commodities' units on a second, muted line (the same treatment as
+  // the account tree). The opening balance is seeded into the operating
+  // currency: that is what it is for every single-currency account, and the
+  // register has no other information about it.
+  const running = new Map<string, number>();
+  const decimals = new Map<string, number>();
+  const opening = openingBalance ? parseFloat(openingBalance) : 0;
+  if (opening !== 0) running.set(operatingCurrency, opening);
   const rows = sorted.map((txn) => {
     const posting = getAccountPosting(txn, account);
     const amount = posting?.amount ? parseFloat(posting.amount) : 0;
-    runningBalance += amount;
-    return { txn, posting, amount, balance: runningBalance };
+    const currency = posting?.currency || operatingCurrency;
+    running.set(currency, (running.get(currency) ?? 0) + amount);
+    if (posting?.amount) {
+      const dot = posting.amount.indexOf(".");
+      const places = dot === -1 ? 0 : posting.amount.length - dot - 1;
+      decimals.set(currency, Math.max(decimals.get(currency) ?? 0, places));
+    }
+    const ocBalance = running.get(operatingCurrency);
+    const units = Array.from(running.entries())
+      .filter(([c]) => c !== operatingCurrency)
+      .map(([c, n]) => ({ currency: c, number: n.toFixed(decimals.get(c) ?? 0) }))
+      .filter((u) => Number(u.number) !== 0)
+      .sort((a, b) => a.currency.localeCompare(b.currency));
+    return {
+      txn,
+      posting,
+      amount,
+      balance: ocBalance ?? 0,
+      // False for an account that has never touched the operating currency
+      // (a USD wallet, a broker holding only shares): its balance *is* the
+      // units, so they take the primary line instead of a meaningless 0,00.
+      hasOc: ocBalance !== undefined,
+      units,
+    };
   });
 
   // Display oldest first, newest at bottom (above the new-row editor)
@@ -303,6 +337,14 @@ export default function AccountRegister({ account, transactions, openingBalance,
             const debitVal = row.amount > 0 ? formatAmount(row.amount, operatingCurrency) : "";
             const creditVal = row.amount < 0 ? formatAmount(Math.abs(row.amount), operatingCurrency) : "";
             const bal = formatAmount(row.balance, operatingCurrency);
+            const unitsText = row.units
+              .map((u) => `${formatUnits(u.number, null, getLocale(operatingCurrency))} ${u.currency}`)
+              .join(" · ");
+            const balSign = row.hasOc
+              ? row.balance >= 0 ? "positive" : "negative"
+              : row.units.length === 1
+                ? Number(row.units[0].number) >= 0 ? "positive" : "negative"
+                : "";
             const costBasis = formatCostBasis(row.posting, operatingCurrency);
             const hasTags = row.txn.tags.length > 0;
             const hasLinks = row.txn.links.length > 0;
@@ -376,8 +418,17 @@ export default function AccountRegister({ account, transactions, openingBalance,
                 <td className={`num amount ${row.amount < 0 ? "negative" : ""}`}>
                   {creditVal}
                 </td>
-                <td className={`num amount ${row.balance >= 0 ? "positive" : "negative"}`}>
-                  {bal}
+                <td className={`num amount ${balSign}`}>
+                  {row.units.length === 0 ? (
+                    bal
+                  ) : row.hasOc ? (
+                    <span className="bal-stack">
+                      <span>{bal}</span>
+                      <span className="bal-units" title={unitsText}>{unitsText}</span>
+                    </span>
+                  ) : (
+                    <span className="bal-units bal-units-only" title={unitsText}>{unitsText}</span>
+                  )}
                 </td>
                 <td className="actions" onClick={(e) => e.stopPropagation()}>
                   {row.txn.lineno != null && (

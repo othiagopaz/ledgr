@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -73,11 +73,19 @@ def serialize_inventory(inv: inventory.Inventory) -> list[dict[str, Any]]:
 _INTERNAL_META_KEYS = frozenset({"filename", "lineno", "ledgr-type"})
 
 
+# Reduces a subtree inventory under a conversion lens into ``(value, other)``:
+# the total in the report currency as a string (``None`` when nothing in the
+# inventory converts) and the positions that stayed outside it. See
+# ``value_and_other``.
+Valuer = Callable[[inventory.Inventory], tuple[str | None, list[dict[str, Any]]]]
+
+
 def serialize_account_node(
     real_acct: realization.RealAccount,
     opens_map: dict[str, data.Open] | None = None,
     closes_map: dict[str, data.Close] | None = None,
     posting_counts: dict[str, int] | None = None,
+    valuer: Valuer | None = None,
 ) -> dict[str, Any]:
     """Recursively serialize a ``RealAccount`` into a JSON-friendly dict.
 
@@ -88,10 +96,14 @@ def serialize_account_node(
     ``posting_counts`` reports how many postings name the account — the account
     list uses both to keep a large catalog of long-dead accounts readable.
 
+    ``valuer`` adds ``value`` / ``other`` — the subtree balance seen through a
+    conversion lens (PLAN-commodities-ux §2.7). ``balance`` is never touched by
+    it: it stays the raw positions, lot by lot, whatever the lens.
+
     Returns the shape expected by ``AccountNode`` on the frontend.
     """
     children = [
-        serialize_account_node(c, opens_map, closes_map, posting_counts)
+        serialize_account_node(c, opens_map, closes_map, posting_counts, valuer)
         for c in real_acct.values()
     ]
     children.sort(key=lambda n: n["name"])
@@ -128,7 +140,7 @@ def serialize_account_node(
         c.get("subtree_posting_count", 0) for c in children
     )
 
-    return {
+    node: dict[str, Any] = {
         "name": acct_name,
         "type": acct_type,
         "ledgr_type": ledgr_type,
@@ -144,6 +156,9 @@ def serialize_account_node(
         "posting_count": own_postings,
         "subtree_posting_count": subtree_postings,
     }
+    if valuer is not None:
+        node["value"], node["other"] = valuer(balance)
+    return node
 
 
 # ------------------------------------------------------------------
@@ -614,6 +629,40 @@ def convert_inventory(
     else:
         result = cost_or_value(counter, conversion, prices, date)
     return dict(result)
+
+
+def value_and_other(
+    inv: Iterable[Any] | CounterInventory,
+    conversion: str,
+    prices: FavaPriceMap,
+    date: datetime.date | None,
+    oc: str,
+    precisions: dict[str, int] | None = None,
+) -> tuple[str | None, list[dict[str, Any]]]:
+    """Split an inventory seen through a lens into *the number* and *the rest*.
+
+    ``convert_inventory`` answers ``{currency: amount}``; this reads that answer
+    the way a single balance column has to: everything that landed in the
+    report currency is **the value** (quantized to display precision, since a
+    market value is derived), and every position the lens could not bring
+    across — vacation days under any lens, ``USD`` cash under ``at_cost``,
+    all non-OC units under ``units`` — is **other**, in the same
+    ``{"number", "currency"}`` shape as a raw balance.
+
+    ``value`` is ``None`` only when nothing converts (an empty inventory, or
+    one made solely of unconvertible positions) — the caller can tell "no
+    value" from "a value of zero".
+    """
+    rc = report_currency(conversion, oc)
+    converted = convert_inventory(inv, conversion, prices, date, oc)
+    total = converted.get(rc)
+    value = str(quantize_display(total, rc, precisions)) if total is not None else None
+    other = [
+        {"number": str(number), "currency": currency}
+        for currency, number in sorted(converted.items())
+        if currency != rc and number != 0
+    ]
+    return value, other
 
 
 def quantize_display(

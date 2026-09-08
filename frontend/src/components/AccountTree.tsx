@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { AccountNode, Balance } from "../types";
 import { useAppStore } from "../stores/appStore";
-import { formatAmount, amountSignClass } from "../utils/format";
+import { formatAmount, amountSignClass, getLocale } from "../utils/format";
+import { formatUnits } from "../utils/holdings";
 
 interface Props {
   accounts: AccountNode[];
@@ -10,42 +11,143 @@ interface Props {
   onEdit?: (node: AccountNode) => void;
 }
 
-function isZeroBalance(balances: Balance[]): boolean {
-  return balances.every((b) => parseFloat(b.number) === 0);
+// ── Balance column ───────────────────────────────────────────────────
+//
+// One node, two lines at most. The primary line is `value`: the subtree total
+// in the operating currency as the backend saw it through the conversion lens
+// (market, cost, or plain units). Under it, only when the account holds
+// something other than the operating currency, a single muted line lists the
+// raw units — `-550,00 USD · 70 PETR4` — so the reader sees what is *in* the
+// account, not only what it is worth. Units the lens could not value (no
+// price, no cost) are marked; they are the part of the picture the number
+// above does not include.
+
+/** One non-OC commodity in an account, aggregated across lots. */
+interface UnitLine {
+  currency: string;
+  /** Sum of the positions, as a decimal string with the widest precision seen. */
+  number: string;
+  /** True when the current lens could not bring this commodity into `value`. */
+  unvalued: boolean;
 }
 
-function BalanceDisplay({ balances }: { balances: Balance[] }) {
-  const operatingCurrency = useAppStore((s) => s.operatingCurrency);
+/** Count of decimals in a decimal string ("33.5" → 1, "100" → 0). */
+function decimalsOf(value: string): number {
+  const i = value.indexOf(".");
+  return i === -1 ? 0 : value.length - i - 1;
+}
 
-  if (balances.length === 0) return <span className="acct-bal">—</span>;
+/**
+ * The non-operating-currency side of a balance, one entry per commodity with
+ * lots folded together: a FIFO account carries `40 PETR4 {25}` and `30 PETR4
+ * {30}` as two positions, and the reader wants `70 PETR4`. The precision is
+ * the widest the ledger used for that commodity, so `100` stays `100` and
+ * `1000.00 USD` keeps its cents. Commodities that net to zero drop out.
+ */
+function unitLines(node: AccountNode, oc: string, markUnvalued: boolean): UnitLine[] {
+  const sums = new Map<string, { total: number; decimals: number }>();
+  for (const b of node.balance) {
+    if (b.currency === oc) continue;
+    const cur = sums.get(b.currency) ?? { total: 0, decimals: 0 };
+    cur.total += parseFloat(b.number);
+    cur.decimals = Math.max(cur.decimals, decimalsOf(b.number));
+    sums.set(b.currency, cur);
+  }
+  const unvalued = new Set((node.other ?? []).map((o) => o.currency));
+  const lines: UnitLine[] = [];
+  for (const [currency, { total, decimals }] of sums) {
+    const number = total.toFixed(decimals);
+    if (Number(number) === 0) continue;
+    lines.push({ currency, number, unvalued: markUnvalued && unvalued.has(currency) });
+  }
+  lines.sort((a, b) => a.currency.localeCompare(b.currency));
+  return lines;
+}
 
-  const byCurrency = new Map<string, number>();
+/** The operating-currency part of a raw balance; null when there is none. */
+function ocPart(balances: Balance[], oc: string): number | null {
+  let seen = false;
+  let total = 0;
   for (const b of balances) {
-    byCurrency.set(b.currency, (byCurrency.get(b.currency) || 0) + parseFloat(b.number));
+    if (b.currency !== oc) continue;
+    seen = true;
+    total += parseFloat(b.number);
+  }
+  return seen ? total : null;
+}
+
+/**
+ * The number for the primary line. `value` comes from the backend under the
+ * lens; a payload that predates it (no `value` key at all) falls back to the
+ * operating-currency part of the raw balance — what the tree showed before.
+ */
+function primaryValue(node: AccountNode, oc: string): number | null {
+  if (node.value === undefined) return ocPart(node.balance, oc);
+  return node.value === null ? null : parseFloat(node.value);
+}
+
+/**
+ * Nothing to show: no value (or a value of zero) AND no units. An account
+ * with 0 BRL and 100 PETR4 is not zero — the shares are the balance.
+ */
+function isZeroNode(node: AccountNode, oc: string): boolean {
+  const value = primaryValue(node, oc);
+  if (value !== null && value !== 0) return false;
+  return unitLines(node, oc, false).length === 0;
+}
+
+function BalanceDisplay({ node }: { node: AccountNode }) {
+  const operatingCurrency = useAppStore((s) => s.operatingCurrency);
+  const lens = useAppStore((s) => s.conversion);
+  const locale = getLocale(operatingCurrency);
+
+  const value = primaryValue(node, operatingCurrency);
+  // Under `units` nothing outside the operating currency is valued, by
+  // definition — marking every unit would only add noise. The marker earns
+  // its place on the lenses that value most things and leave a few behind.
+  const lines = unitLines(node, operatingCurrency, lens !== "units");
+
+  if (value === null && lines.length === 0) {
+    return <span className="acct-bal">—</span>;
   }
 
-  const entries = Array.from(byCurrency.entries());
-
-  if (entries.length === 1) {
-    const [currency, number] = entries[0];
-    const formatted = formatAmount(number, operatingCurrency);
-    return (
-      <span className={`acct-bal ${amountSignClass(number)}`}>
-        {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
-      </span>
-    );
-  }
+  const unitText = (line: UnitLine) =>
+    `${formatUnits(line.number, null, locale)} ${line.currency}`;
+  const unvaluedText = lines.filter((l) => l.unvalued).map(unitText);
+  const lineTitle =
+    lines.map(unitText).join(" · ") +
+    (unvaluedText.length > 0
+      ? `\n${unvaluedText.join(", ")} — not valued under this lens`
+      : "");
 
   return (
-    <span className="acct-bal acct-bal-multi">
-      {entries.map(([currency, number]) => {
-        const formatted = formatAmount(number, operatingCurrency);
-        return (
-          <span key={currency} className={`acct-bal-line ${amountSignClass(number)}`}>
-            {currency === operatingCurrency ? formatted : `${formatted} ${currency}`}
-          </span>
-        );
-      })}
+    <span className="acct-bal acct-bal-stack">
+      <span
+        className={`acct-bal-primary ${
+          value === null ? "acct-bal-none" : amountSignClass(value)
+        }`}
+      >
+        {value === null ? "—" : formatAmount(value, operatingCurrency)}
+      </span>
+      {lines.length > 0 && (
+        <span className="acct-bal-units" title={lineTitle}>
+          {lines.map((line, i) => (
+            <span key={line.currency}>
+              {i > 0 && (
+                <span className="acct-bal-sep" aria-hidden="true">
+                  ·
+                </span>
+              )}
+              <span
+                className={`acct-bal-unit${line.unvalued ? " acct-bal-unit-unvalued" : ""}`}
+                title={line.unvalued ? `${unitText(line)} — not valued under this lens` : undefined}
+              >
+                {unitText(line)}
+              </span>
+            </span>
+          ))}
+        </span>
+      )}
     </span>
   );
 }
@@ -87,6 +189,7 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
   });
   const [focusIndex, setFocusIndex] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const operatingCurrency = useAppStore((s) => s.operatingCurrency);
 
   const flatRows = flattenTree(accounts, expandedSet);
 
@@ -181,7 +284,10 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
       {flatRows.map((row, i) => {
         const isFocused = i === focusIndex;
         const isSelected = row.node.name === selectedAccount;
-        const zero = isZeroBalance(row.node.balance);
+        const zero = isZeroNode(row.node, operatingCurrency);
+        // A row holding non-OC units carries a second balance line, so it gets
+        // the taller fixed height; every other row keeps the compact one.
+        const multi = unitLines(row.node, operatingCurrency, false).length > 0;
         const shortName =
           row.depth === 0
             ? row.node.name
@@ -198,6 +304,7 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
             className={
               `acct-row` +
               `${row.depth === 0 ? " acct-row-top" : ""}` +
+              `${multi ? " acct-row-multi" : ""}` +
               `${isFocused ? " acct-row-focused" : ""}` +
               `${isSelected ? " acct-row-selected" : ""}` +
               `${zero && row.depth > 0 ? " acct-row-zero" : ""}` +
@@ -214,7 +321,7 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
             <span className="acct-indent" style={{ width: row.depth * 16 }} />
             {/* The chevron is its own button: clicking the row opens the
                 account's register (navigating away), so an expand folded into
-                the row click was invisible \u2014 the tree appeared keyboard-only.
+                the row click was invisible — the tree appeared keyboard-only.
                 stopPropagation keeps expanding and opening separate. */}
             {row.hasChildren ? (
               <button
@@ -240,7 +347,7 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
                 onDoubleClick={(e) => e.stopPropagation()}
               >
                 <span className="acct-toggle-glyph" aria-hidden="true">
-                  {row.isExpanded ? "\u25BE" : "\u25B8"}
+                  {row.isExpanded ? "▾" : "▸"}
                 </span>
               </button>
             ) : (
@@ -277,7 +384,7 @@ export default function AccountTree({ accounts, selectedAccount, onSelect, onEdi
                   unused
                 </span>
               )}
-            <BalanceDisplay balances={row.node.balance} />
+            <BalanceDisplay node={row.node} />
             {/* Explicit edit affordance. Double-click also works, but the row's
                 own onClick opens the register first, so the double-click was
                 effectively invisible — same trap the chevron had. Its own
