@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { fetchCommodities, fetchPriceHistory } from "../../api/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { enablePlugins, fetchCommodities, fetchPriceHistory } from "../../api/client";
 import { useAppStore } from "../../stores/appStore";
 import { useCommoditiesUi } from "../../stores/commoditiesUiStore";
 import { formatAmount, formatDateFull, formatDateShort } from "../../utils/format";
 import PriceModal from "./PriceModal";
 import CommodityModal from "./CommodityModal";
-import type { CommodityRow, CommoditiesResponse } from "../../types";
+import PriceChart from "./PriceChart";
+import type { CommodityRow, CommoditiesResponse, LedgerPluginName } from "../../types";
 
 // The four ledger plugins the commodity model leans on (PLAN §2.9), with the
-// one-line "why" shown when the loaded ledger does not have one.
+// one-line "why" shown next to each.
 const PLUGINS: {
-  key: keyof CommoditiesResponse["plugins"];
+  key: LedgerPluginName;
   name: string;
   why: string;
 }[] = [
@@ -36,6 +37,9 @@ const PLUGINS: {
     why: "Books the FX result of spend accounts into Equity:CurrencyTrading so a coffee in USD is just an expense.",
   },
 ];
+
+/** Query keys whose numbers can move when a plugin lands (implicit_prices adds price points). */
+const PLUGIN_DEPENDENT_KEYS = ["commodities", "prices", "price-history", "holdings", "errors"];
 
 /**
  * Accounts → Commodities (PLAN-commodities-ux §3.3): every commodity seen in
@@ -66,28 +70,7 @@ export default function CommoditiesView() {
 
   return (
     <div className="commodities-view">
-      {data && (
-        <div className="commodities-plugins" role="list" aria-label="Ledger plugins">
-          {PLUGINS.map((p) => {
-            const on = data.plugins[p.key];
-            return (
-              <div
-                key={p.key}
-                role="listitem"
-                className={`commodities-plugin${on ? " on" : " off"}`}
-                title={on ? `plugin "beancount.plugins.${p.name}" is on` : p.why}
-              >
-                <span className="commodities-plugin-state">{on ? "✓" : "off"}</span>
-                <span className="commodities-plugin-name">{p.name}</span>
-                {!on && <span className="commodities-plugin-why">{p.why}</span>}
-                {on && p.key === "currency_accounts" && data.currency_trading_account && (
-                  <span className="commodities-plugin-why">→ {data.currency_trading_account}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {data && <PluginsBanner data={data} />}
 
       <div className="commodities-toolbar">
         <span className="commodities-count">
@@ -153,6 +136,112 @@ export default function CommoditiesView() {
       {priceModalOpen && <PriceModal />}
       {commodityModalOpen && <CommodityModal />}
     </div>
+  );
+}
+
+/**
+ * The plugin banner (PLAN §2.9). Self-explanatory and actionable: each of the
+ * four plugins shows on/off with its "why"; an off row gets Enable, and the
+ * banner an Enable all. Once all four are on it collapses to one quiet line.
+ * `POST /api/plugins/enable` writes the `plugin` lines into the top-level file.
+ */
+function PluginsBanner({ data }: { data: CommoditiesResponse }) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const off = PLUGINS.filter((p) => !data.plugins[p.key]).map((p) => p.key);
+
+  const enable = async (names: LedgerPluginName[]) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await enablePlugins(names);
+      await Promise.all(
+        PLUGIN_DEPENDENT_KEYS.map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (off.length === 0) {
+    return (
+      <div
+        className="commodities-plugins commodities-plugins--all-on"
+        title={
+          data.currency_trading_account
+            ? `currency_accounts → ${data.currency_trading_account}`
+            : undefined
+        }
+      >
+        <span className="commodities-plugin-state">✓</span>
+        <span>All four ledger plugins are on</span>
+        {data.currency_trading_account && (
+          <span className="commodities-plugin-why">
+            currency_accounts → {data.currency_trading_account}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <section className="commodities-plugins" aria-label="Ledger plugins">
+      <div className="commodities-plugins-head">
+        <div className="commodities-plugins-text">
+          <span className="commodities-plugins-title">Ledger plugins</span>
+          <span className="commodities-plugins-lede">
+            The commodity model relies on four Beancount plugins declared in the top-level ledger
+            file. {off.length === 1 ? "One is" : `${off.length} are`} off.
+          </span>
+        </div>
+        <button
+          className="btn btn-primary commodities-plugins-enable-all"
+          onClick={() => enable(off)}
+          disabled={busy}
+        >
+          {busy ? "Enabling…" : "Enable all"}
+        </button>
+      </div>
+      <ul className="commodities-plugins-list">
+        {PLUGINS.map((p) => {
+          const on = data.plugins[p.key];
+          return (
+            <li
+              key={p.key}
+              className={`commodities-plugin${on ? " on" : " off"}`}
+              title={on ? `plugin "beancount.plugins.${p.name}" is on` : undefined}
+            >
+              <span className="commodities-plugin-state">{on ? "✓" : "off"}</span>
+              <span className="commodities-plugin-name">{p.name}</span>
+              {!on && (
+                <button
+                  className="btn-link commodities-plugin-enable"
+                  onClick={() => enable([p.key])}
+                  disabled={busy}
+                >
+                  Enable
+                </button>
+              )}
+              <span className="commodities-plugin-why">
+                {p.why}
+                {on && p.key === "currency_accounts" && data.currency_trading_account && (
+                  <> → {data.currency_trading_account}</>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {error && (
+        <div className="commodities-plugins-error" role="alert">
+          {error}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -236,7 +325,7 @@ function CommodityRows({ c, oc, isOpen, onToggle, onDeclare, onPrice }: Commodit
       {isOpen && (
         <tr className="commodities-history-row">
           <td colSpan={colCount}>
-            <PriceHistory base={c.symbol} quote={quote} oc={oc} />
+            <PriceHistory base={c.symbol} quote={quote} oc={oc} onAddPrice={onPrice} />
           </td>
         </tr>
       )}
@@ -244,59 +333,59 @@ function CommodityRows({ c, oc, isOpen, onToggle, onDeclare, onPrice }: Commodit
   );
 }
 
-function PriceHistory({ base, quote, oc }: { base: string; quote: string; oc: string }) {
+interface PriceHistoryProps {
+  base: string;
+  quote: string;
+  oc: string;
+  onAddPrice: () => void;
+}
+
+/** Expanded row: one header line and the full-width chart (or a one-line empty state). */
+function PriceHistory({ base, quote, oc, onAddPrice }: PriceHistoryProps) {
   const { data, isLoading } = useQuery({
     queryKey: ["price-history", base, quote],
     queryFn: () => fetchPriceHistory(base, quote),
   });
 
   if (isLoading) return <div className="report-loading">Loading...</div>;
-  if (!data || data.prices.length === 0) {
-    return <div className="report-empty">No prices for {base}/{quote}.</div>;
+
+  const prices = data?.prices ?? [];
+  if (prices.length === 0) {
+    return (
+      <div className="commodities-history commodities-history--empty">
+        No prices for {base}/{quote} yet —{" "}
+        <button className="dashboard-link-btn" onClick={onAddPrice}>
+          Add price
+        </button>
+        .
+      </div>
+    );
   }
 
-  // Ascending by date from the API; list newest first, sparkline oldest→newest.
-  const points = data.prices.map((p) => Number(p.number));
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const span = max - min || 1;
-  const W = 160;
-  const H = 32;
-  const path = points
-    .map((v, i) => {
-      const x = points.length === 1 ? W / 2 : (i / (points.length - 1)) * W;
-      const y = H - ((v - min) / span) * (H - 4) - 2;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const newestFirst = [...data.prices].reverse();
+  // Ascending by date from the API.
+  const first = prices[0];
+  const last = prices[prices.length - 1];
 
   return (
     <div className="commodities-history">
       <div className="commodities-history-head">
         <span className="commodities-history-title">
-          {base}/{quote} · {data.prices.length} {data.prices.length === 1 ? "price" : "prices"}
+          {base} · {quote}
         </span>
-        <svg
-          className="commodities-sparkline"
-          width={W}
-          height={H}
-          viewBox={`0 0 ${W} ${H}`}
-          aria-hidden="true"
-        >
-          <path d={path} fill="none" stroke="currentColor" strokeWidth={1.5} />
-        </svg>
+        <span className="commodities-history-meta">
+          {prices.length} {prices.length === 1 ? "price" : "prices"}
+        </span>
+        <span className="commodities-history-meta">
+          {prices.length === 1
+            ? formatDateFull(first.date, oc)
+            : `${formatDateFull(first.date, oc)} → ${formatDateFull(last.date, oc)}`}
+        </span>
+        <span className="commodities-history-latest">
+          latest {formatAmount(Number(last.number), quote)}{" "}
+          <span className="text-muted">{quote}</span>
+        </span>
       </div>
-      <ul className="commodities-history-list">
-        {newestFirst.map((p) => (
-          <li key={p.date}>
-            <span className="commodities-history-date">{formatDateFull(p.date, oc)}</span>
-            <span className="commodities-history-value">
-              {formatAmount(Number(p.number), quote)} {quote}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <PriceChart prices={prices} quote={quote} oc={oc} />
     </div>
   );
 }
