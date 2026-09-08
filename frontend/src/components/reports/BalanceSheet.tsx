@@ -32,6 +32,18 @@ export default function BalanceSheet() {
   if (!data) return <div className="report-empty">No data</div>;
 
   const { assets, liabilities, equity, totals, other_totals } = data;
+  // Computed, never posted (PLAN-commodities-ux §2.8): under the At-market
+  // lens, held-at-cost positions are worth more (or less) than their cost, and
+  // that difference has no account. Showing it under Equity is what makes the
+  // sheet close on screen. The API sends it as market − cost (a gain is
+  // positive, §4.7); this table keeps Beancount's raw signs, where Equity is a
+  // credit (negative), so the line is shown as −gain and Total Equity becomes
+  // E − gain: Liabilities + Equity then mirrors Total Assets exactly as it does
+  // for an OC-only ledger. Absent or "0.00" ⇒ no line at all.
+  const unrealizedGain = parseFloat(data.unrealized_gains ?? "0") || 0;
+  const hasUnrealized = Math.abs(unrealizedGain) >= 0.005;
+  const unrealizedCredit = -unrealizedGain;
+  const equityTotal = totals.equity + unrealizedCredit;
   const showOther = !!(
     other_totals &&
     (other_totals.assets?.length || other_totals.liabilities?.length || other_totals.equity?.length)
@@ -105,10 +117,25 @@ export default function BalanceSheet() {
             {equity.map((node) => (
               <BalanceTreeRows key={node.name} node={node} currency={currency} depth={0} showOther={showOther} defaultExpanded={expandAll} />
             ))}
+            {hasUnrealized && (
+              <tr
+                className="report-tree-row bs-unrealized-row"
+                title={`Computed from the latest prices — market value minus cost of positions held at cost: ${unrealizedGain >= 0 ? "a gain" : "a loss"} of ${formatAmount(Math.abs(unrealizedGain), currency)}. Shown with Equity's sign, like every other Equity balance here. Nothing is posted to the ledger.`}
+              >
+                <td className="report-table-account" style={{ paddingLeft: "16px" }}>
+                  Unrealised {unrealizedGain >= 0 ? "gains" : "losses"}
+                  <span className="bs-computed-tag">computed</span>
+                </td>
+                <td className={`report-table-num ${amountSignClass(unrealizedCredit)}`}>
+                  {formatAmount(unrealizedCredit, currency)}
+                </td>
+                {showOther && <td className="report-table-num report-table-other" />}
+              </tr>
+            )}
             <tr className="report-table-subtotal">
               <td>Total Equity</td>
-              <td className={`report-table-num ${amountSignClass(totals.equity)}`}>
-                {formatAmount(totals.equity, currency)}
+              <td className={`report-table-num ${amountSignClass(equityTotal)}`}>
+                {formatAmount(equityTotal, currency)}
               </td>
               {showOther && (
                 <td className="report-table-num report-table-other other-currencies">
@@ -120,8 +147,8 @@ export default function BalanceSheet() {
             {/* Grand total */}
             <tr className="report-table-grand-total">
               <td>Liabilities + Equity</td>
-              <td className={`report-table-num ${amountSignClass(totals.liabilities + totals.equity)}`}>
-                {formatAmount(totals.liabilities + totals.equity, currency)}
+              <td className={`report-table-num ${amountSignClass(totals.liabilities + equityTotal)}`}>
+                {formatAmount(totals.liabilities + equityTotal, currency)}
               </td>
               {showOther && <td className="report-table-num report-table-other" />}
             </tr>

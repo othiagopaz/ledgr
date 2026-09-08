@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAccountNames, fetchAccounts } from "../api/client";
-import type { AccountNode } from "../types";
+import type { AccountNode, Conversion } from "../types";
 import { useAppStore } from "../stores/appStore";
+import { useCommoditiesUi } from "../stores/commoditiesUiStore";
 
 interface PaletteItem {
   id: string;
@@ -270,6 +271,71 @@ export default function CommandPalette() {
       setCommandPaletteOpen(false);
     },
   });
+
+  // ── FE-reads: commodities ──
+  // Conversion lens (PLAN-commodities-ux §3.1). Mirrors the "Filter: …" entries.
+  const lenses: { id: string; label: string; value: Conversion }[] = [
+    { id: "action:value-units", label: "Value: Units", value: "units" },
+    { id: "action:value-at-cost", label: "Value: At cost", value: "at_cost" },
+    { id: "action:value-at-market", label: "Value: At market", value: "at_value" },
+  ];
+  for (const lens of lenses) {
+    items.push({
+      id: lens.id,
+      label: lens.label,
+      group: "Actions",
+      action: () => {
+        useAppStore.getState().setConversion(lens.value);
+        setCommandPaletteOpen(false);
+      },
+    });
+  }
+
+  // Holdings lives inside Reports; Commodities inside Accounts. The sub-tab is
+  // state in the commodities UI store, so the palette sets it and opens the tab.
+  items.push({
+    id: "view:holdings",
+    label: "View Holdings",
+    group: "Views",
+    action: () => {
+      openTab({ id: "reports", type: "report", label: "Reports" });
+      useCommoditiesUi.getState().setReportsTab("holdings");
+      setCommandPaletteOpen(false);
+    },
+  });
+  items.push({
+    id: "view:commodities",
+    label: "View Commodities",
+    group: "Views",
+    action: () => {
+      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      useCommoditiesUi.getState().setAccountsTab("commodities");
+      setCommandPaletteOpen(false);
+    },
+  });
+  items.push({
+    id: "action:new-commodity",
+    label: "New Commodity",
+    group: "Actions",
+    action: () => {
+      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      useCommoditiesUi.getState().setAccountsTab("commodities");
+      useCommoditiesUi.getState().openCommodityModal();
+      setCommandPaletteOpen(false);
+    },
+  });
+  items.push({
+    id: "action:update-price",
+    label: "Update Price",
+    group: "Actions",
+    action: () => {
+      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      useCommoditiesUi.getState().setAccountsTab("commodities");
+      useCommoditiesUi.getState().openPriceModal();
+      setCommandPaletteOpen(false);
+    },
+  });
+  // ── end FE-reads ──
 
   const filtered = query
     ? items.filter((item) => fuzzyMatch(item.label, query))

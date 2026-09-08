@@ -13,8 +13,12 @@ export function useFilterParams(): GlobalFilters {
   const account = useAppStore((s) => s.account);
   const tags = useAppStore((s) => s.tags);
   const payee = useAppStore((s) => s.payee);
+  // The conversion lens rides along with the filters so every report query
+  // key (they all include `filters`) refetches when it changes, and every
+  // fetcher sends it via `appendFilters`.
+  const conversion = useAppStore((s) => s.conversion);
 
   const { from_date, to_date } = resolvePeriodDates({ periodPreset, fromDate, toDate });
 
-  return { account, from_date, to_date, tags, payee };
+  return { account, from_date, to_date, tags, payee, conversion };
 }

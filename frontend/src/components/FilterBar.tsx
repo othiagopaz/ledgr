@@ -4,7 +4,7 @@ import { useAppStore } from '../stores/appStore';
 import { fetchAccountNames, fetchTags, fetchPayees } from '../api/client';
 import { resolvePeriodDates, shiftPeriod } from '../utils/dateUtils';
 import { CalendarIcon, AccountIcon, TagIcon, UserIcon, XIcon } from './icons';
-import type { PeriodPreset } from '../types';
+import type { PeriodPreset, Conversion } from '../types';
 
 // ---- Period presets ----
 
@@ -18,6 +18,57 @@ const PERIOD_PRESETS: { value: PeriodPreset; label: string }[] = [
   { value: 'ytd', label: 'YTD' },
   { value: 'all-time', label: 'All time' },
 ];
+
+// ---- Conversion lens (PLAN-commodities-ux §2.7) ----
+//
+// Not a filter: it changes how non-operating-currency positions are *valued*
+// in every report, never which entries are read. So it never counts towards
+// "Clear all" and never shows a ✕ — there is always exactly one lens active.
+
+const CONVERSIONS: { value: Conversion; label: (oc: string) => string; hint: string }[] = [
+  { value: 'units', label: () => 'Units', hint: 'Raw quantities — 1000 USD stays 1000 USD' },
+  { value: 'at_cost', label: () => 'At cost', hint: 'What you paid — lots at their cost basis' },
+  { value: 'at_value', label: (oc) => `At market (${oc})`, hint: 'Latest price — the default lens' },
+];
+
+/** Lucide-style "scale" glyph, local to the bar (mirrors components/icons). */
+function ValueIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={1.5} strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M12 3v18" />
+      <path d="M5 21h14" />
+      <path d="M3 7h18" />
+      <path d="M6 7l-3 7a3 3 0 0 0 6 0L6 7z" />
+      <path d="M18 7l-3 7a3 3 0 0 0 6 0l-3-7z" />
+    </svg>
+  );
+}
+
+function ConversionDropdown({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const conversion = useAppStore((s) => s.conversion);
+  const setConversion = useAppStore((s) => s.setConversion);
+  const oc = useAppStore((s) => s.operatingCurrency);
+
+  return (
+    <Dropdown open={open} onClose={onClose}>
+      <div className="filter-lens-list">
+        {CONVERSIONS.map((c) => (
+          <button
+            key={c.value}
+            className={`filter-preset-btn filter-lens-btn${conversion === c.value ? ' active' : ''}`}
+            onClick={() => { setConversion(c.value); onClose(); }}
+            title={c.hint}
+          >
+            <span>{c.label(oc)}</span>
+            <span className="filter-lens-hint">{c.hint}</span>
+          </button>
+        ))}
+      </div>
+    </Dropdown>
+  );
+}
 
 // ---- Shared dropdown wrapper ----
 
@@ -254,6 +305,8 @@ export default function FilterBar() {
   const clearFilter = useAppStore((s) => s.clearFilter);
   const clearFilters = useAppStore((s) => s.clearFilters);
   const hasActive = useAppStore((s) => s.hasActiveFilters);
+  const conversion = useAppStore((s) => s.conversion);
+  const operatingCurrency = useAppStore((s) => s.operatingCurrency);
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
@@ -422,6 +475,27 @@ export default function FilterBar() {
           items={payeesQuery.data?.payees ?? []}
           selected={payee}
           onSelect={handlePayeeSelect}
+        />
+      </div>
+
+      {/* Conversion lens. Rendered as a plain (never "active") button: the
+          current lens is always legible in the label, but it is not a filter,
+          so there is no ✕ and it does not feed "Clear all". */}
+      <div className="filter-btn-group">
+        <FilterButton
+          icon={<ValueIcon />}
+          label="Value"
+          active={false}
+          displayValue={
+            CONVERSIONS.find((c) => c.value === conversion)?.label(operatingCurrency) ?? null
+          }
+          title="Value — how positions in other currencies are valued"
+          onClick={() => toggleDropdown('conversion')}
+          onClear={() => {}}
+        />
+        <ConversionDropdown
+          open={openDropdown === 'conversion'}
+          onClose={() => setOpenDropdown(null)}
         />
       </div>
 

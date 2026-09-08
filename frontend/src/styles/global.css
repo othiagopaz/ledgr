@@ -3519,3 +3519,138 @@ button.acct-edit:hover {
 .acct-booking-row .form-field { flex: 0 0 260px; }
 .acct-booking-one { font-size: 11.5px; color: var(--color-text-secondary); line-height: 1.45; padding-top: 22px; }
 /* ── end composer commodity (FE-writes) ── */
+/* ── commodities (FE-reads) ─────────────────────────────────────────────────
+   Conversion lens in the FilterBar, Holdings report, Accounts → Commodities,
+   the two commodity modals. See docs/plans/PLAN-commodities-ux.md §3. */
+
+/* FilterBar lens dropdown: label + one-line hint per lens */
+.filter-lens-list { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 260px; }
+.filter-lens-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; }
+.filter-lens-hint { font-size: 10.5px; color: var(--text-muted); font-family: var(--font-sans); }
+.filter-preset-btn.active .filter-lens-hint { color: inherit; opacity: 0.75; }
+
+/* Balance Sheet: the computed unrealised line */
+.bs-unrealized-row td { font-style: italic; color: var(--color-text-secondary); }
+.bs-unrealized-row td.positive { color: var(--amount-positive); }
+.bs-unrealized-row td.negative { color: var(--amount-negative); }
+.bs-computed-tag {
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: middle;
+}
+
+/* Holdings */
+.holdings-empty div + div { margin-top: 6px; }
+.holdings-fx {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--color-bg-primary);
+}
+.holdings-fx-label { font-weight: 600; color: var(--color-text-primary); }
+.holdings-fx-account { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); }
+.holdings-fx-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.holdings-row:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.holdings-symbol { font-family: var(--font-mono); font-weight: 500; }
+.holdings-booking {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: middle;
+}
+.holdings-account { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
+.holdings-price-date {
+  display: block;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--color-text-tertiary);
+}
+.holdings-price-stale { color: var(--color-warning-fg); }
+.holdings-pct { display: block; font-size: 10.5px; line-height: 1.2; opacity: 0.85; }
+.report-table-subtotal .holdings-pct { font-weight: 400; }
+.holdings-lot-row td { color: var(--color-text-secondary); font-size: 12px; background: var(--color-bg-secondary); }
+.holdings-lot-label { font-family: var(--font-mono); }
+.holdings-lot-tag { margin-left: 6px; color: var(--color-text-tertiary); }
+
+/* Commodities tab */
+.commodities-view { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 24px 24px; }
+.commodities-plugins {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0;
+  margin-bottom: 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.commodities-plugin {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  column-gap: 6px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-right: 1px solid var(--color-border-default);
+  font-size: 12px;
+}
+.commodities-plugin:last-child { border-right: 0; }
+.commodities-plugin-state { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+.commodities-plugin.on .commodities-plugin-state { color: var(--color-success-fg); }
+.commodities-plugin.off .commodities-plugin-state { color: var(--color-text-tertiary); }
+.commodities-plugin-name { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-primary); }
+.commodities-plugin.off .commodities-plugin-name { color: var(--color-text-secondary); }
+.commodities-plugin-why { grid-column: 2; font-size: 11px; line-height: 1.4; color: var(--color-text-tertiary); }
+.commodities-toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; font-size: 12px; color: var(--color-text-secondary); }
+.commodities-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.commodities-count { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); }
+.commodities-empty div + div { margin-top: 6px; }
+.commodities-table-wrapper { max-height: none; }
+.commodities-row:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.commodities-holders { display: flex; flex-wrap: wrap; gap: 4px; }
+.commodities-actions-col { width: 1%; white-space: nowrap; text-align: right; }
+.commodities-actions-col .btn-link { padding: 2px 6px; }
+.type-badge--undeclared { color: var(--color-text-tertiary); border-style: dashed; }
+.commodities-history-row td { padding: 0 12px 10px 44px; background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border-subtle); }
+.commodities-history { padding-top: 8px; }
+.commodities-history-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.commodities-history-title { font-size: 11px; font-family: var(--font-mono); color: var(--color-text-secondary); }
+.commodities-sparkline { color: var(--color-accent); flex-shrink: 0; }
+.commodities-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 3 220px;
+  column-gap: 24px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.commodities-history-list li { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; break-inside: avoid; }
+.commodities-history-date { color: var(--color-text-tertiary); }
+.commodities-history-value { color: var(--color-text-primary); }
+
+/* Modals */
+.price-modal { max-width: 460px; }
+.price-modal-preview { display: block; flex: none; margin: 2px 0 4px; }
+.commodity-modal-note { display: block; flex: none; margin-bottom: 10px; font-family: var(--font-sans); font-size: 12px; line-height: 1.45; }
+.commodity-modal-note code { font-family: var(--font-mono); font-size: 11px; }
+.commodity-modal input.invalid { border-color: var(--color-warning-fg); }
+/* ── end commodities (FE-reads) ── */
