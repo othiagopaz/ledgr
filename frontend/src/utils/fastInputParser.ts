@@ -8,11 +8,13 @@
  */
 
 export interface ParsedToken {
-  type: 'narration' | 'amount' | 'payee' | 'tag' | 'link' | 'date' | 'flag';
+  type: 'narration' | 'amount' | 'payee' | 'tag' | 'link' | 'date' | 'flag' | 'currency';
   value: string;
   raw: string;
   startIndex: number;
   endIndex: number;
+  /** On an `amount`: the commodity typed right after it (`5 USD`, `5usd`). */
+  currency?: string;
 }
 
 export type ActiveTriggerType = 'account' | 'payee' | 'tag' | 'link' | 'amount';
@@ -143,6 +145,22 @@ function tryParseDate(token: string): string | null {
 export interface ParseOpts {
   /** User locale uses comma as decimal (e.g. pt/BRL). Enables bare `212,90`. */
   commaDecimal?: boolean;
+  /**
+   * Commodity symbols the ledger knows (USD, PETR4, …). A word matching one
+   * of them — or any explicit uppercase 3-letter code — right after an amount
+   * becomes that amount's currency; on its own it is a `currency` token the
+   * Composer attaches to an existing amount pill.
+   */
+  currencies?: readonly string[];
+}
+
+/** `5 USD` / `5usd`: is this word a currency for the amount before it? */
+export function currencyWord(word: string | undefined, currencies: ReadonlySet<string>): string | null {
+  if (!word) return null;
+  const up = word.toUpperCase();
+  if (!/^[A-Z][A-Z0-9'._-]{1,23}$/.test(up)) return null;
+  if (currencies.has(up) || /^[A-Z]{3}$/.test(word)) return up;
+  return null;
 }
 
 export function parseInput(text: string, cursorPosition: number, opts: ParseOpts = {}): ParseResult {
@@ -150,13 +168,25 @@ export function parseInput(text: string, cursorPosition: number, opts: ParseOpts
   const narrationParts: string[] = [];
   let activeTrigger: ActiveTrigger | null = null;
   const commaDecimal = opts.commaDecimal ?? false;
+  const currencies = new Set((opts.currencies ?? []).map((c) => c.toUpperCase()));
 
   // Split into whitespace-delimited tokens, preserving positions
   const tokenSegments = splitWithPositions(text);
 
-  for (const seg of tokenSegments) {
+  let skipNext = false;
+  for (let idx = 0; idx < tokenSegments.length; idx++) {
+    const seg = tokenSegments[idx];
+    if (skipNext) { skipNext = false; continue; }
     const { word, start, end } = seg;
     const cursorInToken = cursorPosition >= start && cursorPosition <= end;
+    // The word after this one, for `5 USD` — only when it is already complete
+    // (the cursor is not still inside it).
+    const next = tokenSegments[idx + 1];
+    const nextDone = next ? !(cursorPosition >= next.start && cursorPosition <= next.end) : false;
+    const attachCurrency = (token: ParsedToken) => {
+      const cur = nextDone ? currencyWord(next?.word, currencies) : null;
+      if (cur) { token.currency = cur; token.raw = text.slice(token.startIndex, next.end); token.endIndex = next.end; skipNext = true; }
+    };
 
     // --- Trigger: $ (amount) ---
     if (word.startsWith('$')) {
@@ -169,7 +199,9 @@ export function parseInput(text: string, cursorPosition: number, opts: ParseOpts
         activeTrigger = { type: 'amount', query: value, position: start };
       }
       if (value) {
-        tokens.push({ type: 'amount', value, raw: word, startIndex: start, endIndex: end });
+        const token: ParsedToken = { type: 'amount', value, raw: word, startIndex: start, endIndex: end };
+        if (!cursorInToken) attachCurrency(token);
+        tokens.push(token);
       }
       continue;
     }
@@ -234,7 +266,26 @@ export function parseInput(text: string, cursorPosition: number, opts: ParseOpts
     // --- Bare amount (no $), locale-aware: 212,90 / 1.234,56 / 55.00 ---
     const bareAmount = tryParseAmount(word, commaDecimal);
     if (bareAmount) {
-      tokens.push({ type: 'amount', value: bareAmount, raw: word, startIndex: start, endIndex: end });
+      const token: ParsedToken = { type: 'amount', value: bareAmount, raw: word, startIndex: start, endIndex: end };
+      attachCurrency(token);
+      tokens.push(token);
+      continue;
+    }
+
+    // --- Glued amount + currency: 5usd / 27,50EUR ---
+    const glued = word.match(/^([\d.,]+)([A-Za-z][A-Za-z0-9'._-]{1,23})$/);
+    if (glued) {
+      const amt = tryParseAmount(glued[1], commaDecimal);
+      const cur = currencyWord(glued[2], currencies);
+      if (amt && cur) {
+        tokens.push({ type: 'amount', value: amt, currency: cur, raw: word, startIndex: start, endIndex: end });
+        continue;
+      }
+    }
+
+    // --- A known commodity on its own: the Composer attaches it to the amount pill ---
+    if (currencies.has(word.toUpperCase()) && !cursorInToken) {
+      tokens.push({ type: 'currency', value: word.toUpperCase(), raw: word, startIndex: start, endIndex: end });
       continue;
     }
 

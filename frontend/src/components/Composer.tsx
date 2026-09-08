@@ -5,8 +5,7 @@ import {
   addTransaction, editTransaction, fetchTransactions, deleteTransaction,
   createSeries, extendSeries, cancelSeries, reviseSeries, fetchSeries,
   fetchSeriesTransactions,
-  fetchAccounts, fetchOptions, fetchCommodities, createCommodity, fetchHoldings,
-} from "../api/client";
+  fetchAccounts, fetchOptions, fetchCommodities, createCommodity, fetchHoldings, fetchPricePairs } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { parseInput } from "../utils/fastInputParser";
 import { parseSchedule } from "../utils/scheduleParser";
@@ -35,11 +34,16 @@ interface Row {
   account: string;
   amount: string;   // "" = auto-balance
   currency: string;
+  /** `@ price` on this leg — a foreign-currency payment converted at a rate. */
+  price?: string;
+  priceCurrency?: string;
 }
 
 interface Pill {
   type: 'payee' | 'amount' | 'accounts' | 'date' | 'tag' | 'link' | 'flag';
   label: string;
+  /** On an amount pill: its currency when not the operating one (`5 USD`). */
+  currency?: string;
   value: string;
   secondary?: string;
 }
@@ -153,6 +157,12 @@ export default function Composer({ onMutated }: ComposerProps) {
     !!(locale?.startsWith('pt') || locale?.startsWith('de') || locale?.startsWith('es')
       || locale?.startsWith('fr') || operatingCurrency === 'BRL' || operatingCurrency === 'EUR'),
     [locale, operatingCurrency]);
+
+  // Commodity symbols the ledger knows, so `5 USD` on the smart line reads as
+  // an amount in USD (and a stray "USD" attaches to the amount pill).
+  const optionsAlwaysQ = useQuery({ queryKey: ["options"], queryFn: fetchOptions });
+  const knownCurrencies = useMemo(() => optionsAlwaysQ.data?.commodities ?? [], [optionsAlwaysQ.data]);
+  const parseOpts = useMemo(() => ({ commaDecimal, currencies: knownCurrencies }), [commaDecimal, knownCurrencies]);
 
   const isEditingTxn = !!txn;
   const isEditingSeries = !!seedSeries || scope === 'series';
@@ -484,27 +494,58 @@ export default function Composer({ onMutated }: ComposerProps) {
   const txnEditScope = isEditingTxn && !seriesScope;
 
   // ── derived postings (for preview + save) ──────────────────────────────
+  // ── foreign-currency amount on the smart line (`5 USD` from a USD account) ──
+  // The payment leg stays in its own currency; the expense leg is written in
+  // the operating currency at a rate — the latest USD→BRL price in the ledger
+  // by default, editable — so budgets and the P&L keep reading in BRL and the
+  // currency_accounts plugin owns the FX result. With no rate, both legs stay
+  // in the foreign currency (valid Beancount; the expense account then holds USD).
+  const amountPill = pills.find(p => p.type === 'amount') ?? ghostPills.find(p => p.type === 'amount');
+  const residualParse = useMemo(() => parseInput(inputValue, inputValue.length, parseOpts), [inputValue, parseOpts]);
+  const residualAmtToken = residualParse.tokens.find(t => t.type === 'amount');
+  const amountCurrency = (amountPill?.currency ?? residualAmtToken?.currency ?? operatingCurrency).toUpperCase();
+  const foreign = amountCurrency !== operatingCurrency;
+  const pairsQ = useQuery({ queryKey: ["prices", "pairs"], queryFn: fetchPricePairs, enabled: foreign, retry: false });
+  const latestRate = useMemo(() => {
+    const pair = pairsQ.data?.pairs.find(p => p.base === amountCurrency && p.quote === operatingCurrency);
+    return pair?.latest?.number ?? null;
+  }, [pairsQ.data, amountCurrency, operatingCurrency]);
+  // null ⇒ follow the ledger's latest price; a string ⇒ the user typed one ("" = none).
+  const [fxRateInput, setFxRateInput] = useState<string | null>(null);
+  useEffect(() => { setFxRateInput(null); }, [amountCurrency]);
+  const fxRate: number | null = useMemo(() => {
+    const raw = fxRateInput ?? latestRate ?? '';
+    const n = parseLocaleNumber(String(raw).replace('.', commaDecimal ? ',' : '.'), commaDecimal) ?? parseFloat(String(raw));
+    return raw && Number.isFinite(n) && n > 0 ? n : null;
+  }, [fxRateInput, latestRate, commaDecimal]);
+
   const postings: Row[] = useMemo(() => {
     if (split || editing) return rows;
     // Level 0: build the two postings from pills — folding in any residual token
     // still sitting in the input (e.g. "$12" the user never followed with a space),
     // so nothing is silently dropped on Save.
-    const residual = parseInput(inputValue, inputValue.length, { commaDecimal });
-    const residualAmt = residual.tokens.find(t => t.type === 'amount')?.value;
-    const amt = pills.find(p => p.type === 'amount') ?? ghostPills.find(p => p.type === 'amount');
+    const residualAmt = residualAmtToken?.value;
+    const amt = amountPill;
     const acc = pills.find(p => p.type === 'accounts') ?? ghostPills.find(p => p.type === 'accounts');
     const amtVal = (amt?.value || residualAmt) || '';
     const out: Row[] = [];
     if (acc) {
-      out.push({ id: 1, account: acc.value, amount: amtVal, currency: operatingCurrency });
-      out.push({ id: 2, account: acc.secondary || defaultPay || '', amount: '', currency: operatingCurrency });
+      if (foreign && amtVal && fxRate != null) {
+        const qty = toNum(amtVal);
+        const converted = (Math.round(qty * fxRate * 100) / 100).toFixed(2);
+        out.push({ id: 1, account: acc.value, amount: converted, currency: operatingCurrency });
+        out.push({ id: 2, account: acc.secondary || defaultPay || '', amount: (-qty).toString(), currency: amountCurrency,
+          price: String(fxRate), priceCurrency: operatingCurrency });
+      } else {
+        out.push({ id: 1, account: acc.value, amount: amtVal, currency: amountCurrency });
+        out.push({ id: 2, account: acc.secondary || defaultPay || '', amount: '', currency: amountCurrency });
+      }
     } else if (amtVal) {
-      // Amount but no route yet — a single account-less row so the preview can
-      // show the amount / installment breakdown before accounts are picked.
-      out.push({ id: 1, account: '', amount: amtVal, currency: operatingCurrency });
+      out.push({ id: 1, account: '', amount: amtVal, currency: amountCurrency });
     }
     return out;
-  }, [split, editing, rows, pills, ghostPills, inputValue, operatingCurrency, defaultPay, commaDecimal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [split, editing, rows, pills, ghostPills, residualAmtToken, amountPill, operatingCurrency, defaultPay, foreign, fxRate, amountCurrency]);
 
   const balance = useMemo(() => computeBalance(postings), [postings]);
 
@@ -675,7 +716,7 @@ export default function Composer({ onMutated }: ComposerProps) {
       setDropdownItems([]); setDropdownLabel(null);
       return;
     }
-    const result = parseInput(inputValue, inputValue.length, { commaDecimal });
+    const result = parseInput(inputValue, inputValue.length, parseOpts);
     if (result.activeTrigger?.type === 'payee' && result.activeTrigger.query) {
       const name = result.activeTrigger.query;
       const existing = pills.findIndex(p => p.type === 'payee');
@@ -686,9 +727,20 @@ export default function Composer({ onMutated }: ComposerProps) {
     for (const token of result.tokens) {
       if (token.type === 'amount') {
         const existing = pills.findIndex(p => p.type === 'amount');
-        const pill: Pill = { type: 'amount', label: `$ ${token.value}`, value: token.value };
+        const cur = token.currency && token.currency !== operatingCurrency ? token.currency : undefined;
+        const pill: Pill = { type: 'amount', label: cur ? `${token.value} ${cur}` : `$ ${token.value}`, value: token.value, currency: cur };
         setPills(prev => existing >= 0 ? [...prev.slice(0, existing), pill, ...prev.slice(existing + 1)] : [...prev, pill]);
         setInputValue(prev => prev.replace(token.raw, '').replace(/\s+/g, ' ').trim());
+      } else if (token.type === 'currency') {
+        // "USD" typed after the amount already became a pill: re-label that pill.
+        const existing = pills.findIndex(p => p.type === 'amount');
+        if (existing >= 0) {
+          const cur = token.value !== operatingCurrency ? token.value : undefined;
+          setPills(prev => prev.map((p, i) => i === existing
+            ? { ...p, currency: cur, label: cur ? `${p.value} ${cur}` : `$ ${p.value}` }
+            : p));
+          setInputValue(prev => prev.replace(token.raw, '').replace(/\s+/g, ' ').trim());
+        }
       } else if (token.type === 'date') {
         // The date pill is owned by the `date`→pill sync effect; just set date.
         setDate(token.value);
@@ -839,6 +891,7 @@ export default function Composer({ onMutated }: ComposerProps) {
       account: p.account,
       amount: p.amount ? toNum(p.amount) : null,
       currency: p.currency || operatingCurrency,
+      ...(p.price ? { price: toNum(p.price), price_currency: p.priceCurrency || operatingCurrency } : {}),
     }));
   }
 
@@ -854,12 +907,12 @@ export default function Composer({ onMutated }: ComposerProps) {
     if (commodityOpen) {
       // The auto "Buy 100 PETR4" yields to free text typed on the smart line;
       // a narration the user edited in Details wins over both.
-      const typed = parseInput(inputValue, inputValue.length, { commaDecimal }).narration.trim();
+      const typed = parseInput(inputValue, inputValue.length, parseOpts).narration.trim();
       if (narration.trim() && narration !== lastSuggestionRef.current) return narration;
       return typed || narration;
     }
     if (narration.trim() || editing) return narration;
-    return parseInput(inputValue, inputValue.length, { commaDecimal }).narration;
+    return parseInput(inputValue, inputValue.length, parseOpts).narration;
   }
 
   async function saveCommodity() {
@@ -1198,7 +1251,24 @@ export default function Composer({ onMutated }: ComposerProps) {
             ) : (split || editing) ? (
               <PostingGrid rows={rows} onChange={updateRow} onAdd={addRow} onRemove={removeRow} accountNames={accountNames} balance={balance} currencyPlaceholder={operatingCurrency} autoFocusFirst={editing} />
             ) : (
-              <PostingPreview postings={postings} balance={balance} schedule={schedule} currency={operatingCurrency} />
+              <>
+                <PostingPreview postings={postings} balance={balance} schedule={schedule} currency={operatingCurrency} />
+                {foreign && (
+                  <div className="cx-fx">
+                    <span className="cx-fx-label">Rate</span>
+                    <input className="cx-fx-input" inputMode="decimal"
+                      placeholder={latestRate ? '' : 'none'}
+                      value={fxRateInput ?? (latestRate ?? '')}
+                      onChange={e => setFxRateInput(e.target.value)} />
+                    <span className="cx-fx-unit">{operatingCurrency} per {amountCurrency}</span>
+                    <span className="cx-fx-hint">
+                      {fxRate != null
+                        ? <>{postings[0]?.account ? shortName(postings[0].account) : 'expense'} in {operatingCurrency} at this rate · {amountCurrency} leg gets <code>@ {fmtRate(fxRate)} {operatingCurrency}</code>{fxRateInput == null && latestRate ? ' · latest price in the ledger' : ''}</>
+                        : <>no {amountCurrency}→{operatingCurrency} price in the ledger — both legs stay in {amountCurrency}; type a rate to record the expense in {operatingCurrency}</>}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
 
             {/* actions */}
@@ -1328,7 +1398,7 @@ function PostingPreview({ postings, balance, schedule, currency }: { postings: R
         <span className="cx-arrow">→</span>
         <span className={`cx-swatch ${swClass(to.account)}`} />
         <span className="cx-acc">{to.account || '(payment account)'}</span>
-        <span className="cx-pv-amt">{each} {from.currency}</span>
+        <span className="cx-pv-amt">{each} {from.currency}{to.price ? <span className="cx-pv-fx"> · {to.amount} {to.currency} @ {to.price} {to.priceCurrency}</span> : null}</span>
       </div>
       <div className={`cx-bal ${balance.balanced ? 'ok' : 'off'}`}>
         {balance.balanced ? `✓ balanced${amt ? ` — ${to.account ? shortName(to.account) : 'payment'} auto-balances to −${amt}` : ''}` : `Δ ${balance.delta}`}
@@ -1968,7 +2038,9 @@ function computeBalance(postings: Row[]): BalanceState {
   const autos = filled.filter(p => !p.amount.trim()).length;
   if (autos >= 1) return { balanced: true, delta: '0.00' };
   let sum = 0;
-  for (const p of filled) if (p.amount.trim()) sum += toNum(p.amount);
+  // A leg with `@ price` weighs amount × price (Beancount's rule), so a
+  // USD payment converted at a rate balances against its BRL expense.
+  for (const p of filled) if (p.amount.trim()) sum += p.price ? toNum(p.amount) * toNum(p.price) : toNum(p.amount);
   return { balanced: Math.abs(sum) < 0.005, delta: sum.toFixed(2) };
 }
 

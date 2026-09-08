@@ -31,8 +31,6 @@ interface UnitLine extends UnitPosition {
   unvalued: boolean;
 }
 
-/** How many positions the secondary line spells out before folding into `+N`. */
-const MAX_UNITS_INLINE = 2;
 
 /** Count of decimals in a decimal string ("33.5" → 1, "100" → 0). */
 function decimalsOf(value: string): number {
@@ -106,53 +104,33 @@ function BalanceDisplay({ node }: { node: AccountNode }) {
 
   const value = primaryValue(node, operatingCurrency);
   // Under `units` nothing outside the operating currency is valued, by
-  // definition — marking every unit would only add noise. The marker earns
-  // its place on the lenses that value most things and leave a few behind.
+  // definition — marking every unit would only add noise.
   const lines = unitLines(node, operatingCurrency, lens !== "units");
 
   if (value === null && lines.length === 0) {
     return <span className="acct-bal">—</span>;
   }
 
-  const primary = value === null ? "—" : formatAmount(value, operatingCurrency);
-  const summary = summarizeUnits(lines, MAX_UNITS_INLINE, locale);
-  // The tooltip and the accessible name carry what one line cannot: every
-  // position, and which of them the number above leaves out.
-  const detail = lines.length > 0 ? `${primary}\n${summary.full}` : undefined;
+  // One line, one row height, always. The number under the lens is the cell;
+  // what the account holds in other commodities lives in the tooltip, with a
+  // small `◇N` marker so the reader knows there is more to hover. An account
+  // with no value under the lens (a USD wallet, vacation days) shows its
+  // first position instead of a dash.
+  const summary = summarizeUnits(lines, lines.length, locale);
+  const first = summary.shown[0];
+  const primary = value !== null ? formatAmount(value, operatingCurrency) : unitText(first, locale);
+  const primaryClass = value !== null
+    ? amountSignClass(value)
+    : parseFloat(first.number) < 0 ? "negative" : "positive";
+  const extra = value !== null ? lines.length : lines.length - 1;
+  const detail = lines.length > 0
+    ? [value !== null ? formatAmount(value, operatingCurrency) : null, summary.full].filter(Boolean).join("\n")
+    : undefined;
 
   return (
-    <span
-      className="acct-bal acct-bal-stack"
-      title={detail}
-      aria-label={detail?.replace(/\n/g, ", ")}
-    >
-      <span
-        className={`acct-bal-primary ${
-          value === null ? "acct-bal-none" : amountSignClass(value)
-        }`}
-      >
-        {primary}
-      </span>
-      {lines.length > 0 && (
-        <span className="acct-bal-units" aria-hidden="true">
-          {summary.shown.map((line, i) => (
-            <span key={line.currency}>
-              {i > 0 && <span className="acct-bal-sep">·</span>}
-              <span
-                className={`acct-bal-unit${line.unvalued ? " acct-bal-unit-unvalued" : ""}`}
-              >
-                {unitText(line, locale)}
-              </span>
-            </span>
-          ))}
-          {summary.hidden > 0 && (
-            <span>
-              <span className="acct-bal-sep">·</span>
-              <span className="acct-bal-more">+{summary.hidden}</span>
-            </span>
-          )}
-        </span>
-      )}
+    <span className="acct-bal acct-bal-inline" title={detail} aria-label={detail?.replace(/\n/g, ", ")}>
+      {extra > 0 && <span className="acct-bal-chip" aria-hidden="true">◇{extra}</span>}
+      <span className={`acct-bal-primary ${primaryClass}`}>{primary}</span>
     </span>
   );
 }

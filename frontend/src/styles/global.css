@@ -3816,8 +3816,19 @@ button.acct-edit:hover {
    (`-1.150,00 USD · -0,5 VACDAY`) fit without clipping. */
 .acct-bal,
 .acct-tree-col-bal { width: 168px; }
-.acct-row-multi { height: 36px; }
-.acct-row-top.acct-row-multi { height: 40px; }
+/* Round 3: every row keeps the compact height — the other commodities moved
+   into the cell's tooltip behind a small `◇N` marker. */
+.acct-bal-inline { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 6px; min-width: 0; }
+.acct-bal-chip {
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.acct-bal-inline[title] { cursor: help; }
+.register td.amount .bal-inline { display: inline-flex; align-items: baseline; gap: 6px; }
+.register td.amount .bal-chip { font-size: 9.5px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .acct-bal-stack {
   display: flex;
   flex-direction: column;
@@ -3889,3 +3900,13 @@ button.acct-edit:hover {
   color: inherit;
 }
 /* ── end account tree: multi-commodity (round 2) ── */
+
+/* Smart line with a foreign-currency amount (`5 USD`): the rate that turns
+   the payment leg into an operating-currency expense. */
+.cx-fx { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--color-text-secondary); flex-wrap: wrap; }
+.cx-fx-label { text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; color: var(--color-text-tertiary); }
+.cx-fx-input { width: 84px; font: inherit; font-variant-numeric: tabular-nums; padding: 2px 6px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); color: var(--color-text); }
+.cx-fx-unit { color: var(--color-text-tertiary); }
+.cx-fx-hint { flex-basis: 100%; color: var(--color-text-tertiary); }
+.cx-fx-hint code { font-size: 10.5px; }
+.cx-pv-fx { color: var(--color-text-tertiary); font-weight: 400; }

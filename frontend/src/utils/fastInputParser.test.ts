@@ -304,3 +304,38 @@ describe('parseInput — bare amount on space', () => {
     expect(r.tokens.find(t => t.type === 'amount')?.value).toBe('50');
   });
 });
+
+describe("amount with a currency", () => {
+  const opts = { commaDecimal: true, currencies: ["BRL", "USD", "PETR4"] };
+  it("attaches the word after the amount when it is a known symbol", () => {
+    const r = parseInput("cafe 5 USD ", 11, opts);
+    const amt = r.tokens.find((t) => t.type === "amount")!;
+    expect(amt.value).toBe("5");
+    expect(amt.currency).toBe("USD");
+    expect(amt.raw).toBe("5 USD");
+    expect(r.narration).toBe("cafe");
+  });
+  it("accepts an explicit uppercase 3-letter code even when unknown", () => {
+    const amt = parseInput("12,50 EUR ", 10, opts).tokens.find((t) => t.type === "amount")!;
+    expect(amt.currency).toBe("EUR");
+  });
+  it("does not eat an ordinary lowercase word after a number", () => {
+    const r = parseInput("12 and more ", 12, opts);
+    const amt = r.tokens.find((t) => t.type === "amount")!;
+    expect(amt.currency).toBeUndefined();
+    expect(r.narration).toBe("and more");
+  });
+  it("reads a glued 5usd", () => {
+    const amt = parseInput("5usd ", 5, opts).tokens.find((t) => t.type === "amount")!;
+    expect(amt.value).toBe("5");
+    expect(amt.currency).toBe("USD");
+  });
+  it("emits a currency token for a known symbol on its own", () => {
+    const r = parseInput("usd ", 4, opts);
+    expect(r.tokens.find((t) => t.type === "currency")?.value).toBe("USD");
+  });
+  it("waits while the currency word is still being typed", () => {
+    const r = parseInput("5 US", 4, opts);
+    expect(r.tokens.find((t) => t.type === "amount")?.currency).toBeUndefined();
+  });
+});

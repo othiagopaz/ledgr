@@ -3,7 +3,7 @@ import type { Transaction, TransactionInput } from "../types";
 import { addTransaction, editTransaction, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, formatDateFull, getLocale, formatInstallmentBadge } from "../utils/format";
-import { formatUnits, summarizeUnits } from "../utils/holdings";
+import { formatUnits, summarizeUnits, unitText } from "../utils/holdings";
 import { today } from "../utils/dateUtils";
 import InlineEditor from "./InlineEditor";
 
@@ -437,12 +437,15 @@ export default function AccountRegister({ account, transactions, openingBalance,
                   {row.units.length === 0 ? (
                     bal
                   ) : row.hasOc ? (
-                    <span className="bal-stack">
+                    <span className="bal-inline">
+                      <span className="bal-chip" aria-hidden="true">◇{row.units.length}</span>
                       <span>{bal}</span>
-                      <span className="bal-units">{units.line}</span>
                     </span>
                   ) : (
-                    <span className="bal-units bal-units-only">{units.line}</span>
+                    <span className="bal-inline">
+                      {row.units.length > 1 && <span className="bal-chip" aria-hidden="true">◇{row.units.length - 1}</span>}
+                      <span>{unitText(units.shown[0], getLocale(operatingCurrency))}</span>
+                    </span>
                   )}
                 </td>
                 <td className="actions" onClick={(e) => e.stopPropagation()}>
