@@ -16,8 +16,7 @@ import { rankAccounts, accountKind, leafName, parentPath, type RankedAccount } f
 import {
   commodityPostings, commodityPreview, estimatedGain, suggestNarration, validateCommodityDraft,
   holdsAtCost, parseLocaleNumber, COMMODITY_RE, fmtUnits, fmtRate,
-  type CommodityDraft, type CommodityKind, type LotChoice, type EntryHeader,
-} from "../utils/commodityPreview";
+  type CommodityDraft, type CommodityKind, type LotChoice, type EntryHeader, seedFromPostings, type CommoditySeed } from '../utils/commodityPreview';
 import InlineAutocomplete from "./InlineAutocomplete";
 import { CalendarIcon } from "./icons";
 import type {
@@ -65,12 +64,48 @@ interface CommodityFields {
   avgCost: string | null;
   lot: LotChoice | null;
   gainAccount: string | null;
+  /** Optional lot label on a buy into a lot-keeping account. */
+  lotLabel: string;
 }
 
 const EMPTY_COMMODITY: CommodityFields = {
   kind: 'buy', qty: '', commodity: '', price: '', fees: '', feesAccount: null,
-  cashAccount: '', assetAccount: '', avgCost: null, lot: null, gainAccount: null,
+  cashAccount: '', assetAccount: '', avgCost: null, lot: null, gainAccount: null, lotLabel: '',
 };
+
+/** A number for a wing input, in the user's decimal separator. */
+function toField(n: number | null, commaDecimal: boolean, rate = false): string {
+  if (n == null || !Number.isFinite(n)) return '';
+  const str = rate ? fmtRate(n) : fmtUnits(n);
+  return commaDecimal ? str.replace('.', ',') : str;
+}
+
+/**
+ * Editing an existing commodity transaction: rebuild the wing's fields from
+ * its postings so the trade is edited as a trade. The plain grid would drop
+ * `{cost}` / `@ price` and write an unbalanced entry.
+ */
+function fieldsFromSeed(seed: CommoditySeed, commaDecimal: boolean): CommodityFields {
+  const hasLotIdentity = seed.costDate != null || seed.costLabel != null;
+  return {
+    kind: seed.kind,
+    qty: toField(seed.quantity, commaDecimal),
+    commodity: seed.commodity,
+    price: toField(seed.unitPrice, commaDecimal, true),
+    fees: seed.fees != null ? toField(seed.fees, commaDecimal, true) : '',
+    feesAccount: seed.feesAccount,
+    cashAccount: seed.cashAccount,
+    assetAccount: seed.assetAccount,
+    // Under NONE the wing reads `avgCost`; under a lot-keeping booking it
+    // reads `lot`. Seed both from the booked cost and let the booking decide.
+    avgCost: seed.kind === 'sell' && seed.cost != null ? toField(seed.cost, commaDecimal, true) : null,
+    lot: seed.kind === 'sell' && seed.cost != null && hasLotIdentity
+      ? { kind: 'lot', lot: { date: seed.costDate ?? '', label: seed.costLabel, units: String(seed.quantity), cost: String(seed.cost) } }
+      : null,
+    gainAccount: seed.gainAccount,
+    lotLabel: seed.kind === 'buy' ? (seed.costLabel ?? '') : '',
+  };
+}
 
 let _id = 7000;
 const nextId = () => _id++;
@@ -278,9 +313,16 @@ export default function Composer({ onMutated }: ComposerProps) {
   }, [routeStage, routeQuery, accountNames, accountUsage, payeeUsual, defaultPay]);
 
   // ── commodity disclosure (buy / sell / exchange) ─────────────────────────
-  // New drafts only — editing a commodity txn is out of scope, like Split/Repeat.
-  const [commodityOpen, setCommodityOpen] = useState<boolean>(() => initial === 'commodity' && !editing);
-  const [cmd, setCmd] = useState<CommodityFields>(EMPTY_COMMODITY);
+  // A new draft opens it on request; editing an existing commodity transaction
+  // opens it seeded from the postings (a series is never a commodity trade).
+  const commoditySeed = useMemo(
+    () => (isEditingTxn && !isEditingSeries && txn ? seedFromPostings(txn.postings, operatingCurrency) : null),
+    [isEditingTxn, isEditingSeries, txn, operatingCurrency]);
+  const isCommodityTxn = commoditySeed != null;
+  const [commodityOpen, setCommodityOpen] = useState<boolean>(
+    () => (initial === 'commodity' && !editing) || isCommodityTxn);
+  const [cmd, setCmd] = useState<CommodityFields>(
+    () => commoditySeed ? fieldsFromSeed(commoditySeed, commaDecimal) : EMPTY_COMMODITY);
   const patchCmd = useCallback((p: Partial<CommodityFields>) => setCmd(c => ({ ...c, ...p })), []);
 
   // The full account tree, for `booking` — that field is the spend-vs-hold
@@ -356,6 +398,7 @@ export default function Composer({ onMutated }: ComposerProps) {
       costCurrency: position?.cost_currency ?? operatingCurrency,
       lot: cmd.lot ?? lotDefault,
       gainAccount: cmd.gainAccount ?? defaultGainAccount,
+      lotLabel: cmd.lotLabel.trim() || null,
     };
   }, [cmd, commaDecimal, operatingCurrency, assetBooking, cmdHolds, position, defaultFeesAccount, defaultGainAccount]);
 
@@ -843,13 +886,24 @@ export default function Composer({ onMutated }: ComposerProps) {
   }
 
   async function saveOccurrence() {
-    const v = validatePostings(); if (v) { setError(v); return; }
+    let postingsOut;
+    if (commodityOpen) {
+      const v = validateCommodityDraft(draft); if (v) { setError(v); return; }
+      postingsOut = commodityPostings(draft);
+    } else {
+      const v = validatePostings(); if (v) { setError(v); return; }
+      postingsOut = postingInputs();
+    }
     const res = await editTransaction({
       lineno: txn!.lineno!, filename: txn!.filename,
-      date: parseSmartDate(date), flag, payee, narration, tags, links,
-      postings: postingInputs(),
+      date: parseSmartDate(date), flag, payee, narration: commodityOpen ? effectiveNarration() : narration, tags, links,
+      postings: postingsOut,
     });
     if (!res.success) { setError(res.errors?.join(", ") || "Failed to edit."); return; }
+    if (commodityOpen) {
+      queryClient.invalidateQueries({ queryKey: ["holdings"] });
+      queryClient.invalidateQueries({ queryKey: ["commodities"] });
+    }
     finish(true);
   }
 
@@ -1138,7 +1192,7 @@ export default function Composer({ onMutated }: ComposerProps) {
             )}
 
             {/* postings: Beancount preview (commodity), preview (L0) or grid (split/editing) */}
-            {commodityOpen && !editing ? (
+            {commodityOpen && !isEditingSeries ? (
               <CommodityBlock draft={draft}
                 header={{ date: parseSmartDate(date), flag, payee, narration: effectiveNarration(), tags, links }} />
             ) : (split || editing) ? (
@@ -1154,7 +1208,9 @@ export default function Composer({ onMutated }: ComposerProps) {
                 {!editing && <button className={`cx-disclose${schedule ? ' active' : ''}`} disabled={commodityOpen}
                   title={commodityOpen ? "Recurring commodity trades are not supported yet" : undefined}
                   onClick={() => { if (!schedule) setSchedule({ kind: 'recurring', frequency: 'monthly' }); setRepeatOpen(v => !v); }}><span className="g">↻</span> Repeat</button>}
-                {!editing && <button className={`cx-disclose${commodityOpen ? ' active' : ''}`} onClick={() => commodityOpen ? leaveCommodity() : enterCommodity()}><span className="g">◇</span> Commodity</button>}
+                {(!editing || isCommodityTxn) && <button className={`cx-disclose${commodityOpen ? ' active' : ''}`}
+                  title={isCommodityTxn && commodityOpen ? "Edit the postings directly (cost and price are kept only in the Commodity panel)" : undefined}
+                  onClick={() => commodityOpen ? leaveCommodity() : enterCommodity()}><span className="g">◇</span> Commodity</button>}
                 <button className={`cx-disclose${detailsOpen ? ' active' : ''}`} onClick={() => setDetailsOpen(v => !v)}><span className="g">⚙</span> Details</button>
               </div>
             )}
@@ -1416,6 +1472,14 @@ function CommodityPanel({
               ? <>◆ holds to sell · <b>{booking}</b> — {BOOKING_HELP[booking!]}</>
               : <>spend account · held at <b>price</b>{bookingKnown ? '' : ' (booking not loaded)'}</>}
           </div>
+        )}
+
+        {/* buy into a lot-keeping account: optional lot label */}
+        {kind === 'buy' && holds && booking !== 'NONE' && (
+          <div className="cx-prow"><label>Lot label</label>
+            <input className="cx-pinp" placeholder='optional — e.g. lote-fev' value={fields.lotLabel}
+              onChange={e => patch({ lotLabel: e.target.value })} />
+            <span className="cx-note-inline" title='Names this lot so a later sale can pick it: {33.00 BRL, "lote-fev"}'>{'{…, "label"}'}</span></div>
         )}
 
         {/* sale from an average-cost account */}

@@ -548,3 +548,63 @@ class TestHoldings:
         assert all(
             not p["account"].startswith("Equity") for p in body["positions"]
         )
+
+
+class TestEnablePlugins:
+    """POST /api/plugins/enable writes plugin lines into the top-level file."""
+
+    LEDGER = (
+        'option "operating_currency" "BRL"\n'
+        'include "inc.beancount"\n'
+        '2026-01-01 open Assets:Bank BRL\n'
+        '2026-01-01 open Assets:Global USD\n'
+    )
+    INC = '2026-01-02 open Expenses:Misc BRL\n'
+
+    def _client(self, tmp_path):
+        from fastapi.testclient import TestClient
+        from ledger import init_ledger
+        from main import app
+        main = tmp_path / "main.beancount"
+        main.write_text(self.LEDGER)
+        (tmp_path / "inc.beancount").write_text(self.INC)
+        init_ledger(str(main))
+        return TestClient(app), main
+
+    def test_enables_all_four_and_opens_the_trading_account(self, tmp_path):
+        client, main = self._client(tmp_path)
+        before = client.get("/api/commodities").json()["plugins"]
+        assert not any(before.values())
+
+        r = client.post("/api/plugins/enable", json={"plugins": [
+            "implicit_prices", "coherent_cost", "check_average_cost", "currency_accounts",
+        ]})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert all(body["plugins"].values())
+        assert body["currency_trading_account"] == "Equity:CurrencyTrading"
+        assert set(body["added"]) == {
+            "implicit_prices", "coherent_cost", "check_average_cost", "currency_accounts",
+        }
+
+        text = main.read_text()
+        lines = text.split("\n")
+        # Right after the option line, in the TOP-LEVEL file (included files are ignored).
+        assert lines[0] == 'option "operating_currency" "BRL"'
+        assert lines[1] == 'plugin "beancount.plugins.implicit_prices"'
+        assert lines[4] == 'plugin "beancount.plugins.currency_accounts" "Equity:CurrencyTrading"'
+        assert "open Equity:CurrencyTrading" in text
+        assert "plugin" not in (tmp_path / "inc.beancount").read_text()
+        assert client.get("/api/errors").json()["count"] == 0
+
+    def test_idempotent(self, tmp_path):
+        client, main = self._client(tmp_path)
+        client.post("/api/plugins/enable", json={"plugins": ["implicit_prices"]})
+        r = client.post("/api/plugins/enable", json={"plugins": ["implicit_prices"]})
+        assert r.json()["added"] == []
+        assert main.read_text().count('plugin "beancount.plugins.implicit_prices"') == 1
+
+    def test_unknown_plugin_is_400(self, tmp_path):
+        client, _ = self._client(tmp_path)
+        r = client.post("/api/plugins/enable", json={"plugins": ["auto_accounts"]})
+        assert r.status_code == 400

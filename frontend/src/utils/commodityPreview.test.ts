@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   commodityPostings, commodityPreview, formatEntry, estimatedGain, cashAmount,
-  suggestNarration, validateCommodityDraft, round2, fmtUnits, fmtRate, parseLocaleNumber,
+  suggestNarration, validateCommodityDraft, round2, fmtUnits, fmtRate, parseLocaleNumber, seedFromPostings,
   type CommodityDraft, type EntryHeader,
 } from "./commodityPreview";
 import type { PostingInput } from "../types";
@@ -273,5 +273,59 @@ describe("narration, validation, arithmetic", () => {
     expect(cashAmount(base({ quantity: 3, unitPrice: 33.33 }))).toBe(-99.99);
     expect(fmtRate(33.333333)).toBe("33.333333");
     expect(fmtRate(5.2)).toBe("5.20");
+  });
+});
+
+describe("lot label on a buy", () => {
+  it("names the lot on a lot-keeping account", () => {
+    const d = base({ booking: "FIFO", lotLabel: "lote-fev" });
+    const asset = commodityPostings(d)[0];
+    expect(asset.cost).toBe(33);
+    expect(asset.cost_label).toBe("lote-fev");
+    expect(formatEntry(header, commodityPostings(d))).toContain('{33.00 BRL, "lote-fev"}');
+  });
+  it("is ignored under NONE and on spend accounts", () => {
+    expect(commodityPostings(base({ lotLabel: "x" }))[0].cost_label).toBeUndefined();
+    expect(commodityPostings(base({ booking: null, lotLabel: "x" }))[0].cost_label).toBeUndefined();
+  });
+  it("rejects quotes", () => {
+    expect(validateCommodityDraft(base({ booking: "FIFO", lotLabel: 'a"b' }))).toMatch(/quotes/);
+  });
+});
+
+describe("seedFromPostings — editing an existing trade", () => {
+  it("reads a buy at cost back out", () => {
+    const seed = seedFromPostings([
+      { account: "Assets:XP", amount: "100", currency: "PETR4", cost: "33.00", cost_currency: "BRL", cost_date: "2026-02-01", cost_label: "lote-fev" },
+      { account: "Assets:Bank:Itau", amount: "-3304.90", currency: "BRL" },
+      { account: "Expenses:Fees", amount: "4.90", currency: "BRL" },
+    ], "BRL");
+    expect(seed).toMatchObject({
+      kind: "buy", quantity: 100, commodity: "PETR4", unitPrice: 33,
+      cashAccount: "Assets:Bank:Itau", assetAccount: "Assets:XP",
+      fees: 4.9, feesAccount: "Expenses:Fees", gainAccount: null,
+      cost: 33, costDate: "2026-02-01", costLabel: "lote-fev",
+    });
+  });
+  it("reads a sale with a booked lot and an elided gain", () => {
+    const seed = seedFromPostings([
+      { account: "Assets:XP", amount: "-50", currency: "PETR4", cost: "37.00", cost_currency: "BRL", cost_date: "2026-03-01", price: "40.00", price_currency: "BRL" },
+      { account: "Assets:Bank:Itau", amount: "2000.00", currency: "BRL" },
+      { account: "Income:Gains", amount: "-150.00", currency: "BRL" },
+    ], "BRL");
+    expect(seed).toMatchObject({ kind: "sell", quantity: 50, unitPrice: 40, cost: 37, costDate: "2026-03-01", gainAccount: "Income:Gains", cashAccount: "Assets:Bank:Itau" });
+  });
+  it("reads a USD buy at price from a spend account", () => {
+    const seed = seedFromPostings([
+      { account: "Assets:Bank:Global", amount: "1000.00", currency: "USD", price: "5.00", price_currency: "BRL" },
+      { account: "Assets:Bank:Personnalite", amount: "-5000.00", currency: "BRL" },
+    ], "BRL");
+    expect(seed).toMatchObject({ kind: "buy", quantity: 1000, commodity: "USD", unitPrice: 5, cost: null, cashAccount: "Assets:Bank:Personnalite" });
+  });
+  it("is null for an ordinary BRL transaction", () => {
+    expect(seedFromPostings([
+      { account: "Expenses:Food", amount: "50.00", currency: "BRL" },
+      { account: "Assets:Bank:Itau", amount: "-50.00", currency: "BRL" },
+    ], "BRL")).toBeNull();
   });
 });

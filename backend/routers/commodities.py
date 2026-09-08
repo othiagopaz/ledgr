@@ -24,6 +24,7 @@ Writes go through ``FavaLedger.file`` (``insert_entries`` /
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -480,6 +481,91 @@ def create_price(
     ledger.file.insert_entries([data.Price(meta, date, base, Amount(number, quote))])
     reload_ledger()
     return {"ok": True}
+
+
+# ------------------------------------------------------------------
+# Ledger plugins (PLAN §2.9)
+# ------------------------------------------------------------------
+
+# The plan (§2.6) names the FX pair `Equity:CurrencyTrading`; the plugin's own
+# default is `Equity:CurrencyAccounts`, so the config is always written out.
+CURRENCY_TRADING_ACCOUNT = "Equity:CurrencyTrading"
+
+RECOMMENDED_PLUGINS: dict[str, str | None] = {
+    "implicit_prices": None,
+    "coherent_cost": None,
+    "check_average_cost": None,
+    "currency_accounts": CURRENCY_TRADING_ACCOUNT,
+}
+
+
+class PluginsIn(BaseModel):
+    plugins: list[str]
+
+
+def _plugin_line(name: str) -> str:
+    config = RECOMMENDED_PLUGINS[name]
+    line = f'plugin "beancount.plugins.{name}"'
+    return f'{line} "{config}"' if config else line
+
+
+@router.post("/api/plugins/enable")
+def enable_plugins(
+    body: PluginsIn,
+    ledger: FavaLedger = Depends(get_ledger),
+) -> dict[str, Any]:
+    """Write the recommended ``plugin`` lines into the **top-level** file.
+
+    Beancount ignores ``plugin`` directives in included files, so this always
+    edits ``ledger.beancount_file_path`` through ``FavaLedger.file`` — the
+    lines go right after the last ``option`` (or at the top when there is
+    none), which is where Beancount and readers expect them. Idempotent:
+    plugins already on are skipped. ``currency_accounts`` also needs its base
+    account to exist; the matching ``open`` is inserted (dated at the earliest
+    ``open`` in the ledger) when missing.
+    """
+    unknown = [n for n in body.plugins if n not in RECOMMENDED_PLUGINS]
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown plugin(s): {', '.join(unknown)}. "
+                   f"Allowed: {', '.join(RECOMMENDED_PLUGINS)}",
+        )
+    active = _active_plugins(ledger)
+    to_add = [
+        n for n in RECOMMENDED_PLUGINS
+        if n in body.plugins and _PLUGINS[n] not in active
+    ]
+
+    if to_add:
+        path = Path(ledger.beancount_file_path)
+        source, sha = ledger.file.get_source(path)
+        lines = source.split("\n")
+        # After the last top-level `option` line, else after leading comments.
+        insert_at = 0
+        for i, line in enumerate(lines):
+            if line.startswith("option "):
+                insert_at = i + 1
+        lines[insert_at:insert_at] = [_plugin_line(n) for n in to_add]
+        ledger.file.set_source(path, "\n".join(lines), sha)
+
+        if "currency_accounts" in to_add:
+            base = CURRENCY_TRADING_ACCOUNT
+            opens = ledger.all_entries_by_type.Open
+            if base not in {o.account for o in opens}:
+                earliest = min((o.date for o in opens), default=datetime.date.today())
+                meta = data.new_metadata(str(path), 0)
+                ledger.file.insert_entries([data.Open(meta, earliest, base, [], None)])
+        reload_ledger()
+        ledger = get_ledger()
+
+    active = _active_plugins(ledger)
+    return {
+        "ok": True,
+        "plugins": {n: _PLUGINS[n] in active for n in RECOMMENDED_PLUGINS},
+        "currency_trading_account": _currency_trading_account(active),
+        "added": to_add,
+    }
 
 
 # ------------------------------------------------------------------

@@ -21,7 +21,7 @@ export default function Sidebar({ errorCount }: SidebarProps) {
   }
 
   function openAccounts() {
-    openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+    openTab({ id: "accounts", type: "accounts", label: "Accounts & Commodities" });
   }
 
   function openReports() {

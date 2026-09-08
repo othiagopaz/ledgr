@@ -41,6 +41,7 @@ export interface Posting {
   cost?: string | null;
   cost_currency?: string;
   cost_date?: string | null;
+  cost_label?: string | null;
   price?: string | null;
   price_currency?: string;
 }

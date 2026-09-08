@@ -128,7 +128,7 @@ export default function CommandPalette() {
     group: "Actions",
     action: () => {
       useAppStore.getState().toggleShowClosedAccounts();
-      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      openTab({ id: "accounts", type: "accounts", label: "Accounts & Commodities" });
       setCommandPaletteOpen(false);
     },
   });
@@ -214,7 +214,7 @@ export default function CommandPalette() {
     label: "View Accounts",
     group: "Views",
     action: () => {
-      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      openTab({ id: "accounts", type: "accounts", label: "Accounts & Commodities" });
       setCommandPaletteOpen(false);
     },
   });
@@ -308,7 +308,7 @@ export default function CommandPalette() {
     label: "View Commodities",
     group: "Views",
     action: () => {
-      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      openTab({ id: "accounts", type: "accounts", label: "Accounts & Commodities" });
       useCommoditiesUi.getState().setAccountsTab("commodities");
       setCommandPaletteOpen(false);
     },
@@ -318,7 +318,7 @@ export default function CommandPalette() {
     label: "New Commodity",
     group: "Actions",
     action: () => {
-      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      openTab({ id: "accounts", type: "accounts", label: "Accounts & Commodities" });
       useCommoditiesUi.getState().setAccountsTab("commodities");
       useCommoditiesUi.getState().openCommodityModal();
       setCommandPaletteOpen(false);
@@ -329,7 +329,7 @@ export default function CommandPalette() {
     label: "Update Price",
     group: "Actions",
     action: () => {
-      openTab({ id: "accounts", type: "accounts", label: "Accounts" });
+      openTab({ id: "accounts", type: "accounts", label: "Accounts & Commodities" });
       useCommoditiesUi.getState().setAccountsTab("commodities");
       useCommoditiesUi.getState().openPriceModal();
       setCommandPaletteOpen(false);

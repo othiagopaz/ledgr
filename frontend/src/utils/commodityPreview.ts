@@ -49,6 +49,12 @@ export interface CommodityDraft {
   lot: LotChoice | null;
   /** Elided leg on a hold sale. */
   gainAccount: string;
+  /**
+   * Optional lot label on a buy into a lot-keeping account (FIFO/LIFO/HIFO/
+   * STRICT): `{33.00 BRL, "lote-fev"}`. Ignored under NONE, where lots are
+   * not matched, and on spend accounts.
+   */
+  lotLabel?: string | null;
 }
 
 export interface EntryHeader {
@@ -183,6 +189,8 @@ export function commodityPostings(d: CommodityDraft): PostingInput[] {
   if (holdsAtCost(d)) {
     asset.cost = d.unitPrice;
     asset.cost_currency = oc;
+    const label = d.lotLabel?.trim();
+    if (label && d.booking !== "NONE") asset.cost_label = label;
   } else {
     asset.price = d.unitPrice;
     asset.price_currency = oc;
@@ -284,6 +292,7 @@ export function validateCommodityDraft(d: CommodityDraft): string | null {
   if (d.cashAccount === d.assetAccount) return "Cash and asset accounts must differ.";
   if (d.fees != null && d.fees < 0) return "Fees cannot be negative.";
   if (d.fees && d.fees > 0 && !d.feesAccount.trim()) return "Pick an account for the fees.";
+  if (d.lotLabel && /["\n]/.test(d.lotLabel)) return "A lot label cannot contain quotes.";
   if (d.kind === "sell" && holdsAtCost(d)) {
     if (!d.gainAccount.trim()) return "Pick the gain account.";
     if (d.booking === "NONE") {
@@ -297,4 +306,83 @@ export function validateCommodityDraft(d: CommodityDraft): string | null {
     }
   }
   return null;
+}
+
+// ── editing: seed a draft from an existing transaction ─────────────────────
+
+/** What an existing commodity transaction says about itself, in raw numbers. */
+export interface CommoditySeed {
+  kind: "buy" | "sell";
+  quantity: number;
+  commodity: string;
+  /** Unit price: the posting's `@ price`, else its cost (a buy at cost). */
+  unitPrice: number | null;
+  cashAccount: string;
+  assetAccount: string;
+  fees: number | null;
+  feesAccount: string | null;
+  gainAccount: string | null;
+  /** The asset posting's booked cost, when it has one. */
+  cost: number | null;
+  costCurrency: string | null;
+  costDate: string | null;
+  costLabel: string | null;
+}
+
+interface SeedPosting {
+  account: string;
+  amount: string | null;
+  currency: string | null;
+  cost?: string | null;
+  cost_currency?: string;
+  cost_date?: string | null;
+  cost_label?: string | null;
+  price?: string | null;
+  price_currency?: string;
+}
+
+/**
+ * Recognise a commodity transaction and read its trade back out, so the
+ * Commodity wing can edit it instead of the plain grid (which would drop the
+ * cost and price annotations). Returns `null` for an ordinary transaction.
+ *
+ * The asset leg is the one posting whose units are not the operating
+ * currency; cash is the largest OC leg that is neither a fee nor a gain.
+ */
+export function seedFromPostings(postings: SeedPosting[], oc: string): CommoditySeed | null {
+  const asset = postings.find(
+    (p) => p.currency && p.currency !== oc && p.amount != null && parseFloat(p.amount) !== 0,
+  );
+  if (!asset || !asset.currency || asset.amount == null) return null;
+  const units = parseFloat(asset.amount);
+  if (!Number.isFinite(units) || units === 0) return null;
+
+  const ocLegs = postings.filter((p) => p !== asset && (p.currency == null || p.currency === oc));
+  const fee = ocLegs.find((p) => p.account.startsWith("Expenses:") && p.amount != null);
+  const gain = ocLegs.find((p) => p.account.startsWith("Income:") || p.account.startsWith("Equity:"));
+  const cashCandidates = ocLegs.filter((p) => p !== fee && p !== gain);
+  cashCandidates.sort((a, b) => Math.abs(parseFloat(b.amount ?? "0")) - Math.abs(parseFloat(a.amount ?? "0")));
+  const cash = cashCandidates[0];
+
+  const num = (v: string | null | undefined): number | null => {
+    if (v == null) return null;
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const cost = num(asset.cost);
+  return {
+    kind: units > 0 ? "buy" : "sell",
+    quantity: Math.abs(units),
+    commodity: asset.currency,
+    unitPrice: num(asset.price) ?? cost,
+    cashAccount: cash?.account ?? "",
+    assetAccount: asset.account,
+    fees: fee ? Math.abs(num(fee.amount) ?? 0) || null : null,
+    feesAccount: fee?.account ?? null,
+    gainAccount: gain?.account ?? null,
+    cost,
+    costCurrency: asset.cost_currency ?? null,
+    costDate: asset.cost_date ?? null,
+    costLabel: asset.cost_label ?? null,
+  };
 }
