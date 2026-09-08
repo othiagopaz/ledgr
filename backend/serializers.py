@@ -654,13 +654,29 @@ def value_and_other(
     value" from "a value of zero".
     """
     rc = report_currency(conversion, oc)
-    converted = convert_inventory(inv, conversion, prices, date, oc)
-    total = converted.get(rc)
+    counter = to_counter_inventory(inv)
+    total: Decimal | None = None
+    leftovers: dict[str, Decimal] = {}
+    # Position by position, so a leftover is reported as what is *held*
+    # (`1 XAU`), not as the intermediate the lens stopped at (`1700 USD`
+    # under `at_cost`). The reader looks for the commodity in the account.
+    for pos in counter.positions():
+        single = CounterInventory()
+        single.add_position(pos)
+        converted = convert_inventory(single, conversion, prices, date, oc)
+        landed = converted.get(rc)
+        if landed is not None and len(converted) == 1:
+            total = (total or Decimal(0)) + landed
+            continue
+        if landed is not None:
+            total = (total or Decimal(0)) + landed
+        units = pos.units
+        leftovers[units.currency] = leftovers.get(units.currency, Decimal(0)) + units.number
     value = str(quantize_display(total, rc, precisions)) if total is not None else None
     other = [
         {"number": str(number), "currency": currency}
-        for currency, number in sorted(converted.items())
-        if currency != rc and number != 0
+        for currency, number in sorted(leftovers.items())
+        if number != 0
     ]
     return value, other
 

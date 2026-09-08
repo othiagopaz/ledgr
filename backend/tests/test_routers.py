@@ -2786,3 +2786,31 @@ class TestAccountsConversionLens:
         r = client.get("/api/accounts", params={"conversion": "bananas"})
         assert r.status_code == 400
         assert "conversion" in r.json()["detail"]
+
+
+class TestAccountsOtherIsWhatIsHeld:
+    """`other` names the commodity in the account, not the lens's intermediate."""
+
+    def test_gold_at_cost_is_reported_as_xau(self):
+        from fastapi.testclient import TestClient
+        from ledger import init_ledger
+        from main import app
+        import os
+        init_ledger(os.path.join(os.path.dirname(__file__), "fixtures", "commodities.beancount"))
+        client = TestClient(app)
+        body = client.get("/api/accounts?conversion=at_cost").json()
+
+        def find(nodes, name):
+            for n in nodes:
+                if n["name"] == name:
+                    return n
+                hit = find(n.get("children", []), name)
+                if hit:
+                    return hit
+            return None
+
+        vault = find(body["accounts"], "Assets:Vault:XAU")
+        assert vault is not None
+        # {1700 USD} cost does not chain to BRL under at_cost: the leftover is the gold itself.
+        assert vault["other"] == [{"number": "1", "currency": "XAU"}]
+        assert vault["value"] is None
