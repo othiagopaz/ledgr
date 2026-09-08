@@ -1,6 +1,7 @@
 import type { Transaction } from "../types";
 import { useAppStore } from "../stores/appStore";
-import { formatAmount, amountSignClass } from "../utils/format";
+import { formatAmount, amountSignClass, getLocale } from "../utils/format";
+import { formatUnits } from "../utils/holdings";
 import { useCommoditiesUi } from "../stores/commoditiesUiStore";
 
 interface StatusBarProps {
@@ -69,7 +70,7 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
     : [...currencies][0];
   const fmt = (n: number) => totalsCurrency === operatingCurrency
     ? formatAmount(n, operatingCurrency)
-    : `${formatAmount(n, operatingCurrency)} ${totalsCurrency}`;
+    : `${formatUnits(String(n), null, getLocale(operatingCurrency))} ${totalsCurrency}`;
   for (const txn of transactions) {
     const posting = txn.postings.find((p) => p.account === account);
     const inTotals = (posting?.currency ?? operatingCurrency) === totalsCurrency;
