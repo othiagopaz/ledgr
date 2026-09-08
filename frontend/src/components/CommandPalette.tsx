@@ -61,6 +61,9 @@ export default function CommandPalette() {
     { id: "action:new-txn", label: "New", open: () => openComposer() },
     { id: "action:new-split", label: "New — Split (multiple postings)", open: () => openComposer({ initial: 'split' }) },
     { id: "action:new-repeat", label: "New — Repeat (recurring / installments)", open: () => openComposer({ initial: 'repeat' }) },
+    // ── FE-writes: commodities ──
+    { id: "action:new-commodity", label: "New — Commodity (buy / sell / exchange)", open: () => openComposer({ initial: 'commodity' }) },
+    // ── end FE-writes ──
   ];
   for (const a of newActions) {
     items.push({
