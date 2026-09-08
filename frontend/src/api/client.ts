@@ -36,6 +36,7 @@ import type {
   HoldingsResponse,
   LedgerPluginName,
   EnablePluginsResponse,
+  SetPluginsInput,
 } from "../types";
 
 const BASE = "";
@@ -525,5 +526,13 @@ export async function fetchHoldings(
 export async function enablePlugins(
   plugins: LedgerPluginName[],
 ): Promise<EnablePluginsResponse> {
-  return post("/api/plugins/enable", { plugins });
+  return setPlugins({ enable: plugins });
+}
+
+/**
+ * Turn recommended plugins on or off, optionally choosing the base account
+ * for `currency_accounts`. `POST /api/plugins`.
+ */
+export async function setPlugins(body: SetPluginsInput): Promise<EnablePluginsResponse> {
+  return post("/api/plugins", body);
 }

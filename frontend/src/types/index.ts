@@ -766,4 +766,13 @@ export interface EnablePluginsResponse {
   currency_trading_account: string | null;
   /** Plugin lines actually written this call (empty when all were already on). */
   added: LedgerPluginName[];
+  /** Plugin lines removed this call. */
+  removed: LedgerPluginName[];
+}
+
+export interface SetPluginsInput {
+  enable?: LedgerPluginName[];
+  disable?: LedgerPluginName[];
+  /** Base account for `currency_accounts` (must be under Equity). Default Equity:CurrencyTrading. */
+  currency_trading_account?: string;
 }

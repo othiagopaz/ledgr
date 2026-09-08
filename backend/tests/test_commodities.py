@@ -608,3 +608,62 @@ class TestEnablePlugins:
         client, _ = self._client(tmp_path)
         r = client.post("/api/plugins/enable", json={"plugins": ["auto_accounts"]})
         assert r.status_code == 400
+
+
+class TestSetPlugins(TestEnablePlugins):
+    """POST /api/plugins: disable, and choose the currency trading account."""
+
+    def test_disable_removes_only_that_line(self, tmp_path):
+        client, main = self._client(tmp_path)
+        client.post("/api/plugins", json={"enable": ["implicit_prices", "coherent_cost"]})
+        r = client.post("/api/plugins", json={"disable": ["coherent_cost"]})
+        assert r.status_code == 200
+        assert r.json()["removed"] == ["coherent_cost"]
+        assert r.json()["plugins"] == {
+            "implicit_prices": True, "coherent_cost": False,
+            "check_average_cost": False, "currency_accounts": False,
+        }
+        text = main.read_text()
+        assert 'plugin "beancount.plugins.implicit_prices"' in text
+        assert "coherent_cost" not in text
+        assert client.get("/api/errors").json()["count"] == 0
+
+    def test_custom_trading_account_is_written_and_opened(self, tmp_path):
+        client, main = self._client(tmp_path)
+        r = client.post("/api/plugins", json={
+            "enable": ["currency_accounts"], "currency_trading_account": "Equity:FX",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["currency_trading_account"] == "Equity:FX"
+        text = main.read_text()
+        assert 'plugin "beancount.plugins.currency_accounts" "Equity:FX"' in text
+        assert "open Equity:FX" in text
+        # Re-enabling with another account rewrites the line, once.
+        r = client.post("/api/plugins", json={
+            "enable": ["currency_accounts"], "currency_trading_account": "Equity:Trading",
+        })
+        text = main.read_text()
+        assert text.count("beancount.plugins.currency_accounts") == 1
+        assert '"Equity:Trading"' in text
+        assert r.json()["currency_trading_account"] == "Equity:Trading"
+
+    def test_trading_account_must_be_equity(self, tmp_path):
+        client, _ = self._client(tmp_path)
+        r = client.post("/api/plugins", json={
+            "enable": ["currency_accounts"], "currency_trading_account": "Income:FX",
+        })
+        assert r.status_code == 400
+
+    def test_disabling_currency_accounts_keeps_the_ledger_valid(self, tmp_path):
+        client, _ = self._client(tmp_path)
+        client.post("/api/plugins", json={"enable": ["currency_accounts"]})
+        client.post("/api/transactions", json={
+            "date": "2026-02-01", "flag": "*", "payee": "", "narration": "Buy USD",
+            "postings": [
+                {"account": "Assets:Global", "amount": "100", "currency": "USD", "price": "5.00", "price_currency": "BRL"},
+                {"account": "Assets:Bank", "amount": "-500.00", "currency": "BRL"},
+            ],
+        })
+        r = client.post("/api/plugins", json={"disable": ["currency_accounts"]})
+        assert r.json()["plugins"]["currency_accounts"] is False
+        assert client.get("/api/errors").json()["count"] == 0
