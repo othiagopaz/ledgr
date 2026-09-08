@@ -165,7 +165,7 @@ function CommodityRowView({ c, oc, onDeclare, onPrice }: CommodityRowViewProps) 
         {c.is_operating && <span className="type-badge">operating</span>}
         {!c.declared && <span className="type-badge type-badge--undeclared">not declared</span>}
       </td>
-      <td className={c.name ? undefined : "text-muted"}>{c.name ?? "—"}</td>
+      <td className={`commodities-name${c.name ? "" : " text-muted"}`} title={c.name ?? undefined}>{c.name ?? "—"}</td>
       <td className="report-table-num">{c.precision ?? <span className="text-muted">—</span>}</td>
       <td className="commodities-meta-col">
         {metadata.length === 0 ? (

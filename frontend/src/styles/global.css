@@ -3779,6 +3779,8 @@ button.acct-edit:hover {
 .commodities-count { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); }
 .commodities-empty div + div { margin-top: 6px; }
 .commodities-table-wrapper { max-height: none; }
+/* A name is one line: give it room and ellipsize instead of wrapping. */
+.commodities-name { min-width: 180px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .commodities-holders { display: flex; flex-wrap: wrap; gap: 4px; }
 .commodities-actions-col { width: 1%; white-space: nowrap; text-align: right; }
 .commodities-actions-col .btn-link { padding: 2px 6px; }
