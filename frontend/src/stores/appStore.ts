@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Transaction, ViewMode, AccountNode, SeriesSummary, PeriodPreset, FilterState, ComposerScope, ComposerOpts } from '../types';
+import type { Transaction, ViewMode, AccountNode, SeriesSummary, PeriodPreset, FilterState, ComposerScope, ComposerOpts, Conversion } from '../types';
 import type { DrillTarget } from '../components/TransactionDrawer';
 
 interface Tab {
@@ -20,6 +20,34 @@ interface Tab {
  * Resolved at query time by `resolvePeriodDates`, so it always means "now".
  */
 export const DEFAULT_PERIOD_PRESET: PeriodPreset = 'this-year';
+
+/**
+ * Conversion lens (PLAN-commodities-ux §2.7). A lens, not a filter: it changes
+ * how every report values non-operating-currency positions, never which
+ * entries are read. Persisted so the app reopens in the lens the user chose;
+ * `at_value` is the default because it is the only lens in which a "spend" USD
+ * account adds up with everything else.
+ */
+const CONVERSION_STORAGE_KEY = 'ledgr:conversion';
+const CONVERSIONS: readonly Conversion[] = ['units', 'at_cost', 'at_value'];
+
+function loadConversion(): Conversion {
+  try {
+    const raw = localStorage.getItem(CONVERSION_STORAGE_KEY);
+    if (raw && (CONVERSIONS as readonly string[]).includes(raw)) return raw as Conversion;
+  } catch {
+    // localStorage unavailable (private mode, blocked storage) — fall through.
+  }
+  return 'at_value';
+}
+
+function persistConversion(c: Conversion): void {
+  try {
+    localStorage.setItem(CONVERSION_STORAGE_KEY, c);
+  } catch {
+    // Best effort only; the in-memory value still applies for the session.
+  }
+}
 
 export type BudgetNavAction =
   | 'next-month'
@@ -104,6 +132,11 @@ interface AppState {
   clearFilters: () => void;
   clearFilter: (key: keyof FilterState) => void;
   hasActiveFilters: () => boolean;
+
+  // Conversion lens (units / at_cost / at_value). Not a filter — see the
+  // note on `loadConversion`; it never counts towards hasActiveFilters.
+  conversion: Conversion;
+  setConversion: (conversion: Conversion) => void;
 
   // Config
   operatingCurrency: string;
@@ -303,6 +336,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const periodIsDefault =
       s.periodPreset === DEFAULT_PERIOD_PRESET && !s.fromDate && !s.toDate;
     return !!(!periodIsDefault || s.account || s.tags.length || s.payee);
+  },
+
+  // Conversion lens
+  conversion: loadConversion(),
+  setConversion: (conversion) => {
+    persistConversion(conversion);
+    set({ conversion });
   },
 
   // Config

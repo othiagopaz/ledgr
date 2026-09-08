@@ -312,6 +312,14 @@ export interface BalanceSheetResponse {
   planned_liabilities?: BalanceSheetNode[];
   planned_equity?: BalanceSheetNode[];
   planned_totals?: { assets: number; liabilities: number; equity: number };
+  /** Lens the sheet was valued in (PLAN-commodities-ux §4.7). */
+  conversion?: Conversion;
+  /**
+   * Computed, never posted: market value − cost of held-at-cost positions, in
+   * the operating currency. "0.00" unless `conversion` is `at_value`. Under
+   * `at_value`, assets == liabilities + equity + unrealized_gains.
+   */
+  unrealized_gains?: string;
 }
 
 export interface CashFlowItem {
