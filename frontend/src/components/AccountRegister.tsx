@@ -334,8 +334,14 @@ export default function AccountRegister({ account, transactions, openingBalance,
             const seriesType = row.txn.metadata?.['ledgr-series-type'];
             const seriesSeq = row.txn.metadata?.['ledgr-series-seq'];
             const seriesTotal = row.txn.metadata?.['ledgr-series-total'];
-            const debitVal = row.amount > 0 ? formatAmount(row.amount, operatingCurrency) : "";
-            const creditVal = row.amount < 0 ? formatAmount(Math.abs(row.amount), operatingCurrency) : "";
+            // A posting in another commodity is a quantity, not money: show
+            // `50 ITUB4`, never `50,00`.
+            const rowCur = row.posting?.currency || operatingCurrency;
+            const fmtCell = (n: number) => rowCur === operatingCurrency
+              ? formatAmount(n, operatingCurrency)
+              : `${formatUnits(String(n), null, getLocale(operatingCurrency))} ${rowCur}`;
+            const debitVal = row.amount > 0 ? fmtCell(row.amount) : "";
+            const creditVal = row.amount < 0 ? fmtCell(Math.abs(row.amount)) : "";
             const bal = formatAmount(row.balance, operatingCurrency);
             const unitsText = row.units
               .map((u) => `${formatUnits(u.number, null, getLocale(operatingCurrency))} ${u.currency}`)

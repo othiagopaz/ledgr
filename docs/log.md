@@ -9,6 +9,16 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-09-08 — Commodities round 2 (user review)
+
+- **Plugins are enabled from the app.** `POST /api/plugins/enable` writes the four recommended `plugin` lines into the **top-level** file (Beancount ignores `plugin` in included files — verified) and opens `Equity:CurrencyTrading` when `currency_accounts` goes on. The Commodities tab banner explains what the plugins are and offers Enable / Enable all.
+- **Price history is one interactive chart** (recharts, hover tooltip, time axis, padded domain) instead of a sparkline plus a list.
+- **Accounts tree and register with several commodities**: `/api/accounts` gains `conversion` + `value`/`other` per node; the Balance column shows the valued total with the units on a second line instead of three overlapping numbers; the register keeps one running balance per commodity instead of summing USD + PETR4 + BRL into one float.
+- **Editing a trade edits it as a trade**: the Composer's Commodity wing opens seeded from the postings (`seedFromPostings`, pure, tested). The plain grid used to drop `{cost}` and `@ price` on save. Also fixed: the register's `E` keystroke leaked into the autofocused Quantity field.
+- Optional **lot label** on a buy into a FIFO/LIFO/HIFO/STRICT account. Sidebar tab renamed **Accounts & Commodities**.
+
+---
+
 ## 2026-09-08 — Commodities: the feature lands (`feat/commodities`)
 
 - New plan [`plans/PLAN-commodities-ux.md`](plans/PLAN-commodities-ux.md): the product decisions over the engine map in `features/commodities.md`. The one that reorganises everything: **there is no currency-vs-stock split, only spend-vs-hold per account**, signalled by the booking method on `open`. Brazilian average cost = booking `NONE` + Ledgr pre-fills the cost + `check_average_cost` guards it (Beancount 3.2 has no `AVERAGE`). Conversion lens is global, default at market; unrealised gains are computed, never posted.

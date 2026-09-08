@@ -61,6 +61,11 @@ Fava's `cost_or_value` / `convert_position` over `FavaLedger.prices`
   `Equity:CurrencyTrading:*`, so `unrealized_gains` is only the held-at-cost part.
 - An operating-currency-only ledger returns **byte-identical** numbers under
   every lens — pinned by an HTTP-level regression test over `minimal.beancount`.
+- `GET /api/accounts` takes the same `conversion` and adds `value` (subtree
+  total in the report currency under the lens, `null` when nothing converts)
+  and `other` (positions the lens could not value) to every node; `balance`
+  stays the raw position list. The tree shows `value` as the primary number
+  and the non-OC units on a muted second line.
 
 Holdings (`/api/holdings`) lists every non-OC position per (account,
 commodity): units, cost in the cost currency, market value and unrealised gain

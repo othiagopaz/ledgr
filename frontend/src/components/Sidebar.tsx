@@ -50,7 +50,7 @@ export default function Sidebar({ errorCount }: SidebarProps) {
           className={`sidebar-nav-item${activeType === "accounts" ? " active" : ""}`}
           onClick={openAccounts}
         >
-          Accounts
+          Accounts & Commodities
         </button>
 
         <button

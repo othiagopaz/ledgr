@@ -57,9 +57,23 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
   let projectedCount = 0;
   let projectedSum = 0;
 
+  // Totals are per currency: an account holding BRL plus 100 PETR4 must not
+  // add shares to reais. Sum the operating currency when the account has any
+  // OC posting; otherwise (a USD wallet) sum the one other currency and say so.
+  const postingsHere = transactions
+    .map((txn) => ({ txn, posting: txn.postings.find((p) => p.account === account) }))
+    .filter((x) => x.posting && x.posting.amount);
+  const currencies = new Set(postingsHere.map((x) => x.posting!.currency ?? operatingCurrency));
+  const totalsCurrency = currencies.has(operatingCurrency) || currencies.size === 0
+    ? operatingCurrency
+    : [...currencies][0];
+  const fmt = (n: number) => totalsCurrency === operatingCurrency
+    ? formatAmount(n, operatingCurrency)
+    : `${formatAmount(n, operatingCurrency)} ${totalsCurrency}`;
   for (const txn of transactions) {
     const posting = txn.postings.find((p) => p.account === account);
-    const amt = posting?.amount ? parseFloat(posting.amount) : 0;
+    const inTotals = (posting?.currency ?? operatingCurrency) === totalsCurrency;
+    const amt = posting?.amount && inTotals ? parseFloat(posting.amount) : 0;
     if (txn.flag === "!") {
       projectedCount++;
       projectedSum += amt;
@@ -69,7 +83,8 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
     }
   }
 
-  const opening = openingBalance ? parseFloat(openingBalance) : 0;
+  // The opening balance is stated in the operating currency (see the router).
+  const opening = openingBalance && totalsCurrency === operatingCurrency ? parseFloat(openingBalance) : 0;
   const totalBalance = opening + clearedSum + projectedSum;
 
   return (
@@ -79,21 +94,21 @@ export default function StatusBar({ account, transactions, openingBalance }: Sta
           <span className="status-dot dot-confirmed" />
           {clearedCount} cleared:{" "}
           <span className={amountSignClass(clearedSum)}>
-            {formatAmount(clearedSum, operatingCurrency)}
+            {fmt(clearedSum)}
           </span>
         </span>
         <span className="status-item">
           <span className="status-dot dot-pending" />
           {projectedCount} projected:{" "}
           <span className={amountSignClass(projectedSum)}>
-            {formatAmount(projectedSum, operatingCurrency)}
+            {fmt(projectedSum)}
           </span>
         </span>
         <span>|</span>
         <span>
           Balance:{" "}
           <span className={amountSignClass(totalBalance)}>
-            {formatAmount(totalBalance, operatingCurrency)}
+            {fmt(totalBalance)}
           </span>
         </span>
         <span>|</span>
