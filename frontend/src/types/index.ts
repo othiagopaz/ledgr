@@ -167,7 +167,7 @@ export type ComposerScope = 'occurrence' | 'series';
 export type ComposerOpts =
   | { txn: Transaction }
   | { series: SeriesSummary }
-  | { initial?: 'split' | 'repeat' };
+  | { initial?: 'split' | 'repeat' | 'commodity' };
 
 export interface DraftPosting {
   id: number;

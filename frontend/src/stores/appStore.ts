@@ -54,7 +54,7 @@ interface AppState {
   composerTxn: Transaction | null;          // editing one occurrence / plain txn
   composerSeries: SeriesSummary | null;     // editing a whole series
   composerScope: ComposerScope;             // 'occurrence' | 'series'
-  composerInitial: 'split' | 'repeat' | null; // pre-disclosure for a new draft
+  composerInitial: 'split' | 'repeat' | 'commodity' | null; // pre-disclosure for a new draft
   openComposer: (opts?: ComposerOpts) => void;
   escalateToSeries: () => void;             // occurrence → whole-series scope (path 3)
   closeComposer: () => void;

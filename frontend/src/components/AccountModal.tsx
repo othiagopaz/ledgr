@@ -10,7 +10,7 @@ import {
   renameAccount,
   addTransaction,
 } from "../api/client";
-import type { AccountNode, RenamePlan } from "../types";
+import type { AccountNode, BookingMethod, RenamePlan } from "../types";
 import { renamedTo, validateRenameTarget } from "../utils/accountRename";
 import { useAppStore } from "../stores/appStore";
 import { today, parseSmartDate } from "../utils/dateUtils";
@@ -30,6 +30,18 @@ const FALLBACK_ACCOUNT_TYPES: Record<string, { value: string; label: string }[]>
 // backend/account_types.py — the backend enforces this with a 400; this guard
 // is the client-side counterpart so the user never makes a doomed request.
 const REQUIRED_TYPE_ROOTS = new Set(["Assets", "Liabilities"]);
+
+// Booking methods offered for an Assets account that holds to sell
+// (PLAN-commodities-ux §3.5). The method decides which lot a sale reduces, and
+// therefore the capital gain declared — a tax decision, so each gets one line.
+// NONE is Brazilian average cost: Ledgr pre-fills the average on every sale.
+const BOOKING_OPTIONS: { value: BookingMethod; label: string; help: string }[] = [
+  { value: "NONE", label: "NONE — average cost (Brazil)", help: "No lots. Every sale is priced at the position's weighted average cost, which Ledgr pre-fills." },
+  { value: "FIFO", label: "FIFO — oldest lot first", help: "A sale reduces the lot you bought first." },
+  { value: "LIFO", label: "LIFO — newest lot first", help: "A sale reduces the lot you bought last." },
+  { value: "HIFO", label: "HIFO — most expensive lot first", help: "A sale reduces the highest-cost lot, which defers the gain." },
+  { value: "STRICT", label: "STRICT — you name the lot on every sale", help: "Nothing is chosen for you: each sale must say which lot it reduces." },
+];
 
 interface MetadataRow {
   id: number;
@@ -75,6 +87,15 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
       operatingCurrency
     )
   );
+
+  // ── Booking (Assets only) ─────────────────────────────────────────────────
+  //
+  // The booking method on `open` is the spend-vs-hold signal: an account with
+  // one holds assets to sell and tracks cost; an account without one is money
+  // you spend. `holdsAssets` is the toggle; `booking` the method under it.
+  const initialBooking: BookingMethod | null = isEditing ? (account!.booking ?? null) : null;
+  const [holdsAssets, setHoldsAssets] = useState<boolean>(initialBooking !== null);
+  const [booking, setBooking] = useState<BookingMethod>(initialBooking ?? "NONE");
 
   // Metadata rows (key-value pairs for custom metadata)
   const [metadataRows, setMetadataRows] = useState<MetadataRow[]>(() => {
@@ -158,6 +179,7 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
   // ── Dynamic type options ──────────────────────────────────────────────────
 
   const root = isEditing ? account!.name.split(":")[0] : name.split(":")[0];
+  const isAssets = root === "Assets";
   const typeOptions = accountTypes[root] || [];
   // A required root (Assets/Liabilities) with no type selected yet.
   const missingRequiredType = REQUIRED_TYPE_ROOTS.has(root) && !ledgrType;
@@ -224,8 +246,14 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
         .map((c: string) => c.trim().toUpperCase())
         .filter(Boolean);
 
+      // Booking travels only on Assets. On create it is simply absent for a
+      // spend account; on update `""` clears it (back to spend) and `undefined`
+      // leaves it alone, so an unchanged edit never touches the directive.
+      const wantedBooking: BookingMethod | null = isAssets && holdsAssets ? booking : null;
+
       if (isEditing) {
         const parsedOpen = parseSmartDate(openDate);
+        const bookingChanged = wantedBooking !== initialBooking;
         const result = await updateAccount({
           name: account!.name,
           ledgr_type: ledgrType || undefined,
@@ -234,6 +262,7 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
           // Only send it when the user actually moved it, so an unchanged edit
           // never rewrites the directive's date.
           date: parsedOpen !== account!.open_date ? parsedOpen : undefined,
+          booking: bookingChanged ? (wantedBooking ?? "") : undefined,
         });
         if (!result.success) {
           setError(result.errors?.join(", ") || "Failed to update account.");
@@ -252,6 +281,7 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
           ledgr_type: ledgrType || undefined,
           currencies: currencyList.length > 0 ? currencyList : undefined,
           metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          ...(wantedBooking ? { booking: wantedBooking } : {}),
         });
         if (!result.success) {
           setError(result.errors?.join(", ") || "Failed to create account.");
@@ -494,6 +524,47 @@ export default function AccountModal({ onMutated }: AccountModalProps) {
               />
             </div>
           </div>
+
+          {/* Booking — Assets only. Spend vs hold, in the ledger's own terms. */}
+          {isAssets && (
+            <div className="acct-section acct-booking">
+              <label className="acct-modal-checkbox">
+                <input
+                  type="checkbox"
+                  checked={holdsAssets}
+                  onChange={(e) => setHoldsAssets(e.target.checked)}
+                />
+                <span>Holds assets to sell (track cost)</span>
+              </label>
+              <p className="acct-booking-help">
+                {holdsAssets
+                  ? <>Each sale computes its gain from the stored cost, into a gains account of your choosing. Use this for shares, gold, or a currency you buy as an investment.</>
+                  : <>This is money you spend: balances are held at price, with the FX result handled by the ledger's <b>currency_accounts</b> plugin. Turn it on for shares, gold, or a currency bought to be sold.</>}
+              </p>
+              {holdsAssets && (
+                <div className="acct-booking-row">
+                  <div className="form-field">
+                    <label>Booking</label>
+                    <select
+                      value={booking}
+                      onChange={(e) => setBooking(e.target.value as BookingMethod)}
+                    >
+                      {BOOKING_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                      {/* Not offered, but an account opened with it must still round-trip. */}
+                      {initialBooking === "STRICT_WITH_SIZE" && (
+                        <option value="STRICT_WITH_SIZE">STRICT_WITH_SIZE — lot by size, else you name it</option>
+                      )}
+                    </select>
+                  </div>
+                  <div className="acct-booking-one">
+                    {BOOKING_OPTIONS.find((o) => o.value === booking)?.help}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Metadata key-value section */}
           <div className="acct-section">

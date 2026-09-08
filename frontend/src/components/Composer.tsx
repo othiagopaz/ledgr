@@ -5,6 +5,7 @@ import {
   addTransaction, editTransaction, fetchTransactions, deleteTransaction,
   createSeries, extendSeries, cancelSeries, reviseSeries, fetchSeries,
   fetchSeriesTransactions,
+  fetchAccounts, fetchOptions, fetchCommodities, createCommodity, fetchHoldings,
 } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { parseInput } from "../utils/fastInputParser";
@@ -12,10 +13,16 @@ import { parseSchedule } from "../utils/scheduleParser";
 import { parseSmartDate, today } from "../utils/dateUtils";
 import { formatAmount } from "../utils/format";
 import { rankAccounts, accountKind, leafName, parentPath, type RankedAccount } from "../utils/accountRank";
+import {
+  commodityPostings, commodityPreview, estimatedGain, suggestNarration, validateCommodityDraft,
+  holdsAtCost, parseLocaleNumber, COMMODITY_RE, fmtUnits, fmtRate,
+  type CommodityDraft, type CommodityKind, type LotChoice, type EntryHeader,
+} from "../utils/commodityPreview";
 import InlineAutocomplete from "./InlineAutocomplete";
 import { CalendarIcon } from "./icons";
 import type {
   Transaction, Schedule, SeriesFrequency, SeriesSummary, PostingSpec,
+  AccountNode, BookingMethod, HoldingPosition,
 } from "../types";
 
 interface ComposerProps {
@@ -37,6 +44,33 @@ interface Pill {
   value: string;
   secondary?: string;
 }
+
+/**
+ * Raw text of the Commodity wing. Kept as the user typed it (locale
+ * separators and all); `commodityDraft()` parses it into the numeric
+ * `CommodityDraft` the pure util consumes. `null` on the account fields means
+ * "not chosen — use the default", so a default can land after the account
+ * list loads without stomping a value the user picked.
+ */
+interface CommodityFields {
+  kind: CommodityKind;
+  qty: string;
+  commodity: string;
+  price: string;
+  fees: string;
+  feesAccount: string | null;
+  cashAccount: string;
+  assetAccount: string;
+  /** NONE sale: `null` ⇒ the average from holdings; a string ⇒ user-edited. */
+  avgCost: string | null;
+  lot: LotChoice | null;
+  gainAccount: string | null;
+}
+
+const EMPTY_COMMODITY: CommodityFields = {
+  kind: 'buy', qty: '', commodity: '', price: '', fees: '', feesAccount: null,
+  cashAccount: '', assetAccount: '', avgCost: null, lot: null, gainAccount: null,
+};
 
 let _id = 7000;
 const nextId = () => _id++;
@@ -242,6 +276,118 @@ export default function Composer({ onMutated }: ComposerProps) {
       preferPayment: routeStage === 'to',
     });
   }, [routeStage, routeQuery, accountNames, accountUsage, payeeUsual, defaultPay]);
+
+  // ── commodity disclosure (buy / sell / exchange) ─────────────────────────
+  // New drafts only — editing a commodity txn is out of scope, like Split/Repeat.
+  const [commodityOpen, setCommodityOpen] = useState<boolean>(() => initial === 'commodity' && !editing);
+  const [cmd, setCmd] = useState<CommodityFields>(EMPTY_COMMODITY);
+  const patchCmd = useCallback((p: Partial<CommodityFields>) => setCmd(c => ({ ...c, ...p })), []);
+
+  // The full account tree, for `booking` — that field is the spend-vs-hold
+  // signal (plan §2.1) and `/api/account-names` does not carry it. Closed
+  // accounts included so an old broker still resolves; keyed apart from the
+  // filtered ["accounts", viewMode, filters] queries the views use.
+  const accountsTreeQ = useQuery({
+    queryKey: ["accounts", "booking-index"],
+    queryFn: () => fetchAccounts("combined", undefined, true),
+    enabled: commodityOpen,
+  });
+  const bookingIndex = useMemo(() => {
+    const m = new Map<string, BookingMethod | null>();
+    const walk = (nodes: AccountNode[]) => {
+      for (const n of nodes) { m.set(n.name, n.booking ?? null); walk(n.children); }
+    };
+    walk(accountsTreeQ.data?.accounts || []);
+    return m;
+  }, [accountsTreeQ.data]);
+
+  // Symbols for the commodity autocomplete: everything the ledger has seen
+  // (options) ∪ everything declared (commodities). The commodities endpoint
+  // also tells us whether a symbol has a `commodity` directive.
+  const optionsQ = useQuery({ queryKey: ["options"], queryFn: fetchOptions, enabled: commodityOpen });
+  const commoditiesQ = useQuery({
+    queryKey: ["commodities"], queryFn: fetchCommodities, enabled: commodityOpen, retry: false,
+  });
+  const commoditySymbols = useMemo(() => {
+    const s = new Set<string>(optionsQ.data?.commodities || []);
+    for (const c of commoditiesQ.data?.commodities || []) s.add(c.symbol);
+    s.delete(operatingCurrency);
+    return [...s].sort();
+  }, [optionsQ.data, commoditiesQ.data, operatingCurrency]);
+
+  const assetBooking: BookingMethod | null = bookingIndex.get(cmd.assetAccount) ?? null;
+  const cmdHolds = holdsAtCost({ kind: cmd.kind, booking: assetBooking });
+
+  // Selling from a holding account: the position's average cost (NONE) or its
+  // lots (every other booking) come from /api/holdings.
+  const holdingsQ = useQuery({
+    queryKey: ["holdings", "combined"],
+    queryFn: () => fetchHoldings("combined"),
+    enabled: commodityOpen && cmd.kind === 'sell' && cmdHolds,
+    retry: false,
+  });
+  const position: HoldingPosition | null = useMemo(() =>
+    holdingsQ.data?.positions.find(p => p.account === cmd.assetAccount && p.commodity === cmd.commodity) ?? null,
+    [holdingsQ.data, cmd.assetAccount, cmd.commodity]);
+
+  // Defaults resolved against the live account list (plan §3.4).
+  const defaultFeesAccount = useMemo(() =>
+    accountNames.includes('Expenses:Fees') ? 'Expenses:Fees' : '', [accountNames]);
+  const defaultGainAccount = useMemo(() =>
+    accountNames.includes('Income:Gains') ? 'Income:Gains'
+      : (accountNames.find(a => /^Income:.*Gains?$/.test(a)) ?? 'Income:Gains'), [accountNames]);
+
+  // Numeric draft for the pure util — the single source for preview AND payload.
+  const draft: CommodityDraft = useMemo(() => {
+    const avgFromHoldings = position?.avg_cost != null ? parseFloat(position.avg_cost) : null;
+    const lotDefault: LotChoice | null = cmdHolds && assetBooking !== 'NONE' ? { kind: 'auto' } : null;
+    return {
+      kind: cmd.kind,
+      quantity: parseLocaleNumber(cmd.qty, commaDecimal),
+      commodity: cmd.commodity.trim().toUpperCase(),
+      unitPrice: parseLocaleNumber(cmd.price, commaDecimal),
+      operatingCurrency,
+      cashAccount: cmd.cashAccount.trim(),
+      assetAccount: cmd.assetAccount.trim(),
+      booking: assetBooking,
+      fees: cmd.fees.trim() ? parseLocaleNumber(cmd.fees, commaDecimal) : null,
+      feesAccount: cmd.feesAccount ?? defaultFeesAccount,
+      avgCost: cmd.avgCost != null ? parseLocaleNumber(cmd.avgCost, commaDecimal) : avgFromHoldings,
+      costCurrency: position?.cost_currency ?? operatingCurrency,
+      lot: cmd.lot ?? lotDefault,
+      gainAccount: cmd.gainAccount ?? defaultGainAccount,
+    };
+  }, [cmd, commaDecimal, operatingCurrency, assetBooking, cmdHolds, position, defaultFeesAccount, defaultGainAccount]);
+
+  // Narration follows the trade ("Buy 100 PETR4") until the user edits it.
+  // We remember the last suggestion so we can tell "still ours" from "theirs".
+  const cmdSuggestion = suggestNarration(draft);
+  const lastSuggestionRef = useRef('');
+  useEffect(() => {
+    if (!commodityOpen) return;
+    if (!narration.trim() || narration === lastSuggestionRef.current) setNarration(cmdSuggestion);
+    lastSuggestionRef.current = cmdSuggestion;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cmdSuggestion, commodityOpen]);
+
+  function enterCommodity() {
+    // Mutually exclusive with Split; Repeat is deferred for commodity trades.
+    setSplit(false);
+    setSchedule(null); setScheduleTotal(""); setRepeatOpen(false);
+    setCommodityOpen(true);
+  }
+  function leaveCommodity() {
+    setCommodityOpen(false);
+    // Drop the auto narration, keep anything the user typed themselves.
+    if (narration === lastSuggestionRef.current) setNarration("");
+    lastSuggestionRef.current = '';
+  }
+
+  async function declareCommodity(symbol: string, name: string, precision: number | null) {
+    await createCommodity({ symbol, name: name.trim() || undefined, precision: precision ?? undefined });
+    queryClient.invalidateQueries({ queryKey: ["commodities"] });
+    queryClient.invalidateQueries({ queryKey: ["options"] });
+  }
 
   // Keep schedule + grid in sync once the series summary resolves (edit-from-txn,
   // series scope). Only backfills when nothing has been entered yet.
@@ -469,7 +615,8 @@ export default function Composer({ onMutated }: ComposerProps) {
   function processInlineTokens() {
     // Schedule phrases commit here (on space): ↻ monthly / 212,90*10 / 1000:10.
     // Attaching opens the Repeat wing so the user sees + can adjust it.
-    const sched = parseSchedule(inputValue);
+    // (Not while the Commodity wing is open — recurring trades are deferred.)
+    const sched = commodityOpen ? null : parseSchedule(inputValue);
     if (sched) {
       setSchedule(sched.schedule);
       if (sched.total) {
@@ -593,6 +740,7 @@ export default function Composer({ onMutated }: ComposerProps) {
   function removeRow(i: number) { setRows(prev => prev.length <= 2 ? prev : prev.filter((_, idx) => idx !== i)); }
 
   function enterSplit() {
+    if (commodityOpen) leaveCommodity();   // Split and Commodity are mutually exclusive
     // Materialize current pill-derived postings into editable rows.
     if (!split) {
       let seeded = postings.length >= 2 ? postings.map(p => ({ ...p, id: nextId() })) : rows;
@@ -632,6 +780,7 @@ export default function Composer({ onMutated }: ComposerProps) {
         }
         return await saveOccurrence();
       }
+      if (commodityOpen) return await saveCommodity();
       if (schedule) return await saveNewSeries();
       return await saveTransaction();
     } catch (err) {
@@ -659,8 +808,28 @@ export default function Composer({ onMutated }: ComposerProps) {
 
   // In L0 the narration is the non-trigger text still in the input.
   function effectiveNarration(): string {
+    if (commodityOpen) {
+      // The auto "Buy 100 PETR4" yields to free text typed on the smart line;
+      // a narration the user edited in Details wins over both.
+      const typed = parseInput(inputValue, inputValue.length, { commaDecimal }).narration.trim();
+      if (narration.trim() && narration !== lastSuggestionRef.current) return narration;
+      return typed || narration;
+    }
     if (narration.trim() || editing) return narration;
     return parseInput(inputValue, inputValue.length, { commaDecimal }).narration;
+  }
+
+  async function saveCommodity() {
+    const v = validateCommodityDraft(draft); if (v) { setError(v); return; }
+    const res = await addTransaction({
+      date: parseSmartDate(date), flag, payee, narration: effectiveNarration(), tags, links,
+      postings: commodityPostings(draft),
+    });
+    if (!res.success) { setError(res.errors?.join(", ") || "Failed to add transaction."); return; }
+    // A trade moves a position — the avg cost / lots we prefill from must refresh.
+    queryClient.invalidateQueries({ queryKey: ["holdings"] });
+    queryClient.invalidateQueries({ queryKey: ["commodities"] });
+    finish();
   }
 
   async function saveTransaction() {
@@ -732,6 +901,10 @@ export default function Composer({ onMutated }: ComposerProps) {
     setFlag('*'); setPayee(""); setNarration(""); setTags([]); setLinks([]);
     setSchedule(null); setScheduleTotal(""); setRepeatOpen(false); setDetailsOpen(false);
     setRouteStage('idle'); setRouteFrom(null); setRouteTo(null); setRouteFlip(false); setRouteQuery(''); setPayeeUsual(null);
+    // Commodity: the wing stays open (a run of trades is the common case) and
+    // keeps kind + accounts + symbol; the per-trade numbers clear.
+    setCmd(c => ({ ...c, qty: '', price: '', fees: '', avgCost: null, lot: null }));
+    lastSuggestionRef.current = '';
     setError(null);
     setTimeout(() => inputRef.current?.focus(), 0);
   }
@@ -829,7 +1002,7 @@ export default function Composer({ onMutated }: ComposerProps) {
   const leftWing = detailsOpen && !seriesScope;
   // Occurrence editing has no right wing — the inline scope banner already says
   // "editing one installment · Edit entire series →", so a wing would duplicate it.
-  const rightWing = repeatOpen ? 'schedule' : seriesScope ? 'series' : null;
+  const rightWing = commodityOpen ? 'commodity' : repeatOpen ? 'schedule' : seriesScope ? 'series' : null;
   const hasPanel = leftWing || !!rightWing;
 
   const isMac = navigator.platform.includes("Mac");
@@ -878,7 +1051,9 @@ export default function Composer({ onMutated }: ComposerProps) {
                 <div className="cx-line-field">
                   <input ref={inputRef} className="cx-line-input" value={inputValue}
                     onChange={handleInputChange} onKeyDown={handleLineKeyDown}
-                    placeholder={routeStage !== 'idle' ? '' : "Type narration — 212,90 · @ payee · > from→to · # tag · ↻ monthly · 212,90*10"} autoComplete="off" />
+                    placeholder={routeStage !== 'idle' ? ''
+                      : commodityOpen ? "Type narration — @ payee · # tag · ^ link · a date — the trade lives in the Commodity panel →"
+                      : "Type narration — 212,90 · @ payee · > from→to · # tag · ↻ monthly · 212,90*10"} autoComplete="off" />
                   {/* the route chip builds inline while picking accounts */}
                   {routeStage !== 'idle' && (
                     <RouteChip stage={routeStage} from={routeFrom} to={routeTo} flip={routeFlip}
@@ -887,11 +1062,13 @@ export default function Composer({ onMutated }: ComposerProps) {
                       onFlip={() => setRouteFlip(f => !f)}
                       onCancel={cancelRoute} />
                   )}
-                  <div className="cx-sched-slot">
-                    {schedule
-                      ? <ScheduleChip schedule={schedule} onEdit={() => setRepeatOpen(v => !v)} onRemove={() => { setSchedule(null); setRepeatOpen(false); }} />
-                      : <button className="cx-chip-add" onClick={() => { if (!schedule) setSchedule({ kind: 'recurring', frequency: 'monthly' }); setRepeatOpen(true); }}>↻ repeat</button>}
-                  </div>
+                  {!commodityOpen && (
+                    <div className="cx-sched-slot">
+                      {schedule
+                        ? <ScheduleChip schedule={schedule} onEdit={() => setRepeatOpen(v => !v)} onRemove={() => { setSchedule(null); setRepeatOpen(false); }} />
+                        : <button className="cx-chip-add" onClick={() => { if (!schedule) setSchedule({ kind: 'recurring', frequency: 'monthly' }); setRepeatOpen(true); }}>↻ repeat</button>}
+                    </div>
+                  )}
                 </div>
                 {/* route picker dropdown (ranked accounts) */}
                 {routeStage !== 'idle' && (
@@ -960,8 +1137,11 @@ export default function Composer({ onMutated }: ComposerProps) {
               </div>
             )}
 
-            {/* postings: preview (L0) or grid (split/editing) */}
-            {(split || editing) ? (
+            {/* postings: Beancount preview (commodity), preview (L0) or grid (split/editing) */}
+            {commodityOpen && !editing ? (
+              <CommodityBlock draft={draft}
+                header={{ date: parseSmartDate(date), flag, payee, narration: effectiveNarration(), tags, links }} />
+            ) : (split || editing) ? (
               <PostingGrid rows={rows} onChange={updateRow} onAdd={addRow} onRemove={removeRow} accountNames={accountNames} balance={balance} currencyPlaceholder={operatingCurrency} autoFocusFirst={editing} />
             ) : (
               <PostingPreview postings={postings} balance={balance} schedule={schedule} currency={operatingCurrency} />
@@ -971,7 +1151,10 @@ export default function Composer({ onMutated }: ComposerProps) {
             {!seriesScope && (
               <div className="cx-actions">
                 {!editing && <button className={`cx-disclose${split ? ' active' : ''}`} onClick={enterSplit}><span className="g">＋</span> Split</button>}
-                {!editing && <button className={`cx-disclose${schedule ? ' active' : ''}`} onClick={() => { if (!schedule) setSchedule({ kind: 'recurring', frequency: 'monthly' }); setRepeatOpen(v => !v); }}><span className="g">↻</span> Repeat</button>}
+                {!editing && <button className={`cx-disclose${schedule ? ' active' : ''}`} disabled={commodityOpen}
+                  title={commodityOpen ? "Recurring commodity trades are not supported yet" : undefined}
+                  onClick={() => { if (!schedule) setSchedule({ kind: 'recurring', frequency: 'monthly' }); setRepeatOpen(v => !v); }}><span className="g">↻</span> Repeat</button>}
+                {!editing && <button className={`cx-disclose${commodityOpen ? ' active' : ''}`} onClick={() => commodityOpen ? leaveCommodity() : enterCommodity()}><span className="g">◇</span> Commodity</button>}
                 <button className={`cx-disclose${detailsOpen ? ' active' : ''}`} onClick={() => setDetailsOpen(v => !v)}><span className="g">⚙</span> Details</button>
               </div>
             )}
@@ -992,6 +1175,21 @@ export default function Composer({ onMutated }: ComposerProps) {
         </div>
 
         {/* RIGHT WING */}
+        {rightWing === 'commodity' && (
+          <CommodityPanel fields={cmd} patch={patchCmd} draft={draft}
+            holds={cmdHolds} booking={assetBooking}
+            bookingKnown={accountsTreeQ.isSuccess}
+            accountNames={accountNames} symbols={commoditySymbols}
+            declared={commoditiesQ.isSuccess
+              ? (commoditiesQ.data.commodities.find(c => c.symbol === draft.commodity)?.declared ?? false)
+              : null}
+            position={position}
+            holdingsState={holdingsQ.isFetching ? 'loading' : holdingsQ.isError ? 'error' : holdingsQ.isSuccess ? 'ok' : 'idle'}
+            defaultFeesAccount={defaultFeesAccount} defaultGainAccount={defaultGainAccount}
+            currency={operatingCurrency}
+            onDeclare={declareCommodity}
+            onClose={leaveCommodity} />
+        )}
         {rightWing === 'schedule' && (
           <SchedulePanel schedule={schedule!} total={scheduleTotal}
             draftAmount={postings.find(p => p.amount)?.amount || ''}
@@ -1080,6 +1278,228 @@ function PostingPreview({ postings, balance, schedule, currency }: { postings: R
         {balance.balanced ? `✓ balanced${amt ? ` — ${to.account ? shortName(to.account) : 'payment'} auto-balances to −${amt}` : ''}` : `Δ ${balance.delta}`}
       </div>
     </>
+  );
+}
+
+// ── commodity: preview block (center) + wing (right) ─────────────────────────
+
+const BOOKING_HELP: Record<BookingMethod, string> = {
+  NONE: 'average cost',
+  FIFO: 'oldest lot first',
+  LIFO: 'newest lot first',
+  HIFO: 'most expensive lot first',
+  STRICT: 'you name the lot',
+  STRICT_WITH_SIZE: 'lot by size, else you name it',
+};
+
+/** The Beancount entry we would write, rendered from the same postings we send. */
+function CommodityBlock({ draft, header }: { draft: CommodityDraft; header: EntryHeader }) {
+  const postings = commodityPostings(draft);
+  if (postings.length === 0) {
+    return (
+      <div className="cx-preview empty">
+        Fill <b>quantity</b>, <b>commodity</b> and <b>unit price</b> in the Commodity panel — the Beancount entry appears here.
+      </div>
+    );
+  }
+  const text = commodityPreview(header, draft);
+  const gain = estimatedGain(draft);
+  const problem = validateCommodityDraft(draft);
+  const oc = draft.operatingCurrency;
+  const holdSale = draft.kind === 'sell' && holdsAtCost(draft);
+  return (
+    <div className="cx-cmd-preview">
+      <pre className="cx-bc">{text}</pre>
+      <div className="cx-cmd-foot">
+        {gain != null && (
+          <span className={`cx-cmd-gain ${gain > 0 ? 'positive' : gain < 0 ? 'negative' : 'amount-zero'}`}>
+            Gain ≈ {gain > 0 ? '+' : ''}{formatAmount(gain, oc)} {oc}<em>approx.</em>
+          </span>
+        )}
+        {holdSale && gain == null && <span className="cx-cmd-note">gain computed by Beancount from the lot it picks</span>}
+        {problem
+          ? <span className="cx-cmd-problem">{problem}</span>
+          : <span className="cx-cmd-ok">✓ balanced</span>}
+      </div>
+    </div>
+  );
+}
+
+function CommodityPanel({
+  fields, patch, draft, holds, booking, bookingKnown, accountNames, symbols, declared,
+  position, holdingsState, defaultFeesAccount, defaultGainAccount, currency, onDeclare, onClose,
+}: {
+  fields: CommodityFields; patch: (p: Partial<CommodityFields>) => void; draft: CommodityDraft;
+  holds: boolean; booking: BookingMethod | null; bookingKnown: boolean;
+  accountNames: string[]; symbols: string[];
+  /** `null` while the commodities endpoint is unknown/unavailable — no prompt then. */
+  declared: boolean | null;
+  position: HoldingPosition | null;
+  holdingsState: 'idle' | 'loading' | 'error' | 'ok';
+  defaultFeesAccount: string; defaultGainAccount: string; currency: string;
+  onDeclare: (symbol: string, name: string, precision: number | null) => Promise<void>;
+  onClose: () => void;
+}) {
+  const kind = fields.kind;
+  const exchange = kind === 'exchange';
+  const sell = kind === 'sell';
+  const symbol = draft.commodity;
+  const symbolOk = !!symbol && COMMODITY_RE.test(symbol) && symbol !== currency;
+  const lots = position?.lots ?? [];
+  const costCur = position?.cost_currency ?? currency;
+  const chosenLot = fields.lot?.kind === 'lot' ? fields.lot.lot : null;
+  const lotValue = chosenLot
+    ? String(lots.findIndex(l => l.date === chosenLot.date && l.cost === chosenLot.cost && l.label === chosenLot.label))
+    : 'auto';
+  // The prefilled average is shown at the precision we will send (`fmtRate`,
+  // up to six decimals), in the user's decimal separator — so the field, the
+  // preview and the payload never disagree on the cost basis.
+  const decimalSep = formatAmount(1.5, currency).includes(',') ? ',' : '.';
+  const avgShown = fields.avgCost ?? (draft.avgCost != null ? fmtRate(draft.avgCost).replace('.', decimalSep) : '');
+
+  const holdingsHint = (what: string) =>
+    holdingsState === 'loading' ? `looking up ${what}…`
+    : holdingsState === 'error' ? `holdings unavailable — type ${what} yourself`
+    : holdingsState === 'ok' && !position ? `no ${symbol || 'position'} found in ${leafName(fields.assetAccount) || 'that account'}`
+    : null;
+
+  return (
+    <div className="cx-addon right cx-cmd">
+      <div className="cx-panel-head"><span className="cx-pt">◇ Commodity</span>
+        <button className="cx-panel-x" onClick={onClose}>&times;</button></div>
+      <div className="cx-panel-body">
+        <div className="cx-kind-seg three">
+          {([['buy', '↓', 'Buy'], ['sell', '↑', 'Sell'], ['exchange', '⇄', 'Exchange']] as [CommodityKind, string, string][]).map(([k, ic, label]) => (
+            <button key={k} className={`cx-kind-btn${kind === k ? ' on' : ''}`}
+              onClick={() => patch({ kind: k, lot: null, avgCost: null })}><span className="ic">{ic}</span>{label}</button>
+          ))}
+        </div>
+
+        <div className="cx-prow"><label>Quantity</label>
+          <input className="cx-pinp" inputMode="decimal" placeholder={exchange ? '1000' : '100'} value={fields.qty}
+            onChange={e => patch({ qty: e.target.value })} autoFocus /></div>
+
+        <div className="cx-prow"><label>{exchange ? 'Currency' : 'Commodity'}</label>
+          <InlineAutocomplete className="cx-pinp" value={fields.commodity}
+            onChange={v => patch({ commodity: v.toUpperCase(), lot: null, avgCost: null })}
+            options={symbols} placeholder={exchange ? 'USD' : 'PETR4'} /></div>
+        {symbolOk && declared === false && (
+          <DeclareInline key={symbol} symbol={symbol} onDeclare={onDeclare} />
+        )}
+
+        <div className="cx-prow"><label>Unit price</label>
+          <input className="cx-pinp" inputMode="decimal" placeholder="0,00" value={fields.price}
+            onChange={e => patch({ price: e.target.value })} />
+          <span className="cx-note-inline">{currency}</span></div>
+
+        <div className="cx-prow"><label>Fees</label>
+          <input className="cx-pinp cx-cmd-fee" inputMode="decimal" placeholder="0,00" value={fields.fees}
+            onChange={e => patch({ fees: e.target.value })} />
+          <InlineAutocomplete className="cx-pinp" value={fields.feesAccount ?? defaultFeesAccount}
+            onChange={v => patch({ feesAccount: v })} options={accountNames} placeholder="Expenses:Fees" /></div>
+
+        <div className="cx-prow"><label>{exchange ? 'Pays' : 'Cash'}</label>
+          <InlineAutocomplete className="cx-pinp" value={fields.cashAccount}
+            onChange={v => patch({ cashAccount: v })} options={accountNames} placeholder="Assets:Bank:…" /></div>
+
+        <div className="cx-prow"><label>{exchange ? 'Receives' : 'Asset'}</label>
+          <InlineAutocomplete className="cx-pinp" value={fields.assetAccount}
+            onChange={v => patch({ assetAccount: v, lot: null, avgCost: null })} options={accountNames}
+            placeholder={exchange ? 'Assets:Global' : 'Assets:XP'} /></div>
+
+        {/* spend vs hold — read from the account's booking (plan §2.1) */}
+        {fields.assetAccount.trim() && (
+          <div className={`cx-cmd-mode${holds ? ' hold' : ''}`}>
+            {exchange
+              ? <>cash to cash · held at <b>price</b> — no gain leg</>
+              : holds
+              ? <>◆ holds to sell · <b>{booking}</b> — {BOOKING_HELP[booking!]}</>
+              : <>spend account · held at <b>price</b>{bookingKnown ? '' : ' (booking not loaded)'}</>}
+          </div>
+        )}
+
+        {/* sale from an average-cost account */}
+        {sell && holds && booking === 'NONE' && (
+          <>
+            <div className="cx-prow"><label>Cost basis</label>
+              <input className="cx-pinp" inputMode="decimal" placeholder="avg cost" value={avgShown}
+                onChange={e => patch({ avgCost: e.target.value })} />
+              <span className="cx-note-inline">avg · {costCur}</span></div>
+            <div className="cx-cmd-hint">
+              {holdingsHint('the average cost')
+                ?? (position ? `average of ${fmtUnits(parseFloat(position.units))} ${symbol} held at ${position.cost_total} ${costCur}` : null)}
+            </div>
+          </>
+        )}
+
+        {/* sale from a lot-keeping account */}
+        {sell && holds && booking !== 'NONE' && (
+          <>
+            <div className="cx-prow"><label>Lot</label>
+              <select className="cx-pinp" value={lotValue}
+                onChange={e => patch({ lot: e.target.value === 'auto' ? { kind: 'auto' } : { kind: 'lot', lot: lots[Number(e.target.value)] } })}>
+                <option value="auto">Automatic ({booking} — {BOOKING_HELP[booking!]})</option>
+                {lots.map((l, i) => (
+                  <option key={`${l.date}-${l.cost}-${l.label ?? ''}`} value={String(i)}>
+                    {l.date} · {fmtUnits(parseFloat(l.units))} {symbol} @ {fmtRate(parseFloat(l.cost))} {costCur}{l.label ? ` · "${l.label}"` : ''}
+                  </option>
+                ))}
+              </select></div>
+            <div className="cx-cmd-hint">
+              {holdingsHint('the lots') ?? (position && lots.length === 0 ? 'no lots listed — Automatic lets the booking method choose' : null)}
+            </div>
+          </>
+        )}
+
+        {sell && holds && (
+          <div className="cx-prow"><label>Gain to</label>
+            <InlineAutocomplete className="cx-pinp" value={fields.gainAccount ?? defaultGainAccount}
+              onChange={v => patch({ gainAccount: v })} options={accountNames} placeholder="Income:Gains" /></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** "PETR4 is not declared — declare it": a tiny, non-blocking `commodity` directive form. */
+function DeclareInline({ symbol, onDeclare }: { symbol: string; onDeclare: (symbol: string, name: string, precision: number | null) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [precision, setPrecision] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  if (done) return <div className="cx-cmd-hint ok">✓ {symbol} declared</div>;
+  if (!open) {
+    return (
+      <div className="cx-cmd-undeclared">
+        <b>{symbol}</b> is not declared — <button type="button" className="btn-link" onClick={() => setOpen(true)}>declare it</button>
+        <span className="cx-note-inline"> (optional)</span>
+      </div>
+    );
+  }
+  async function go() {
+    setBusy(true); setErr(null);
+    try {
+      const p = precision.trim() === '' ? null : parseInt(precision, 10);
+      await onDeclare(symbol, name, p != null && Number.isFinite(p) ? p : null);
+      setDone(true);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Failed to declare."); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="cx-cmd-declare">
+      <div className="cx-prow"><label>Name</label>
+        <input className="cx-pinp" value={name} onChange={e => setName(e.target.value)} placeholder="Petrobras PN" autoFocus /></div>
+      <div className="cx-prow"><label>Precision</label>
+        <input className="cx-pinp cx-cmd-fee" type="number" min={0} max={12} value={precision} onChange={e => setPrecision(e.target.value)} placeholder="2" />
+        <span className="cx-note-inline">decimals</span></div>
+      <div className="cx-dialog-actions">
+        <button type="button" className="btn" onClick={() => setOpen(false)}>Skip</button>
+        <button type="button" className="btn btn-primary" onClick={go} disabled={busy}>{busy ? 'Declaring…' : `Declare ${symbol}`}</button>
+      </div>
+      {err && <div className="error-msg">{err}</div>}
+    </div>
   );
 }
 
@@ -1505,7 +1925,7 @@ function seedRows(txn: Transaction | null, series: SeriesSummary | null, currenc
   ];
 }
 
-function seedSchedule(series: SeriesSummary | null, initial: 'split' | 'repeat' | null): Schedule | null {
+function seedSchedule(series: SeriesSummary | null, initial: 'split' | 'repeat' | 'commodity' | null): Schedule | null {
   if (series) {
     return series.type === 'installment'
       ? { kind: 'installment', count: series.total, amountIsTotal: false }
