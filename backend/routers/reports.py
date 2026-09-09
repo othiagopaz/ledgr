@@ -653,6 +653,7 @@ def get_income_expense(
 @router.get("/api/reports/account-balance")
 def get_account_balance(
     account: str = Query(...),
+    filter_account: str | None = Query(None),
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
     tags: list[str] = Query([]),
@@ -662,11 +663,17 @@ def get_account_balance(
     conversion: str = Query("at_value"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """Running balance of a specific account over time."""
+    """Running balance of a specific account over time.
+
+    ``account`` is what the chart is *about*; ``filter_account`` is the global
+    filter layered on top. They intersect, so the series narrows to the flows
+    the two share instead of the chart silently re-pointing to the filter.
+    The ``consolidate`` decision stays a fact about ``account`` alone.
+    """
     oc = ledger.options["operating_currency"][0]
     lens = _lens(conversion, ledger)
     fkw = dict(
-        account=account,
+        account=[a for a in (account, filter_account) if a],
         from_date=datetime.date.fromisoformat(from_date) if from_date else None,
         to_date=datetime.date.fromisoformat(to_date) if to_date else None,
         tags=tags or None,

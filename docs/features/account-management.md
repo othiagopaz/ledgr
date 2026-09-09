@@ -1,6 +1,6 @@
 ---
 type: feature
-last_updated: 2026-08-20
+last_updated: 2026-09-08
 ---
 
 # Account Management — edit, rename, deactivate
@@ -58,7 +58,7 @@ Such purely structural nodes are common — a real ledger has 22 of them (`Asset
 
 ### What "inactive" does and does not do
 
-It stops **new** postings. Nothing else. Verified endpoint by endpoint:
+It stops **new** postings and drops out of suggestions. Nothing else. Verified endpoint by endpoint:
 
 | Surface | Inactive account still appears? |
 |---|---|
@@ -66,8 +66,11 @@ It stops **new** postings. Nothing else. Verified endpoint by endpoint:
 | Balance Sheet | **yes**, for as long as it carries a balance |
 | Cash Flow | **yes** — its movements are ordinary movements |
 | `GET /api/transactions` | **yes** — full history, unchanged |
-| `GET /api/account-names` (autocomplete) | **yes** |
-| Accounts tree | **no** — the only surface that hides it, and only by default |
+| `GET /api/account-names` (autocomplete) | **no** by default — `include_closed=true` brings them back, mirroring the tree |
+| `GET /api/suggestions` (payee → usual account) | **no** — a suggestion the write path would refuse is worse than none |
+| Accounts tree | **no** by default |
+
+Every suggestion surface (Composer route picker, Cmd+K account entries, filter bar, budget/chart/modal pickers) feeds from `/api/account-names`, so hiding there hides everywhere. The flat list prunes like the tree — a structural node with no live descendant goes too — with one deliberate difference: a closed parent with a live child stays in the *tree* (the child needs its place) but leaves the *list*, because a flat list has no structure to preserve and the account itself cannot be posted to.
 
 History is immutable: nothing past is hidden or rewritten. An inactive account drops off the Balance Sheet only once its balance reaches zero — that is the balance being zero, not the account being inactive; an *open* account with a zero balance is equally absent.
 

@@ -150,14 +150,46 @@ def _prune_closed(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 @router.get("/api/account-names")
 def get_account_names(
+    include_closed: bool = Query(False),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, list[str]]:
-    """All account names (for autocomplete)."""
+    """Account names for autocomplete. Inactive accounts are omitted by default.
+
+    Every suggestion surface (Composer route picker, Cmd+K, filter bar) feeds
+    from here, and a closed account is never a useful suggestion: it cannot
+    take new postings, and its history is reachable by other means. Mirrors
+    ``/api/accounts``: ``include_closed=true`` brings them back.
+
+    A name survives the default filter when it is an open, un-closed account —
+    or a structural node (no ``open`` of its own) that still has one of those
+    beneath it. A closed parent is dropped even when a live child keeps it in
+    the *tree*: the tree needs it to hang the child off, a flat list does not.
+    """
     real_root = realization.realize(ledger.all_entries)
     names: list[str] = []
     for child in realization.iter_children(real_root):
         if child.account:
             names.append(child.account)
+
+    if not include_closed:
+        opened = {
+            e.account for e in ledger.all_entries if isinstance(e, data.Open)
+        }
+        closed = {
+            e.account for e in ledger.all_entries if isinstance(e, data.Close)
+        }
+        live = opened - closed
+
+        def is_active(name: str) -> bool:
+            if name in closed:
+                return False
+            if name in live:
+                return True
+            prefix = name + ":"
+            return any(d.startswith(prefix) for d in live)
+
+        names = [n for n in names if is_active(n)]
+
     names.sort()
     return {"accounts": names}
 
@@ -259,7 +291,12 @@ def get_suggestions(
     payee: str = Query(...),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """Smart suggestions for a payee — most common account and typical amount."""
+    """Smart suggestions for a payee — most common account and typical amount.
+
+    Inactive accounts are never suggested: the payee's history may point at a
+    retired account, but a suggestion the ledger would refuse to post to is
+    worse than none.
+    """
     txns = [
         e for e in ledger.all_entries
         if isinstance(e, data.Transaction) and e.payee == payee
@@ -267,11 +304,15 @@ def get_suggestions(
     if not txns:
         return {"payee": payee, "account": None, "amount": None, "currency": None}
 
+    closed = {e.account for e in ledger.all_entries if isinstance(e, data.Close)}
+
     account_counts: dict[str, int] = {}
     amounts: list[Decimal] = []
     for t in txns:
         if len(t.postings) == 2:
             acct = t.postings[0].account
+            if acct in closed:
+                continue
             account_counts[acct] = account_counts.get(acct, 0) + 1
             if t.postings[0].units:
                 amounts.append(t.postings[0].units.number)

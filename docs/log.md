@@ -9,6 +9,13 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-09-08 — Inactive accounts out of suggestions; account filter intersects with the open register
+
+- `features/account-management.md`: `/api/account-names` and `/api/suggestions` now omit closed accounts by default (`include_closed=true` opts back in), so every autocomplete surface — Composer route picker, Cmd+K, filter bar, budget/chart/modal pickers — stops offering accounts that cannot take postings. Endpoint table updated.
+- `frontend/guidelines.md`: new section on the global Account filter meeting a page with its own account (register, balance chart) — they intersect via `filter_account` + chained `AccountFilter`s (counterpart semantics), replacing the "global filter wins" behavior from PLAN-global-filters §5.9 that showed unrelated history inside a register.
+
+---
+
 ## 2026-09-08 — Commodities: foreign-currency spending documented
 
 - `features/commodities.md` §8b and plan §2.11: why a USD expense from a USD account is written in BRL at the day's rate (P&L fixed, budgets see it, FX result stays in `Equity:CurrencyTrading`) and when the USD-only form is the right one. Currency on the smart line only when glued to the number (`5USD`, `100.10BRL`).

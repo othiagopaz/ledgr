@@ -274,6 +274,46 @@ class TestTransactionsRouter:
             assert txn["date"] >= "2024-02-01"
             assert txn["date"] <= "2024-02-28"
 
+    def test_filter_account_intersects_with_open_account(
+        self, client: TestClient
+    ) -> None:
+        """`account` (the open register) and `filter_account` (the global
+        filter) must BOTH be touched — the filter shows counterparts of the
+        open account, it does not replace it."""
+        r = client.get(
+            "/api/transactions",
+            params={"account": "Assets:Checking", "filter_account": "Expenses:Food"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        # Two Food transactions exist; only Groceries went through Checking
+        # (Dinner went on the credit card).
+        assert body["count"] == 1
+        assert body["transactions"][0]["narration"] == "Groceries"
+
+    def test_filter_account_on_unrelated_register_is_empty(
+        self, client: TestClient
+    ) -> None:
+        """The reported bug: an unrelated register showed the filtered
+        account's whole history. It must show nothing."""
+        r = client.get(
+            "/api/transactions",
+            params={"account": "Assets:Savings", "filter_account": "Expenses:Food"},
+        )
+        assert r.status_code == 200
+        assert r.json()["count"] == 0
+
+    def test_filter_account_alone_behaves_like_account(
+        self, client: TestClient
+    ) -> None:
+        by_account = client.get(
+            "/api/transactions", params={"account": "Expenses:Food"}
+        ).json()
+        by_filter = client.get(
+            "/api/transactions", params={"filter_account": "Expenses:Food"}
+        ).json()
+        assert by_filter["count"] == by_account["count"] == 2
+
     def test_opening_balance_for_account_date_window(
         self, client: TestClient
     ) -> None:
@@ -443,6 +483,20 @@ class TestReportsRouter:
         assert r.status_code == 200
         body = r.json()
         assert "series" in body
+
+    def test_account_balance_filter_account_narrows_not_repoints(
+        self, client: TestClient
+    ) -> None:
+        """A global account filter narrows the charted account's series to the
+        flows the two share — it must not silently chart the filter instead.
+        Checking ∩ Food is the single -350.00 groceries payment."""
+        r = client.get(
+            "/api/reports/account-balance",
+            params={"account": "Assets:Checking", "filter_account": "Expenses:Food"},
+        )
+        assert r.status_code == 200
+        series = r.json()["series"]
+        assert Decimal(series[-1]["balance"]) == Decimal("-350.00")
 
     def test_net_worth_series(self, client: TestClient) -> None:
         r = client.get("/api/reports/net-worth")
@@ -1358,6 +1412,75 @@ class TestInactiveAccountPostings:
         names = _flatten_names(hierarchy_client.get("/api/accounts").json()["accounts"])
         assert "Assets:Invest" in names
         assert "Assets:Invest:ClearOther" in names
+
+
+class TestInactiveAccountSuggestions:
+    """Inactive accounts never show up as suggestions.
+
+    ``/api/account-names`` feeds every autocomplete surface (Composer route
+    picker, Cmd+K, filter bar, budget/chart pickers), and ``/api/suggestions``
+    pre-fills the payee's usual account. A closed account cannot take new
+    postings, so suggesting it only sets the user up for a refusal at save
+    time.
+    """
+
+    def test_closed_account_dropped_from_account_names(
+        self, hierarchy_client: TestClient
+    ) -> None:
+        before = hierarchy_client.get("/api/account-names").json()["accounts"]
+        assert "Assets:Invest:Clear" in before
+        assert "Assets:Invest:Clear:Equities" in before
+
+        hierarchy_client.post("/api/accounts/close", json={
+            "name": "Assets:Invest:Clear", "date": "2024-12-31",
+        })
+
+        after = hierarchy_client.get("/api/account-names").json()["accounts"]
+        assert "Assets:Invest:Clear" not in after
+        # The cascade closed the child too.
+        assert "Assets:Invest:Clear:Equities" not in after
+        # The structural parent survives while a live sibling needs it.
+        assert "Assets:Invest" in after
+        assert "Assets:Invest:ClearOther" in after
+
+    def test_include_closed_brings_them_back(
+        self, hierarchy_client: TestClient
+    ) -> None:
+        hierarchy_client.post("/api/accounts/close", json={
+            "name": "Assets:Invest:Clear", "date": "2024-12-31",
+        })
+        names = hierarchy_client.get(
+            "/api/account-names", params={"include_closed": "true"}
+        ).json()["accounts"]
+        assert "Assets:Invest:Clear" in names
+        assert "Assets:Invest:Clear:Equities" in names
+
+    def test_structural_parent_dropped_with_its_last_live_child(
+        self, hierarchy_client: TestClient
+    ) -> None:
+        """`Assets:Invest` has no `open` of its own — once every real account
+        beneath it is closed it is a suggestion for nothing."""
+        for name in ("Assets:Invest:Clear", "Assets:Invest:ClearOther"):
+            hierarchy_client.post("/api/accounts/close", json={
+                "name": name, "date": "2024-12-31",
+            })
+        names = hierarchy_client.get("/api/account-names").json()["accounts"]
+        assert "Assets:Invest" not in names
+
+    def test_payee_suggestion_skips_closed_account(
+        self, client: TestClient
+    ) -> None:
+        """Supermarket's only history points at Expenses:Food — once that is
+        retired, no account beats a stale one."""
+        r = client.get("/api/suggestions", params={"payee": "Supermarket"})
+        assert r.json()["account"] == "Expenses:Food"
+
+        client.post("/api/accounts/close", json={
+            "name": "Expenses:Food", "date": "2025-01-01",
+        })
+
+        r = client.get("/api/suggestions", params={"payee": "Supermarket"})
+        assert r.json()["account"] is None
 
 
 # ------------------------------------------------------------------

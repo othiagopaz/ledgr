@@ -63,7 +63,15 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 
 function appendFilters(params: URLSearchParams, f?: GlobalFilters): void {
   if (!f) return;
-  if (f.account) params.set("account", f.account);
+  // A page with its own account context (the open register, the balance
+  // chart) has already set `account`; the global account filter must not
+  // clobber it — that showed the filtered account's whole history inside an
+  // unrelated register. It goes to `filter_account` instead, which the
+  // backend intersects with the context: only entries touching both.
+  if (f.account) {
+    if (params.has("account")) params.set("filter_account", f.account);
+    else params.set("account", f.account);
+  }
   if (f.from_date) params.set("from_date", f.from_date);
   if (f.to_date) params.set("to_date", f.to_date);
   if (f.tags?.length) {

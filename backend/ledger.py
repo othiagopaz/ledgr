@@ -88,7 +88,7 @@ def get_filtered_entries(
     ledger: FavaLedger,
     view_mode: str = "combined",
     *,
-    account: str | None = None,
+    account: str | list[str] | None = None,
     from_date: datetime.date | None = None,
     to_date: datetime.date | None = None,
     tags: list[str] | None = None,
@@ -115,9 +115,16 @@ def get_filtered_entries(
             if not isinstance(e, data.Transaction) or e.flag == flag
         ]
 
-    # 2. Account filter — Fava's AccountFilter (regex + has_component)
+    # 2. Account filter — Fava's AccountFilter (regex + has_component).
+    # A list intersects: each pass keeps only the entries that touch that
+    # account, so ["A", "B"] means "touches A AND touches B". This is the
+    # counterpart semantics a register needs when the global account filter
+    # is layered on top of the open account — not "either one", which would
+    # flood the register with entries the open account never saw.
     if account:
-        entries = AccountFilter(account).apply(entries)
+        for name in [account] if isinstance(account, str) else account:
+            if name:
+                entries = AccountFilter(name).apply(entries)
 
     # 3. Tags + payee — Fava's AdvancedFilter (query syntax parser)
     filter_parts: list[str] = []

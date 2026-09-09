@@ -262,6 +262,26 @@ all" would show permanently with nothing to clear) but does count All time, so
 there is always a way back. Presets resolve at query time via
 `resolvePeriodDates`, so "this year" keeps meaning *now* without a reload.
 
+### Account filter on a page with its own account: intersect, never replace
+
+Two pages carry their own account context: the open register and the
+Account-Balance chart. When the global Account filter is set on top of one of
+those, the two must **intersect** — show entries touching *both* — because
+"filter this register by `Expenses:Daily:Clothing`" means *that account's
+movements through this one* (counterpart semantics), not the filtered account's
+whole history pasted into an unrelated register (the original behavior, a real
+reported bug: PLAN-global-filters §5.9 prose said "the global filter wins" and
+that shipped).
+
+Mechanics: `appendFilters` in `api/client.ts` sends the global account as
+`filter_account` whenever the fetcher already set `account` (the page's
+context), and only then; the backend passes both to `get_filtered_entries`,
+which chains one Fava `AccountFilter` per name — each pass narrows the
+survivors, so a list means AND. Opening balances and the chart's `consolidate`
+decision stay anchored on `account` alone. Pages without their own account
+context are untouched — their only account is the global one, sent as `account`
+exactly as before.
+
 ## Data fetching (React Query)
 
 ### Global config (`main.tsx`)

@@ -339,6 +339,7 @@ def _find_entry_by_lineno(
 @router.get("/api/transactions")
 def get_transactions(
     account: str | None = Query(None),
+    filter_account: str | None = Query(None),
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
     tags: list[str] = Query([]),
@@ -346,10 +347,17 @@ def get_transactions(
     view_mode: str = Query("combined", pattern="^(actual|planned|combined)$"),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, Any]:
-    """List transactions, optionally filtered by account, date, tags, payee."""
+    """List transactions, optionally filtered by account, date, tags, payee.
+
+    ``account`` is the page's own context (the open register);
+    ``filter_account`` is the global filter layered on top. They intersect —
+    an entry must touch both — so filtering a register by another account
+    shows that account's movements *through* the open one, not the whole
+    ledger's. Opening balances stay anchored on ``account``.
+    """
     entries = get_filtered_entries(
         ledger, view_mode,
-        account=account,
+        account=[a for a in (account, filter_account) if a] or None,
         from_date=datetime.date.fromisoformat(from_date) if from_date else None,
         to_date=datetime.date.fromisoformat(to_date) if to_date else None,
         tags=tags or None,
