@@ -9,7 +9,7 @@ from __future__ import annotations
 import datetime
 import re
 from decimal import Decimal
-from typing import Any
+from typing import Any, Iterable
 
 from beancount.core import amount as amt_mod, data, interpolate
 from beancount.core.number import MISSING
@@ -400,10 +400,13 @@ def get_transactions(
 
 def _validate_active_accounts(
     ledger: FavaLedger,
-    postings: list[data.Posting],
+    postings: Iterable[Any],
     txn_date: datetime.date,
 ) -> list[str]:
     """Reject postings to an account that is not open on ``txn_date``.
+
+    ``postings`` is anything with an ``.account`` — Beancount postings or the
+    request models the series endpoints receive.
 
     Beancount reports both cases as "Invalid reference to inactive account" —
     its "inactive" covers an account that is **not yet open** as well as one
@@ -411,6 +414,11 @@ def _validate_active_accounts(
     transaction has been written, leaving a validation error in the user's
     ledger while the API already answered ``success: true``. Checking first
     keeps the file clean.
+
+    An account with no ``open`` at all is rejected too ("Invalid reference to
+    unknown account"). The usual way in is a structural node: ``Expenses:Gifts``
+    exists in the tree only because ``Expenses:Gifts:Gifts`` was opened, and
+    picking it from a suggestion list wrote a posting Beancount refuses.
 
     Two windows are rejected:
 
@@ -432,7 +440,18 @@ def _validate_active_accounts(
     errors = []
     for posting in postings:
         open_date = opens.get(posting.account)
-        if open_date is not None and txn_date < open_date:
+        if open_date is None:
+            prefix = posting.account + ":"
+            children = sorted(a for a in opens if a.startswith(prefix))
+            hint = (
+                f" It only groups other accounts ({', '.join(children[:3])}"
+                f"{', …' if len(children) > 3 else ''}); pick one of those."
+                if children
+                else " Open it first, or pick another account."
+            )
+            errors.append(f"Account '{posting.account}' is not open.{hint}")
+            continue
+        if txn_date < open_date:
             errors.append(
                 f"Account '{posting.account}' only opens on "
                 f"{open_date.isoformat()}, so it cannot take a posting dated "
@@ -510,6 +529,10 @@ def edit_transaction(
     balance_errors = _validate_balance(bc_postings, ledger.options)
     if balance_errors:
         return {"success": False, "errors": balance_errors}
+
+    inactive_errors = _validate_active_accounts(ledger, bc_postings, txn_date)
+    if inactive_errors:
+        return {"success": False, "errors": inactive_errors}
 
     # Start with fresh metadata, then re-apply all ledgr-* keys from the
     # original entry so that series metadata (ledgr-series, ledgr-series-type,

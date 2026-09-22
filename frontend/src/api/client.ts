@@ -153,6 +153,12 @@ export async function fetchAccountNames(): Promise<{ accounts: string[] }> {
   return get("/api/account-names");
 }
 
+/** Only accounts a posting can name: structural parents (no `open` of their
+ *  own) are left out, since Beancount rejects a posting to one. */
+export async function fetchPostableAccountNames(): Promise<{ accounts: string[] }> {
+  return get("/api/account-names?postable=true");
+}
+
 // Account CRUD
 
 export interface AccountMutationResponse {

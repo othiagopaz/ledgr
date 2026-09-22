@@ -374,7 +374,7 @@ class TestCreateSeriesFrequency:
             "currency": "BRL",
             "frequency": frequency,
             "postings": [
-                {"account": "Expenses:Health", "amount": "30"},
+                {"account": "Expenses:Food", "amount": "30"},
                 {"account": "Assets:Checking", "amount": "-30"},
             ],
         })
@@ -534,7 +534,7 @@ class TestCreateSplitSeries:
             "currency": "BRL",
             "postings": [
                 {"account": "Expenses:Food", "amount": "60"},
-                {"account": "Expenses:Entertainment", "amount": "40"},
+                {"account": "Expenses:Rent", "amount": "40"},
                 {"account": "Assets:Checking", "amount": "-100"},
             ],
         })
@@ -561,7 +561,7 @@ class TestCreateSplitSeries:
             "currency": "BRL",
             "postings": [
                 {"account": "Expenses:Food", "amount": "60"},
-                {"account": "Expenses:Entertainment", "amount": "40"},
+                {"account": "Expenses:Rent", "amount": "40"},
                 {"account": "Assets:Checking"},
             ],
         })
@@ -585,7 +585,7 @@ class TestCreateSplitSeries:
             "amount_is_total": True,
             "postings": [
                 {"account": "Expenses:Food", "amount": "60"},
-                {"account": "Expenses:Entertainment", "amount": "40"},
+                {"account": "Expenses:Rent", "amount": "40"},
                 {"account": "Assets:Checking", "amount": "-100"},
             ],
         })
@@ -607,7 +607,7 @@ class TestCreateSplitSeries:
             "amount_is_total": True,
             "postings": [
                 {"account": "Expenses:Food", "amount": "600"},
-                {"account": "Expenses:Entertainment", "amount": "600"},
+                {"account": "Expenses:Rent", "amount": "600"},
                 {"account": "Assets:Checking"},
             ],
         })
@@ -619,7 +619,7 @@ class TestCreateSplitSeries:
         # (beancount elaborates the auto posting to the concrete number on load).
         for t in txns:
             assert _leg(t, "Expenses:Food") == Decimal("60.00")
-            assert _leg(t, "Expenses:Entertainment") == Decimal("60.00")
+            assert _leg(t, "Expenses:Rent") == Decimal("60.00")
             assert _leg(t, "Assets:Checking") == Decimal("-120.00")
         # Legs sum to their typed totals exactly (no drift).
         assert sum(_leg(t, "Expenses:Food") for t in txns) == Decimal("600.00")
@@ -639,7 +639,7 @@ class TestCreateSplitSeries:
             "amount_is_total": True,
             "postings": [
                 {"account": "Expenses:Food", "amount": "1000"},
-                {"account": "Expenses:Entertainment", "amount": "1000"},
+                {"account": "Expenses:Rent", "amount": "1000"},
                 {"account": "Assets:Checking"},
             ],
         })
@@ -650,7 +650,7 @@ class TestCreateSplitSeries:
         ]
         # Both explicit legs sum to exactly 1000 across the run.
         assert sum(_leg(t, "Expenses:Food") for t in txns) == Decimal("1000.00")
-        assert sum(_leg(t, "Expenses:Entertainment") for t in txns) == Decimal("1000.00")
+        assert sum(_leg(t, "Expenses:Rent") for t in txns) == Decimal("1000.00")
 
 
 # ------------------------------------------------------------------
@@ -715,7 +715,7 @@ class TestExtendSeries:
             "currency": "BRL",
             "frequency": "weekly",
             "postings": [
-                {"account": "Expenses:Home", "amount": "50"},
+                {"account": "Expenses:Food", "amount": "50"},
                 {"account": "Assets:Checking", "amount": "-50"},
             ],
         }).json()

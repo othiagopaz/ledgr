@@ -1,6 +1,6 @@
 ---
 type: log
-last_updated: 2026-09-08
+last_updated: 2026-09-22
 ---
 
 # Wiki Log
@@ -8,6 +8,10 @@ last_updated: 2026-09-08
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
+
+## 2026-09-22 — Structural accounts cannot take postings
+
+- `pitfalls.md`: posting fields must use the postable account list; backend refuses accounts with no `open` (POST/PUT transactions, POST series).
 
 ## 2026-09-08 — Inactive accounts out of suggestions; account filter intersects with the open register
 

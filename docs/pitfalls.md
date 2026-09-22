@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-09-08
+last_updated: 2026-09-22
 ---
 
 # Known failure modes — do not repeat
@@ -59,6 +59,7 @@ Real incidents and their fixes. Add new entries as you encounter them — with e
 | Reading Budget membership off the counterpart pair | "`Expenses` against `investment` never budgets" is wrong — the same pair budgets or not depending on whether that **transaction** has a cash leg. Two filters are at play: one on the transaction (did money move?), one on the posting (is this an envelope?) | See the decision diagram in [`features/budgets.md`](features/budgets.md) §3 |
 | Extending `require_cash_counterpart` to expenses without allowing the card | Removes **all** card spend from the Budget — R$53k on a real ledger, since a card purchase has no cash leg at purchase time | The rule accepts `DEFERRED_CASH_TYPES`, not just `cash` |
 | `if (result.success) { …commit… }` with no else branch | A refused write does **nothing**: editor stays open, no message, Enter reads as a dead key. Reported as "não está salvando, nada acontece" right after validation was tightened | Throw on `!result.success` so the inline editor's `await onSave(...)` rejects and it can show the reason |
+| Feeding a posting field from the default `/api/account-names` | That list keeps structural parents (`Expenses:Gifts`, no `open` of its own) for filters; a Composer split picked one and wrote a posting Beancount rejects as "unknown account" | Posting fields use `fetchPostableAccountNames` (`?postable=true`); `_validate_active_accounts` also refuses any account with no `open` |
 | Offering a palette action that needs context the palette lacks | `Rename Account` with no account focused can only fail | Gate the entry on the context existing — see [`frontend/command-palette.md`](frontend/command-palette.md) |
 
 ## Docs / wiki

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { fetchAccountNames, fetchPayees, fetchSuggestions } from "../api/client";
+import { fetchPostableAccountNames, fetchPayees, fetchSuggestions } from "../api/client";
 import { useQuery } from "@tanstack/react-query";
 import type { TransactionInput } from "../types";
 import type { Transaction } from "../types";
@@ -68,8 +68,8 @@ export default function InlineEditor({
   const creditRef = useRef<HTMLInputElement>(null);
 
   const accountNamesQuery = useQuery({
-    queryKey: ["account-names"],
-    queryFn: fetchAccountNames,
+    queryKey: ["account-names", "postable"],
+    queryFn: fetchPostableAccountNames,
   });
 
   const payeesQuery = useQuery({

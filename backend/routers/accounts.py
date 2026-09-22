@@ -151,9 +151,14 @@ def _prune_closed(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 @router.get("/api/account-names")
 def get_account_names(
     include_closed: bool = Query(False),
+    postable: bool = Query(False),
     ledger: FavaLedger = Depends(get_ledger),
 ) -> dict[str, list[str]]:
     """Account names for autocomplete. Inactive accounts are omitted by default.
+
+    ``postable=true`` keeps only accounts with an ``open`` of their own — what a
+    posting can name. Structural nodes are fine for filtering (they roll up
+    their children) but a posting to one is "unknown account" to Beancount.
 
     Every suggestion surface (Composer route picker, Cmd+K, filter bar) feeds
     from here, and a closed account is never a useful suggestion: it cannot
@@ -189,6 +194,12 @@ def get_account_names(
             return any(d.startswith(prefix) for d in live)
 
         names = [n for n in names if is_active(n)]
+
+    if postable:
+        opened_names = {
+            e.account for e in ledger.all_entries if isinstance(e, data.Open)
+        }
+        names = [n for n in names if n in opened_names]
 
     names.sort()
     return {"accounts": names}

@@ -2976,3 +2976,71 @@ class TestOpeningBalancesPerCurrency:
         body = self._client().get("/api/transactions?account=Assets:Bank:USD").json()
         assert body["opening_balances"] == {}
         assert body["opening_balance"] == "0"
+
+
+class TestStructuralAccountPostings:
+    """A structural node (`Assets:Invest`, no `open` of its own) is in the tree
+    but is not an account a posting can name — Beancount calls it "unknown".
+    Found when a Composer split picked `Expenses:Gifts` over its child
+    `Expenses:Gifts:Gifts` and left a parse error in the ledger."""
+
+    def _txn(self, account: str) -> dict:
+        return {
+            "date": "2025-06-01",
+            "narration": "to a parent",
+            "postings": [
+                {"account": account, "amount": "10.00", "currency": "BRL"},
+                {"account": "Assets:Bank:Main", "amount": "-10.00", "currency": "BRL"},
+            ],
+        }
+
+    def test_posting_to_structural_parent_refused(
+        self, hierarchy_client: TestClient
+    ) -> None:
+        body = hierarchy_client.post(
+            "/api/transactions", json=self._txn("Assets:Invest")
+        ).json()
+        assert body["success"] is False
+        assert "'Assets:Invest' is not open" in body["errors"][0]
+        assert "Assets:Invest:Clear" in body["errors"][0]
+        assert hierarchy_client.get("/api/errors").json()["errors"] == []
+
+    def test_posting_to_unknown_account_refused(
+        self, hierarchy_client: TestClient
+    ) -> None:
+        body = hierarchy_client.post(
+            "/api/transactions", json=self._txn("Expenses:Nowhere")
+        ).json()
+        assert body["success"] is False
+        assert "'Expenses:Nowhere' is not open" in body["errors"][0]
+
+    def test_series_to_structural_parent_refused(
+        self, hierarchy_client: TestClient
+    ) -> None:
+        r = hierarchy_client.post("/api/series", json={
+            "type": "installment",
+            "payee": "Shop",
+            "narration": "parcelado",
+            "start_date": "2025-06-01",
+            "count": 3,
+            "currency": "BRL",
+            "postings": [
+                {"account": "Assets:Invest", "amount": "10.00"},
+                {"account": "Assets:Bank:Main", "amount": None},
+            ],
+        })
+        body = r.json()
+        assert body["success"] is False
+        assert "'Assets:Invest' is not open" in body["errors"][0]
+
+    def test_postable_account_names_drop_structural_parents(
+        self, hierarchy_client: TestClient
+    ) -> None:
+        names = hierarchy_client.get(
+            "/api/account-names", params={"postable": "true"}
+        ).json()["accounts"]
+        assert "Assets:Invest" not in names
+        assert "Assets:Invest:Clear" in names
+        # The default list still carries them, for filters.
+        default = hierarchy_client.get("/api/account-names").json()["accounts"]
+        assert "Assets:Invest" in default

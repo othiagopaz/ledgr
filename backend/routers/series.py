@@ -19,6 +19,7 @@ from fava.core.file import get_entry_slice
 from pydantic import BaseModel
 
 from ledger import get_filtered_entries, get_ledger, reload_ledger
+from routers.transactions import _validate_active_accounts
 from serializers import quantize_amount, serialize_transaction
 from series import (
     compute_dates,
@@ -265,6 +266,10 @@ def create_series(
             status_code=400,
             detail="'amount_is_total' is only valid for installment series.",
         )
+
+    account_errors = _validate_active_accounts(ledger, body.postings, start)
+    if account_errors:
+        return {"success": False, "errors": account_errors}
 
     # --- Build postings_spec ---
     postings_spec: list[dict] = []

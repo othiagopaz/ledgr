@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  fetchAccountNames, fetchPayees, fetchTags, fetchSuggestions,
+  fetchPostableAccountNames, fetchPayees, fetchTags, fetchSuggestions,
   addTransaction, editTransaction, fetchTransactions, deleteTransaction,
   createSeries, extendSeries, cancelSeries, reviseSeries, fetchSeries,
   fetchSeriesTransactions,
@@ -260,7 +260,9 @@ export default function Composer({ onMutated }: ComposerProps) {
     setTimeout(() => setFlash(null), 2600);
   }
 
-  const accountNamesQ = useQuery({ queryKey: ["account-names"], queryFn: fetchAccountNames });
+  // Postable only: a structural parent like `Expenses:Gifts` is not an account
+  // Beancount will take a posting to.
+  const accountNamesQ = useQuery({ queryKey: ["account-names", "postable"], queryFn: fetchPostableAccountNames });
   const payeesQ = useQuery({ queryKey: ["payees"], queryFn: fetchPayees });
   const tagsQ = useQuery({ queryKey: ["tags"], queryFn: fetchTags });
   const accountNames = useMemo(() => accountNamesQ.data?.accounts || [], [accountNamesQ.data]);
