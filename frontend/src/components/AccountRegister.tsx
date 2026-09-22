@@ -3,7 +3,7 @@ import type { Transaction, TransactionInput } from "../types";
 import { addTransaction, editTransaction, deleteTransaction } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 import { formatAmount, formatDateFull, getLocale, formatInstallmentBadge } from "../utils/format";
-import { formatUnits, summarizeUnits, unitText } from "../utils/holdings";
+import { formatUnits, summarizeUnits } from "../utils/holdings";
 import { today } from "../utils/dateUtils";
 import InlineEditor from "./InlineEditor";
 
@@ -107,18 +107,33 @@ export default function AccountRegister({ account, transactions, openingBalance,
     if (opening !== 0) running.set(operatingCurrency, opening);
   }
   const rows = sorted.map((txn) => {
-    const posting = getAccountPosting(txn, account);
-    const amount = posting?.amount ? parseFloat(posting.amount) : 0;
-    const currency = posting?.currency || operatingCurrency;
-    running.set(currency, (running.get(currency) ?? 0) + amount);
-    if (posting?.amount) {
-      const dot = posting.amount.indexOf(".");
-      const places = dot === -1 ? 0 : posting.amount.length - dot - 1;
-      decimals.set(currency, Math.max(decimals.get(currency) ?? 0, places));
+    // Every posting on this account in the transaction, folded per currency.
+    // An exchange inside one wallet ("-5150 BRL, +1002.65 USD", both on Arc)
+    // has two legs here; reading only the first one silently dropped the
+    // other from the running balance.
+    const here = txn.postings.filter((p) => p.account === account && p.amount);
+    const moved = new Map<string, number>();
+    for (const p of here) {
+      const cur = p.currency || operatingCurrency;
+      moved.set(cur, (moved.get(cur) ?? 0) + parseFloat(p.amount!));
+      const dot = p.amount!.indexOf(".");
+      const places = dot === -1 ? 0 : p.amount!.length - dot - 1;
+      decimals.set(cur, Math.max(decimals.get(cur) ?? 0, places));
     }
-    const ocBalance = running.get(operatingCurrency);
+    for (const [cur, amt] of moved) running.set(cur, (running.get(cur) ?? 0) + amt);
+    const posting = here[0] ?? getAccountPosting(txn, account);
+    // The row's own currency: the operating currency when it moved, else the
+    // commodity that did. The Balance cell follows it, so a USD payment shows
+    // the USD balance and the other holdings ride along as ◇N.
+    const rowCur = moved.has(operatingCurrency)
+      ? operatingCurrency
+      : (moved.keys().next().value as string | undefined) ?? operatingCurrency;
+    const amount = moved.get(rowCur) ?? 0;
+    const movements = Array.from(moved.entries())
+      .map(([currency, n]) => ({ currency, amount: n }))
+      .filter((m) => m.amount !== 0);
     const units = Array.from(running.entries())
-      .filter(([c]) => c !== operatingCurrency)
+      .filter(([c]) => c !== rowCur)
       .map(([c, n]) => ({ currency: c, number: n.toFixed(decimals.get(c) ?? 0) }))
       .filter((u) => Number(u.number) !== 0)
       .sort((a, b) => a.currency.localeCompare(b.currency));
@@ -126,11 +141,9 @@ export default function AccountRegister({ account, transactions, openingBalance,
       txn,
       posting,
       amount,
-      balance: ocBalance ?? 0,
-      // False for an account that has never touched the operating currency
-      // (a USD wallet, a broker holding only shares): its balance *is* the
-      // units, so they take the primary line instead of a meaningless 0,00.
-      hasOc: ocBalance !== undefined,
+      rowCur,
+      movements,
+      balance: running.get(rowCur) ?? 0,
       units,
     };
   });
@@ -318,8 +331,8 @@ export default function AccountRegister({ account, transactions, openingBalance,
             <th>Narration</th>
             <th>Transfer</th>
             <th className="num" style={{ width: 28 }}>R</th>
-            <th className="num" style={{ width: 100 }}>Debit</th>
-            <th className="num" style={{ width: 100 }}>Credit</th>
+            <th className="num" style={{ width: 120 }}>Debit</th>
+            <th className="num" style={{ width: 120 }}>Credit</th>
             {/* Wide enough for two positions and the `+N` tail on the units
                 line (see .register td.amount .bal-units). */}
             <th className="num" style={{ width: 170 }}>Balance</th>
@@ -353,24 +366,18 @@ export default function AccountRegister({ account, transactions, openingBalance,
             const seriesTotal = row.txn.metadata?.['ledgr-series-total'];
             // A posting in another commodity is a quantity, not money: show
             // `50 ITUB4`, never `50,00`.
-            const rowCur = row.posting?.currency || operatingCurrency;
-            const fmtCell = (n: number) => rowCur === operatingCurrency
+            const locale = getLocale(operatingCurrency);
+            const fmtIn = (n: number, cur: string) => cur === operatingCurrency
               ? formatAmount(n, operatingCurrency)
-              : `${formatUnits(String(n), null, getLocale(operatingCurrency))} ${rowCur}`;
-            const debitVal = row.amount > 0 ? fmtCell(row.amount) : "";
-            const creditVal = row.amount < 0 ? fmtCell(Math.abs(row.amount)) : "";
-            const bal = formatAmount(row.balance, operatingCurrency);
-            // Same one-line rule as the account tree: at most two positions,
-            // then `+N`; the whole list lives in the cell's tooltip.
-            const units = summarizeUnits(row.units, 2, getLocale(operatingCurrency));
-            const balDetail = row.units.length === 0
-              ? undefined
-              : row.hasOc ? `${bal}\n${units.full}` : units.full;
-            const balSign = row.hasOc
-              ? row.balance >= 0 ? "positive" : "negative"
-              : row.units.length === 1
-                ? Number(row.units[0].number) >= 0 ? "positive" : "negative"
-                : "";
+              : `${formatUnits(String(n), null, locale)} ${cur}`;
+            const debits = row.movements.filter((m) => m.amount > 0);
+            const credits = row.movements.filter((m) => m.amount < 0);
+            const bal = fmtIn(row.balance, row.rowCur);
+            // Same one-line rule as the account tree: the balance in the row's
+            // currency, the other holdings behind ◇N; the whole list is the tooltip.
+            const units = summarizeUnits(row.units, row.units.length, locale);
+            const balDetail = row.units.length === 0 ? undefined : `${bal}\n${units.full}`;
+            const balSign = row.balance >= 0 ? "positive" : "negative";
             const costBasis = formatCostBasis(row.posting, operatingCurrency);
             const hasTags = row.txn.tags.length > 0;
             const hasLinks = row.txn.links.length > 0;
@@ -438,30 +445,21 @@ export default function AccountRegister({ account, transactions, openingBalance,
                 <td className={`reconciled ${reconciled === "y" ? "reconciled-yes" : "reconciled-no"}`}>
                   {reconciled}
                 </td>
-                <td className={`num amount ${row.amount > 0 ? "positive" : ""}`}>
-                  {debitVal}
+                <td className={`num amount ${debits.length ? "positive" : ""}`}>
+                  {debits.map((m) => <span key={m.currency} className="mv">{fmtIn(m.amount, m.currency)}</span>)}
                 </td>
-                <td className={`num amount ${row.amount < 0 ? "negative" : ""}`}>
-                  {creditVal}
+                <td className={`num amount ${credits.length ? "negative" : ""}`}>
+                  {credits.map((m) => <span key={m.currency} className="mv">{fmtIn(Math.abs(m.amount), m.currency)}</span>)}
                 </td>
                 <td
                   className={`num amount ${balSign}`}
                   title={balDetail}
                   aria-label={balDetail?.replace(/\n/g, ", ")}
                 >
-                  {row.units.length === 0 ? (
-                    bal
-                  ) : row.hasOc ? (
-                    <span className="bal-inline">
-                      <span className="bal-chip" aria-hidden="true">◇{row.units.length}</span>
-                      <span>{bal}</span>
-                    </span>
-                  ) : (
-                    <span className="bal-inline">
-                      {row.units.length > 1 && <span className="bal-chip" aria-hidden="true">◇{row.units.length - 1}</span>}
-                      <span>{unitText(units.shown[0], getLocale(operatingCurrency))}</span>
-                    </span>
-                  )}
+                  <span className="bal-inline">
+                    {row.units.length > 0 && <span className="bal-chip" aria-hidden="true">◇{row.units.length}</span>}
+                    <span>{bal}</span>
+                  </span>
                 </td>
                 <td className="actions" onClick={(e) => e.stopPropagation()}>
                   {row.txn.lineno != null && (

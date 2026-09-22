@@ -3913,3 +3913,7 @@ button.acct-edit:hover {
 
 /* Register status bar: the other commodities beside the operating-currency balance. */
 .status-bar .status-units { color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+
+/* Register cells never wrap an amount; an exchange row lists one movement per line. */
+.register td.amount { white-space: nowrap; }
+.register td.amount .mv { display: block; }
