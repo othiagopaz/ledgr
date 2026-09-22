@@ -329,3 +329,19 @@ describe("seedFromPostings — editing an existing trade", () => {
     ], "BRL")).toBeNull();
   });
 });
+
+describe("exchange inside one multi-currency wallet", () => {
+  const d = base({
+    kind: "exchange", quantity: 1002.65, commodity: "USDC", unitPrice: 5.136389,
+    cashAccount: "Assets:Bank:Arc", assetAccount: "Assets:Bank:Arc", booking: null,
+  });
+  it("is allowed when the account pays in one currency and receives another", () => {
+    expect(validateCommodityDraft(d)).toBeNull();
+    const [asset, cash] = commodityPostings(d);
+    expect(asset).toMatchObject({ account: "Assets:Bank:Arc", amount: 1002.65, currency: "USDC", price: 5.136389, price_currency: "BRL" });
+    expect(cash).toMatchObject({ account: "Assets:Bank:Arc", amount: -5150, currency: "BRL" });
+  });
+  it("still rejects the same account on a buy or a sale", () => {
+    expect(validateCommodityDraft(base({ cashAccount: "Assets:XP", assetAccount: "Assets:XP" }))).toMatch(/must differ/);
+  });
+});

@@ -289,7 +289,10 @@ export function validateCommodityDraft(d: CommodityDraft): string | null {
   if (!d.unitPrice || d.unitPrice <= 0 || !Number.isFinite(d.unitPrice)) return `Unit price in ${d.operatingCurrency} is required.`;
   if (!d.cashAccount.trim()) return "Pick the cash account.";
   if (!d.assetAccount.trim()) return d.kind === "exchange" ? "Pick the account that receives the currency." : "Pick the asset account.";
-  if (d.cashAccount === d.assetAccount) return "Cash and asset accounts must differ.";
+  // A buy or sale moves value between two accounts. An exchange may happen
+  // inside one multi-currency wallet (Arc, Wise: BRL out, USDC in, same
+  // account) — the two legs differ by currency, which is all Beancount needs.
+  if (d.kind !== "exchange" && d.cashAccount === d.assetAccount) return "Cash and asset accounts must differ.";
   if (d.fees != null && d.fees < 0) return "Fees cannot be negative.";
   if (d.fees && d.fees > 0 && !d.feesAccount.trim()) return "Pick an account for the fees.";
   if (d.lotLabel && /["\n]/.test(d.lotLabel)) return "A lot label cannot contain quotes.";
