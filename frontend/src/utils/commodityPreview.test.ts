@@ -228,7 +228,8 @@ describe("narration, validation, arithmetic", () => {
     expect(validateCommodityDraft(base({ commodity: "BRL" }))).toMatch(/operating currency/);
     expect(validateCommodityDraft(base({ unitPrice: null }))).toMatch(/Unit price/);
     expect(validateCommodityDraft(base({ cashAccount: "" }))).toMatch(/cash account/);
-    expect(validateCommodityDraft(base({ assetAccount: "Assets:Bank:Itau" }))).toMatch(/must differ/);
+    // Same account on both sides is fine: the legs differ by currency.
+    expect(validateCommodityDraft(base({ assetAccount: "Assets:Bank:Itau" }))).toBeNull();
     expect(validateCommodityDraft(base({ fees: 5, feesAccount: "" }))).toMatch(/fees/);
   });
 
@@ -341,7 +342,16 @@ describe("exchange inside one multi-currency wallet", () => {
     expect(asset).toMatchObject({ account: "Assets:Bank:Arc", amount: 1002.65, currency: "USDC", price: 5.136389, price_currency: "BRL" });
     expect(cash).toMatchObject({ account: "Assets:Bank:Arc", amount: -5150, currency: "BRL" });
   });
-  it("still rejects the same account on a buy or a sale", () => {
-    expect(validateCommodityDraft(base({ cashAccount: "Assets:XP", assetAccount: "Assets:XP" }))).toMatch(/must differ/);
+  it("also allows one account on a buy or a sale (a broker holding BRL and shares)", () => {
+    expect(validateCommodityDraft(base({ cashAccount: "Assets:XP", assetAccount: "Assets:XP" }))).toBeNull();
+    const sale = base({
+      kind: "sell", quantity: 3018.39, commodity: "ARS", unitPrice: 0.00336935, fees: 0.13,
+      cashAccount: "Assets:Bank:Wise", assetAccount: "Assets:Bank:Wise", booking: null,
+    });
+    expect(validateCommodityDraft(sale)).toBeNull();
+    const [asset, cash, fee] = commodityPostings(sale);
+    expect(asset).toMatchObject({ account: "Assets:Bank:Wise", amount: -3018.39, currency: "ARS", price: 0.00336935 });
+    expect(cash).toMatchObject({ account: "Assets:Bank:Wise", amount: 10.04, currency: "BRL" });
+    expect(fee).toMatchObject({ account: "Expenses:Fees", amount: 0.13, currency: "BRL" });
   });
 });
