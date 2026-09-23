@@ -921,3 +921,49 @@ class TestHierarchicalBreakdown:
                                   operating_currency="BRL", type_map=TREE_TYPE_MAP)
         for node in flatten_items(result["operating"]["items"]):
             assert node["totals"], f"empty node emitted: {node['full_name']}"
+
+
+class TestOpeningBalanceAdjustments:
+    """An account added mid-history: its opening balance is not a flow."""
+
+    LEDGER = """
+option "operating_currency" "BRL"
+2019-01-01 open Equity:Opening-Balances BRL
+2019-01-01 open Assets:Bank:Wise
+  ledgr-type: "cash"
+2019-01-01 open Assets:Bank:Itau BRL
+  ledgr-type: "cash"
+2019-01-01 open Expenses:Food BRL
+
+2026-01-01 * "Opening-balance"
+  Assets:Bank:Wise            1.06 BRL
+  Equity:Opening-Balances
+
+2026-01-15 * "Lunch"
+  Expenses:Food              20.00 BRL
+  Assets:Bank:Itau
+"""
+
+    def _result(self):
+        from beancount import loader
+        entries, errors, _ = loader.load_string(self.LEDGER)
+        assert not errors
+        return compute_cashflow(entries, interval="monthly", operating_currency="BRL")
+
+    def test_opening_balance_is_a_reconciling_line_not_a_transfer(self):
+        r = self._result()
+        assert r["transfers"]["total"] == 0
+        assert r["opening_adjustments"]["total"] == 1.06
+        assert r["opening_adjustments"]["items"][0]["full_name"] == "Equity"
+
+    def test_net_cash_flow_excludes_it_and_the_balances_still_reconcile(self):
+        r = self._result()
+        assert r["net_cashflow"]["2026-01"] == -20.0
+        opening = r["opening_balance"]["2026-01"]
+        closing = r["closing_balance"]["2026-01"]
+        assert round(opening + r["net_cashflow"]["2026-01"] + r["opening_adjustments"]["totals"]["2026-01"], 2) == round(closing, 2)
+
+    def test_classify_uses_the_ledgers_own_account_name(self):
+        assert classify_posting("Assets:Bank:Wise", "Equity:Opening-Balances", {}) == "opening"
+        assert classify_posting("Assets:Bank:Wise", "Equity:Abertura", {}, opening_account="Equity:Abertura") == "opening"
+        assert classify_posting("Assets:Bank:Wise", "Equity:Abertura", {}) == "transfer"

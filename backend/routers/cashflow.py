@@ -42,4 +42,9 @@ def get_cashflow(
         tags=tags or None,
         payee=payee,
     )
-    return compute_cashflow(entries, interval, oc, type_map=type_map)
+    opening_account = (
+        f"{ledger.options['name_equity']}:{ledger.options['account_previous_balances']}"
+    )
+    return compute_cashflow(
+        entries, interval, oc, type_map=type_map, opening_account=opening_account
+    )

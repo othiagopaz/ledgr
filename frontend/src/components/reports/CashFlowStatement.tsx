@@ -35,7 +35,7 @@ export default function CashFlowStatement() {
   if (!data) return <div className="report-empty">No data</div>;
 
   const {
-    periods, operating, investing, financing, transfers,
+    periods, operating, investing, financing, transfers, opening_adjustments,
     net_cashflow, opening_balance, closing_balance,
     other_net_cashflow, other_opening_balance, other_closing_balance,
   } = data;
@@ -147,6 +147,27 @@ export default function CashFlowStatement() {
                 </td>
               )}
             </tr>
+
+            {/* Opening-balance adjustments: an account added mid-history brought
+                cash in from Equity:Opening-Balances. Reconciles the balances
+                below without pretending anything flowed. */}
+            {opening_adjustments && opening_adjustments.total !== 0 && (
+              <tr className="cashflow-balance-row cashflow-adjustment-row">
+                <td title="Cash that appeared from Equity:Opening-Balances inside this window. Not a flow: it reconciles the opening and closing balances.">Opening-balance adjustments</td>
+                {periods.map((p) => {
+                  const val = opening_adjustments.totals[p] || 0;
+                  return (
+                    <td key={p} className={`report-table-num ${val === 0 ? "" : amountSignClass(val)}`}>
+                      {val === 0 ? "—" : formatAmount(val, currency)}
+                    </td>
+                  );
+                })}
+                <td className={`report-table-num report-table-total ${amountSignClass(opening_adjustments.total)}`}>
+                  {formatAmount(opening_adjustments.total, currency)}
+                </td>
+                {showOther && <td className="report-table-num report-table-other other-currencies" />}
+              </tr>
+            )}
 
             {/* Opening/Closing balances */}
             <tr className="cashflow-balance-row">

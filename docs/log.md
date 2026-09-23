@@ -9,6 +9,12 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-09-22 — Cash Flow: opening balances become a reconciling line
+
+- A cash account added mid-history brought its `Equity:Opening-Balances` posting into the Transfers section, so the month closed with a phantom net cash flow. `classify_posting` now returns `opening`; the amounts land in `opening_adjustments`, out of `net_cashflow`, and the statement shows them as one line between Net Cash Flow and the balances. See `backend/cashflow.md`.
+
+---
+
 ## 2026-09-22 — Commodities: opening balances in a foreign currency need the rate
 
 - `features/commodities.md` §8c: a spend account's foreign-currency opening balance must carry `@ rate`, otherwise the `currency_accounts` pair keeps a phantom position after the money leaves and the FX result reads zero. Found on the user's Wise account (ARS → BRL conversion), fixed in the ledger.

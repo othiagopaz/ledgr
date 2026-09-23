@@ -1,6 +1,6 @@
 ---
 type: module
-last_updated: 2026-08-19
+last_updated: 2026-09-22
 ---
 
 # Cash Flow Statement — the only custom accounting
@@ -100,6 +100,27 @@ counterpart (one non-cash posting account), or `None` for a pure cash↔cash mov
 - **`INVESTING` MUST be checked BEFORE `OPERATING`.** Otherwise an untyped account caught by a prefix rule could shadow a real investment classification. (With per-counterpart attribution, a stock buy with a commission now yields *two* items — the investment leg → investing and the commission leg → operating — but the ordering still guards the single-counterpart decision.)
 
 See [`../pitfalls.md`](../pitfalls.md) for what each mis-order produces.
+
+## Opening balances are not flows
+
+A cash account added to the books mid-history gets its balance from
+`Equity:Opening-Balances` (Beancount's `name_equity:account_previous_balances`,
+which the router passes in). That posting used to classify as a **transfer**
+(Equity is the default bucket), so the month in which a wallet was added showed
+a net cash flow of its opening balance — 1,06 BRL for a Wise account opened in
+January 2026 — when nothing had flowed.
+
+`classify_posting` now returns `"opening"` for that counterpart (checked
+first; the account carries no `ledgr-type`). The amounts are aggregated into
+`opening_adjustments`, kept **out** of `net_cashflow`, and shown by the
+frontend as one reconciling line between Net Cash Flow and the balances:
+
+```
+opening_balance + net_cashflow + opening_adjustments == closing_balance
+```
+
+Opening balances dated before the reporting window never reach this code —
+`clamp_opt` folds them into the synthetic `S` entries, which are excluded.
 
 ## How the Cash Flow is computed — per-counterpart attribution
 

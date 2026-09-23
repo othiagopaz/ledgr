@@ -360,6 +360,9 @@ export interface CashFlowResponse {
   investing: CashFlowSection;
   financing: CashFlowSection;
   transfers: CashFlowSection;
+  /** Cash that appeared from Equity:Opening-Balances inside the window — a
+   *  reconciling line between net cash flow and the closing balance, not a flow. */
+  opening_adjustments?: CashFlowSection;
   net_cashflow: Record<string, number>;
   opening_balance: Record<string, number>;
   closing_balance: Record<string, number>;

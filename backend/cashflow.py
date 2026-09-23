@@ -81,10 +81,14 @@ def date_to_period(d: datetime.date, interval: str) -> str:
 # substance over legal form (IAS 7 permits operating OR financing).
 # ------------------------------------------------------------------
 
+OPENING_BALANCES_ACCOUNT = "Equity:Opening-Balances"
+
+
 def classify_posting(
     cash_account: str,
     counterpart: str | None,
     type_map: dict[str, str],
+    opening_account: str = OPENING_BALANCES_ACCOUNT,
 ) -> str:
     """Classify a single cash-flow counterpart per IAS 7, using ledgr-type.
 
@@ -109,6 +113,13 @@ def classify_posting(
     """
     if counterpart is None:
         return "transfer"
+
+    # ── 0. OPENING — cash that appears from the opening-balances equity
+    #        account (an account added to the books mid-history) is not a
+    #        flow. It is reported as a reconciling line between net cash flow
+    #        and the closing balance, never inside a section. ──
+    if counterpart == opening_account or counterpart.startswith(opening_account + ":"):
+        return "opening"
 
     # ── 1. FINANCING — loan counterpart (BEFORE generic liabilities) ──
     if is_loan_account(counterpart, type_map):
@@ -157,6 +168,7 @@ def compute_cashflow(
     interval: str = "monthly",
     operating_currency: str | None = None,
     type_map: dict[str, str] | None = None,
+    opening_account: str = OPENING_BALANCES_ACCOUNT,
 ) -> dict[str, Any]:
     """Compute the Cash Flow Statement for a period.
 
@@ -240,7 +252,8 @@ def compute_cashflow(
                         "amount": -cp.units.number,
                         "currency": cur,
                         "category": classify_posting(
-                            cash_c[0].account, cp.account, type_map
+                            cash_c[0].account, cp.account, type_map,
+                            opening_account=opening_account,
                         ),
                     })
                 # ── Cross-currency residual. The same-currency counterparts only
@@ -261,7 +274,8 @@ def compute_cashflow(
                     ]
                     if other_cur_cps:
                         category = classify_posting(
-                            cash_c[0].account, other_cur_cps[0], type_map
+                            cash_c[0].account, other_cur_cps[0], type_map,
+                            opening_account=opening_account,
                         )
                         cp_display = (
                             other_cur_cps[0] if len(other_cur_cps) == 1 else "Split"
@@ -293,7 +307,8 @@ def compute_cashflow(
                 for posting in cash_c:
                     if other_cur_cps:
                         category = classify_posting(
-                            posting.account, other_cur_cps[0], type_map
+                            posting.account, other_cur_cps[0], type_map,
+                            opening_account=opening_account,
                         )
                         cp_display = (
                             other_cur_cps[0]
@@ -335,6 +350,10 @@ def compute_cashflow(
     investing = aggregate("investing")
     financing = aggregate("financing")
     transfers = aggregate("transfer")
+    # Opening-balance adjustments: cash that appeared from the opening-balances
+    # equity account inside the window. Reconciles opening → closing but is
+    # deliberately kept OUT of net cash flow — nothing flowed.
+    opening_adj = aggregate("opening")
 
     # Net cash flow per period (OC only)
     net_cashflow: dict[str, float] = {}
@@ -450,6 +469,12 @@ def compute_cashflow(
             "total": round(sum(transfers.values()), 2),
             "items": build_breakdown("transfer"),
             "other_items": build_other_breakdown("transfer"),
+        },
+        "opening_adjustments": {
+            "totals": opening_adj,
+            "total": round(sum(opening_adj.values()), 2),
+            "items": build_breakdown("opening"),
+            "other_items": build_other_breakdown("opening"),
         },
         "net_cashflow": net_cashflow,
         "opening_balance": balances["opening"],
