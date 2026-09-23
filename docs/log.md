@@ -9,6 +9,13 @@ Append-only record of wiki changes, ingests, and lint passes. Most recent first.
 
 ---
 
+## 2026-09-22 — Commodities: opening balances in a foreign currency need the rate
+
+- `features/commodities.md` §8c: a spend account's foreign-currency opening balance must carry `@ rate`, otherwise the `currency_accounts` pair keeps a phantom position after the money leaves and the FX result reads zero. Found on the user's Wise account (ARS → BRL conversion), fixed in the ledger.
+- Composer: cash and asset may be the same account on any trade (one wallet converting ARS → BRL, one broker holding BRL and shares). Register folds every posting on the account into the row and shows the balance in the row's own currency.
+
+---
+
 ## 2026-09-22 — Structural accounts cannot take postings
 
 - `pitfalls.md`: posting fields must use the postable account list; backend refuses accounts with no `open` (POST/PUT transactions, POST series).

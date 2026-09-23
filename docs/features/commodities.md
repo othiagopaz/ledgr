@@ -1,6 +1,6 @@
 ---
 type: feature
-last_updated: 2026-09-08
+last_updated: 2026-09-22
 ---
 
 # Commodities, lots and exchange
@@ -231,6 +231,38 @@ The Composer reads the currency only when it is **glued** to the number
 (`5USD`, `100.10BRL`, `10petr4`; a symbol the ledger knows or an explicit
 uppercase 3-letter code). `5 USD` with a space is deliberately not parsed, so
 an ordinary word after a number never turns into a currency.
+
+## 8c. A spend account's opening balance in a foreign currency carries the rate of that day
+
+`currency_accounts` only posts to the trading pair when a transaction has an
+`@` price. Money that enters a spend account **without** one never gets its
+entry leg in the pair, so when it later leaves with a price the pair keeps a
+phantom position forever and the FX result is wrong.
+
+Seen on 2026-09-22: 3 018,39 ARS opened into `Assets:Bank:Wise` against
+`Equity:Opening-Balances` with no rate, then converted to 10,04 BRL. The pair
+ended at `+3 018,39 ARS / −10,17 BRL` with the wallet empty — an FX result of
+`0,00` when the pesos had in fact lost 1,30 BRL against their January value.
+
+```beancount
+; Wrong: the pesos enter the wallet but not the pair
+2026-01-01 * "Opening-balance"
+  Assets:Bank:Wise            3018.39 ARS
+  Equity:Opening-Balances    -3018.39 ARS
+
+; Right: the rate of that day is the entry leg of the pair
+2026-01-01 * "Opening-balance"
+  Assets:Bank:Wise            3018.39 ARS @ 0.0038 BRL
+  Equity:Opening-Balances      -11.47 BRL
+```
+
+With the entry leg, the pair nets to zero in ARS when the last peso leaves and
+the BRL side holds the realised FX result (+1,30 BRL = a loss, Equity being
+credit-negative). The rule generalises: **every position that enters a spend
+account must carry a price** — opening balances, salary in USD, a gift. A
+buy through the Composer always does; an opening balance typed on the smart
+line only does when the Rate field is filled. The same rule keeps
+`Equity:Opening-Balances` in the operating currency.
 
 ## 9. Balance Sheet at cost
 
