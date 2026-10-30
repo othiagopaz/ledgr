@@ -1,11 +1,17 @@
 ---
 type: log
-last_updated: 2026-09-22
+last_updated: 2026-10-30
 ---
 
 # Wiki Log
 
 Append-only record of wiki changes, ingests, and lint passes. Most recent first.
+
+---
+
+## 2026-10-30 — Period pill names shifted months
+
+- [`frontend/guidelines.md`](frontend/guidelines.md): stepping the period with ‹ / › now labels the pill "November" / "January 2027" / "2025" / "Sep – Nov 2026" instead of `2026-11-01 – 2026-12-01` (`formatPeriodRange` in `dateUtils.ts`). Non-month-aligned windows keep raw ISO dates.
 
 ---
 

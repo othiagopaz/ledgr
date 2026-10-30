@@ -1,6 +1,6 @@
 ---
 type: reference
-last_updated: 2026-09-08
+last_updated: 2026-10-30
 ---
 
 # Front-end guidelines
@@ -256,6 +256,12 @@ Three properties make this work, and each is load-bearing:
   ("Clear all", Cmd+K) returns to the default *year*, never to unbounded, so
   clearing a filter can't silently turn into a full-ledger load. All time stays
   an explicit choice: the Period dropdown, or Cmd+K → "Filter: All Time".
+
+Once ‹ / › turns a preset into an explicit range, the pill still reads in words
+(`formatPeriodRange`): a whole month is its name ("November", "January 2027"
+outside the current year), a calendar year is its number, other whole-month
+spans are "Sep – Nov 2026". Only windows that aren't month-aligned fall back to
+raw ISO dates.
 
 `hasActiveFilters()` treats the default year as *not* active (otherwise "Clear
 all" would show permanently with nothing to clear) but does count All time, so

@@ -167,6 +167,46 @@ export function shiftPeriod(
   };
 }
 
+function monthName(d: Date, style: 'long' | 'short'): string {
+  return d.toLocaleString('en-US', { month: style });
+}
+
+/**
+ * Human label for an explicit `[fromDate, toDate)` window — what the period
+ * pill shows once ‹ / › has turned a preset into a concrete range.
+ *
+ * Whole-month windows read as months, with the year only when it isn't the
+ * current one: "November", "January 2027", "2025" (a calendar year),
+ * "Sep – Nov 2026", "Nov 2025 – Oct 2026". Anything else falls back to the raw
+ * ISO bounds (exclusive end, as stored).
+ */
+export function formatPeriodRange(
+  fromDate: string | null,
+  toDate: string | null,
+  now: Date = new Date(),
+): string {
+  const raw = `${fromDate ?? '...'} – ${toDate ?? '...'}`;
+  if (!fromDate || !toDate) return raw;
+
+  const from = parseLocalISO(fromDate);
+  const to = parseLocalISO(toDate);
+  if (!isMonthAligned(from, to)) return raw;
+  const span = monthSpan(from, to);
+  if (span < 1) return raw;
+
+  if (span === 1) {
+    const name = monthName(from, 'long');
+    return from.getFullYear() === now.getFullYear() ? name : `${name} ${from.getFullYear()}`;
+  }
+  if (span === 12 && from.getMonth() === 0) return String(from.getFullYear());
+
+  const last = new Date(to.getFullYear(), to.getMonth() - 1, 1); // inclusive end month
+  if (from.getFullYear() === last.getFullYear()) {
+    return `${monthName(from, 'short')} – ${monthName(last, 'short')} ${last.getFullYear()}`;
+  }
+  return `${monthName(from, 'short')} ${from.getFullYear()} – ${monthName(last, 'short')} ${last.getFullYear()}`;
+}
+
 /**
  * Convert a report period string into an inclusive-start / exclusive-end date
  * range. Inverse of the backend's `date_to_period` (cashflow.py). Handles the

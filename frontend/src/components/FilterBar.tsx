@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../stores/appStore';
 import { fetchAccountNames, fetchTags, fetchPayees } from '../api/client';
-import { resolvePeriodDates, shiftPeriod } from '../utils/dateUtils';
+import { formatPeriodRange, resolvePeriodDates, shiftPeriod } from '../utils/dateUtils';
 import { CalendarIcon, AccountIcon, TagIcon, UserIcon, XIcon } from './icons';
 import type { PeriodPreset, Conversion } from '../types';
 
@@ -340,7 +340,7 @@ export default function FilterBar() {
   } else if (periodPreset) {
     periodDisplay = PERIOD_PRESETS.find((p) => p.value === periodPreset)?.label ?? null;
   } else if (fromDate || toDate) {
-    periodDisplay = `${fromDate ?? '...'} – ${toDate ?? '...'}`;
+    periodDisplay = formatPeriodRange(fromDate, toDate);
   } else {
     // Unbounded — say so, rather than falling back to the generic "Period".
     periodDisplay = 'All time';
